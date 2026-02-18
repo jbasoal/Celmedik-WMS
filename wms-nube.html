@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WMS - Sistema de Gestión de Almacén</title>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --primary: #2563eb; --primary-dark: #1d4ed8; --success: #059669; --warning: #d97706; --danger: #dc2626;
+            --gray-50: #f9fafb; --gray-100: #f3f4f6; --gray-200: #e5e7eb; --gray-300: #d1d5db; --gray-500: #6b7280;
+            --gray-700: #374151; --gray-800: #1f2937; --gray-900: #111827;
+        }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--gray-100); min-height: 100vh; }
+        .login-screen { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(135deg, var(--gray-900) 0%, var(--gray-800) 100%); display: flex; align-items: center; justify-content: center; z-index: 2000; }
+        .login-box { background: white; padding: 40px; border-radius: 16px; width: 100%; max-width: 400px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+        .login-logo { text-align: center; margin-bottom: 30px; }
+        .login-logo h1 { font-size: 28px; color: var(--gray-800); }
+        .login-logo p { color: var(--gray-500); margin-top: 8px; }
+        .login-status { padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 14px; display: none; }
+        .login-status.error { background: #fee2e2; color: #991b1b; display: block; }
+        .login-status.success { background: #d1fae5; color: #065f46; display: block; }
+        .form-group { margin-bottom: 16px; }
+        .form-label { display: block; font-size: 14px; font-weight: 500; color: var(--gray-700); margin-bottom: 6px; }
+        .form-input { width: 100%; padding: 10px 12px; border: 1px solid var(--gray-300); border-radius: 8px; font-size: 14px; }
+        .form-input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
+        .btn { padding: 10px 16px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; border: none; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s; }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: var(--primary-dark); }
+        .btn-secondary { background: var(--gray-200); color: var(--gray-700); }
+        .btn-secondary:hover { background: var(--gray-300); }
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; opacity: 0; visibility: hidden; transition: all 0.3s; }
+        .modal-overlay.active { opacity: 1; visibility: visible; }
+        .modal { background: white; border-radius: 16px; width: 90%; max-width: 500px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); transform: translateY(20px); }
+        .modal-overlay.active .modal { transform: translateY(0); }
+        .modal-header { padding: 20px; border-bottom: 1px solid var(--gray-200); display: flex; justify-content: space-between; align-items: center; }
+        .modal-title { font-size: 18px; font-weight: 600; }
+        .modal-close { background: none; border: none; cursor: pointer; color: var(--gray-500); padding: 4px; font-size: 24px; }
+        .modal-body { padding: 20px; }
+        .modal-footer { padding: 20px; border-top: 1px solid var(--gray-200); display: flex; justify-content: flex-end; gap: 12px; }
+        .app-container { display: flex; min-height: 100vh; }
+        .sidebar { width: 260px; background: var(--gray-900); color: white; padding: 20px 0; position: fixed; height: 100vh; overflow-y: auto; }
+        .sidebar-header { padding: 0 20px 20px; border-bottom: 1px solid var(--gray-700); margin-bottom: 20px; }
+        .sidebar-header h1 { font-size: 20px; font-weight: 700; color: white; }
+        .main-content { margin-left: 260px; flex: 1; padding: 24px; }
+        .page-title { font-size: 24px; font-weight: 600; color: var(--gray-800); margin-bottom: 24px; }
+        .card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; margin-bottom: 24px; }
+        .stat-card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-left: 4px solid var(--primary); }
+        .stat-label { font-size: 13px; color: var(--gray-500); margin-bottom: 8px; }
+        .stat-value { font-size: 28px; font-weight: 700; color: var(--gray-800); }
+    </style>
+</head>
+<body>
+    <!-- Login Screen -->
+    <div class="login-screen" id="loginScreen">
+        <div class="login-box">
+            <div class="login-logo">
+                <h1>WMS Medical</h1>
+                <p>Sistema de Gestión de Almacén</p>
+            </div>
+            <div class="login-status" id="loginStatus"></div>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <input type="email" class="form-input" id="loginEmail" placeholder="tu@email.com" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Contraseña</label>
+                    <input type="password" class="form-input" id="loginPassword" placeholder="••••••••" required>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%;">Iniciar Sesión</button>
+            </form>
+            <div style="text-align: center; margin-top: 20px;">
+                <button type="button" class="btn btn-secondary" style="width: 100%;" id="registerBtn">Crear nueva cuenta</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Register Modal -->
+    <div class="modal-overlay" id="registerModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title">Crear Cuenta</h3>
+                <button type="button" class="modal-close" id="closeRegisterBtn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="login-status" id="registerStatus"></div>
+                <form id="registerForm">
+                    <div class="form-group">
+                        <label class="form-label">Email</label>
+                        <input type="email" class="form-input" id="registerEmail" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Contraseña</label>
+                        <input type="password" class="form-input" id="registerPassword" required minlength="6">
+                    </div>
+                    <button type="submit" class="btn btn-primary" style="width: 100%;">Crear Cuenta</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- App Container -->
+    <div class="app-container" id="appContainer" style="display: none;">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h1>WMS Medical</h1>
+                <p>Sistema de Gestión</p>
+            </div>
+        </aside>
+        <main class="main-content">
+            <h2 class="page-title">Dashboard</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Productos Maestro</div>
+                    <div class="stat-value" id="statMaestro">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Bodegas</div>
+                    <div class="stat-value" id="statBodegas">0</div>
+                </div>
+            </div>
+            <div class="card">
+                <h3>Bienvenido al WMS</h3>
+                <p>Sistema de Gestión de Almacén para Dispositivos Médicos y Medicamentos</p>
+                <button type="button" class="btn btn-primary" id="logoutBtn" style="margin-top: 20px;">Cerrar Sesión</button>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyCJ73iFZQaqCGVMZEnUA45HmSpXD_Z0oiE",
+            authDomain: "celmedik-inventario.firebaseapp.com",
+            projectId: "celmedik-inventario",
+            storageBucket: "celmedik-inventario.firebasestorage.app",
+            messagingSenderId: "1069071656431",
+            appId: "1:1069071656431:web:5ef4c84416c016a934821a",
+            databaseURL: "https://celmedik-inventario-default-rtdb.firebaseio.com"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.database();
+
+        // DOM Elements
+        const loginScreen = document.getElementById('loginScreen');
+        const appContainer = document.getElementById('appContainer');
+        const loginForm = document.getElementById('loginForm');
+        const registerForm = document.getElementById('registerForm');
+        const registerModal = document.getElementById('registerModal');
+        const registerBtn = document.getElementById('registerBtn');
+        const closeRegisterBtn = document.getElementById('closeRegisterBtn');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const loginStatus = document.getElementById('loginStatus');
+        const registerStatus = document.getElementById('registerStatus');
+
+        // Event Listeners
+        registerBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            registerModal.classList.add('active');
+        });
+
+        closeRegisterBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            registerModal.classList.remove('active');
+        });
+
+        loginForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            
+            auth.signInWithEmailAndPassword(email, password)
+                .catch(error => {
+                    loginStatus.className = 'login-status error';
+                    loginStatus.textContent = error.message;
+                });
+        });
+
+        registerForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const email = document.getElementById('registerEmail').value;
+            const password = document.getElementById('registerPassword').value;
+            
+            auth.createUserWithEmailAndPassword(email, password)
+                .then(() => {
+                    registerStatus.className = 'login-status success';
+                    registerStatus.textContent = 'Cuenta creada. Inicia sesión.';
+                    registerForm.reset();
+                    setTimeout(() => {
+                        registerModal.classList.remove('active');
+                    }, 2000);
+                })
+                .catch(error => {
+                    registerStatus.className = 'login-status error';
+                    registerStatus.textContent = error.message;
+                });
+        });
+
+        logoutBtn.addEventListener('click', () => {
+            auth.signOut();
+        });
+
+        // Auth State
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                loginScreen.style.display = 'none';
+                appContainer.style.display = 'flex';
+            } else {
+                loginScreen.style.display = 'flex';
+                appContainer.style.display = 'none';
+                loginStatus.textContent = '';
+                registerStatus.textContent = '';
+            }
+        });
+
+        // Close modal when clicking outside
+        registerModal.addEventListener('click', (e) => {
+            if (e.target === registerModal) {
+                registerModal.classList.remove('active');
+            }
+        });
+    </script>
+</body>
+</html>
