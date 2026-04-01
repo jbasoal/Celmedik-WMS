@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WMS - Sistema de Gestión de Almacén</title>
+    <title>Celmedik Inventario - WMS Completo</title>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         :root {
@@ -16,228 +16,1530 @@
         }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--gray-100); min-height: 100vh; }
         
-        /* Login Screen */
         .login-screen { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(135deg, var(--gray-900) 0%, var(--gray-800) 100%); display: flex; align-items: center; justify-content: center; z-index: 2000; }
         .login-box { background: white; padding: 40px; border-radius: 16px; width: 100%; max-width: 400px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
         .login-logo { text-align: center; margin-bottom: 30px; }
-        .login-logo h1 { font-size: 28px; color: var(--gray-800); }
-        .login-logo p { color: var(--gray-500); margin-top: 8px; }
-        .login-status { padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 14px; display: none; }
-        .login-status.error { background: #fee2e2; color: #991b1b; display: block; }
-        .login-status.success { background: #d1fae5; color: #065f46; display: block; }
+        .login-logo h1 { font-size: 28px; color: var(--gray-800); margin-bottom: 8px; }
+        .login-logo p { color: var(--gray-500); font-size: 14px; }
         .form-group { margin-bottom: 16px; }
         .form-label { display: block; font-size: 14px; font-weight: 500; color: var(--gray-700); margin-bottom: 6px; }
-        .form-input { width: 100%; padding: 10px 12px; border: 1px solid var(--gray-300); border-radius: 8px; font-size: 14px; }
-        .form-input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
-        .btn { padding: 10px 16px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; border: none; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s; }
-        .btn-primary { background: var(--primary); color: white; }
+        .form-input, .form-select { width: 100%; padding: 10px 12px; border: 1px solid var(--gray-300); border-radius: 8px; font-size: 14px; font-family: inherit; }
+        .form-input:focus, .form-select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
+        .btn { padding: 10px 16px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; border: none; transition: all 0.2s; display: inline-flex; align-items: center; gap: 8px; }
+        .btn-primary { background: var(--primary); color: white; width: 100%; justify-content: center; }
         .btn-primary:hover { background: var(--primary-dark); }
-        .btn-secondary { background: var(--gray-200); color: var(--gray-700); }
+        .btn-secondary { background: var(--gray-200); color: var(--gray-700); width: 100%; justify-content: center; margin-top: 12px; }
         .btn-secondary:hover { background: var(--gray-300); }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-danger:hover { background: #b91c1c; }
+        .btn-sm { padding: 6px 12px; font-size: 12px; width: auto; margin-top: 0; }
+        .status-message { padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 14px; display: none; }
+        .status-message.error { background: #fee2e2; color: #991b1b; display: block; }
+        .status-message.success { background: #d1fae5; color: #065f46; display: block; }
         
-        /* Modal */
-        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 1000; }
-        .modal-overlay.active { display: flex; }
-        .modal { background: white; border-radius: 16px; width: 90%; max-width: 500px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
-        .modal-header { padding: 20px; border-bottom: 1px solid var(--gray-200); display: flex; justify-content: space-between; align-items: center; }
-        .modal-title { font-size: 18px; font-weight: 600; }
-        .modal-close { background: none; border: none; cursor: pointer; color: var(--gray-500); padding: 4px; font-size: 24px; }
-        .modal-body { padding: 20px; }
+        .app-screen { display: none; }
+        .app-screen.active { display: flex; }
+        .container { display: flex; min-height: 100vh; width: 100%; }
+        .sidebar { width: 260px; background: var(--gray-900); color: white; padding: 20px; position: fixed; height: 100vh; overflow-y: auto; z-index: 100; }
+        .sidebar-header { margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid var(--gray-700); }
+        .sidebar-header h1 { font-size: 20px; font-weight: 700; margin-bottom: 5px; }
+        .sidebar-header p { font-size: 12px; color: var(--gray-500); }
+        .sidebar-menu { list-style: none; margin-bottom: 30px; }
+        .sidebar-menu li { margin-bottom: 4px; }
+        .sidebar-menu a { color: #9ca3af; text-decoration: none; padding: 10px 15px; border-radius: 8px; display: block; transition: all 0.2s; cursor: pointer; }
+        .sidebar-menu a:hover, .sidebar-menu a.active { background: var(--primary); color: white; }
+        .sidebar-footer { border-top: 1px solid var(--gray-700); padding-top: 20px; }
+        .user-info { font-size: 12px; color: #9ca3af; margin-bottom: 8px; word-break: break-all; }
+        .user-role { font-size: 11px; color: #6b7280; margin-bottom: 12px; background: var(--gray-800); padding: 4px 8px; border-radius: 4px; display: inline-block; }
         
-        /* App Container */
-        .app-container { display: none; flex-direction: column; min-height: 100vh; }
-        .app-container.active { display: flex; }
-        .app-header { background: white; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; }
-        .app-header h1 { font-size: 24px; color: var(--gray-800); }
-        .app-content { flex: 1; padding: 24px; }
-        .page-title { font-size: 24px; font-weight: 600; color: var(--gray-800); margin-bottom: 24px; }
+        .main-content { margin-left: 260px; flex: 1; padding: 24px; }
+        .header { background: white; padding: 20px; border-radius: 12px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; }
+        .header h1 { font-size: 24px; color: var(--gray-800); }
+        .page { display: none; }
+        .page.active { display: block; }
         .card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; margin-bottom: 24px; }
+        .card h2 { font-size: 18px; margin-bottom: 16px; color: var(--gray-800); }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 24px; }
         .stat-card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-left: 4px solid var(--primary); }
+        .stat-card.warning { border-left-color: var(--warning); }
+        .stat-card.danger { border-left-color: var(--danger); }
         .stat-label { font-size: 13px; color: var(--gray-500); margin-bottom: 8px; }
         .stat-value { font-size: 28px; font-weight: 700; color: var(--gray-800); }
+        
+        .table { width: 100%; border-collapse: collapse; margin-top: 0; font-size: 14px; }
+        .table th { background: var(--gray-100); padding: 12px; text-align: left; font-weight: 600; color: var(--gray-700); border-bottom: 1px solid var(--gray-200); }
+        .table td { padding: 12px; border-bottom: 1px solid var(--gray-200); vertical-align: middle; }
+        .table tr:hover td { background: var(--gray-50); }
+        
+        .badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 500; }
+        .badge-success { background: #d1fae5; color: #065f46; }
+        .badge-warning { background: #fef3c7; color: #92400e; }
+        .badge-danger { background: #fee2e2; color: #991b1b; }
+        .badge-pendiente { background: #fef3c7; color: #92400e; }
+        .badge-aprobado { background: #d1fae5; color: #065f46; }
+        .badge-rechazado { background: #fee2e2; color: #991b1b; }
+        
+        .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; overflow-y: auto; padding: 20px; }
+        .modal.active { display: flex; }
+        .modal-content { background: white; border-radius: 12px; padding: 24px; max-width: 600px; width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,0.3); margin: auto; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .modal-header h2 { font-size: 18px; color: var(--gray-800); }
+        .modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--gray-500); line-height: 1; }
+        .modal-close:hover { color: var(--gray-800); }
+        
+        .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 0; }
+        .form-group { margin-bottom: 16px; }
+        .button-group { display: flex; gap: 12px; margin-top: 20px; }
+        .button-group .btn { flex: 1; margin-top: 0; }
+        .empty-state { text-align: center; padding: 40px; color: var(--gray-500); }
+        .filter-bar { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+        .filter-bar .form-input, .filter-bar .form-select { width: auto; min-width: 150px; margin-bottom: 0; }
+        .alert-box { background: #fef3c7; border-left: 4px solid var(--warning); padding: 16px; border-radius: 8px; margin-bottom: 16px; }
+        .alert-box.danger { background: #fee2e2; border-left-color: var(--danger); }
+        .alert-title { font-weight: 600; color: var(--gray-800); margin-bottom: 4px; }
+        .alert-text { font-size: 14px; color: var(--gray-700); }
+        .table-container { overflow-x: auto; }
+        textarea.form-input { resize: vertical; min-height: 80px; }
     </style>
 </head>
 <body>
-    <!-- Login Screen -->
-    <div class="login-screen" id="loginScreen">
-        <div class="login-box">
-            <div class="login-logo">
-                <h1>WMS Medical</h1>
-                <p>Sistema de Gestión de Almacén</p>
+
+<!-- ===== LOGIN SCREEN ===== -->
+<div class="login-screen" id="loginScreen">
+    <div class="login-box">
+        <div class="login-logo">
+            <h1>Celmedik</h1>
+            <p>Sistema de Gestión de Almacén</p>
+        </div>
+        <div class="status-message" id="loginStatus"></div>
+        <form id="loginForm" onsubmit="handleLogin(event)">
+            <div class="form-group">
+                <label class="form-label">Email</label>
+                <input type="email" class="form-input" id="loginEmail" placeholder="tu@email.com" required>
             </div>
-            <div class="login-status" id="loginStatus"></div>
-            <form id="loginForm">
+            <div class="form-group">
+                <label class="form-label">Contraseña</label>
+                <input type="password" class="form-input" id="loginPassword" placeholder="••••••••" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Iniciar Sesión</button>
+            <button type="button" class="btn btn-secondary" onclick="toggleRegister()">Crear nueva cuenta</button>
+        </form>
+        <div id="registerForm" style="display: none; margin-top: 20px;">
+            <h3 style="margin-bottom: 16px; color: var(--gray-800);">Crear Cuenta</h3>
+            <form onsubmit="handleRegister(event)">
                 <div class="form-group">
                     <label class="form-label">Email</label>
-                    <input type="email" class="form-input" id="loginEmail" placeholder="tu@email.com" required>
+                    <input type="email" class="form-input" id="registerEmail" required>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Contraseña</label>
-                    <input type="password" class="form-input" id="loginPassword" placeholder="••••••••" required>
+                    <label class="form-label">Contraseña (mínimo 6 caracteres)</label>
+                    <input type="password" class="form-input" id="registerPassword" minlength="6" required>
                 </div>
-                <button type="submit" class="btn btn-primary" style="width: 100%;">Iniciar Sesión</button>
+                <div class="form-group">
+                    <label class="form-label">Perfil</label>
+                    <select class="form-select" id="registerPerfil" required>
+                        <option value="">Seleccionar...</option>
+                        <option value="Maestro">Maestro (Acceso completo)</option>
+                        <option value="Operador">Operador (Solo movimientos)</option>
+                        <option value="Visualizador">Visualizador (Solo lectura)</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary">Crear Cuenta</button>
+                <button type="button" class="btn btn-secondary" onclick="toggleRegister()">Volver</button>
             </form>
-            <div style="text-align: center; margin-top: 20px;">
-                <button type="button" class="btn btn-secondary" style="width: 100%;" id="registerBtn">Crear nueva cuenta</button>
-            </div>
         </div>
     </div>
+</div>
 
-    <!-- Register Modal -->
-    <div class="modal-overlay" id="registerModal">
-        <div class="modal">
-            <div class="modal-header">
-                <h3 class="modal-title">Crear Cuenta</h3>
-                <button type="button" class="modal-close" id="closeRegisterBtn">&times;</button>
+<!-- ===== APP SCREEN ===== -->
+<div class="app-screen" id="appScreen">
+    <div class="container">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h1>Celmedik</h1>
+                <p>Inventario WMS</p>
             </div>
-            <div class="modal-body">
-                <div class="login-status" id="registerStatus"></div>
-                <form id="registerForm">
-                    <div class="form-group">
-                        <label class="form-label">Email</label>
-                        <input type="email" class="form-input" id="registerEmail" required>
+            <ul class="sidebar-menu">
+                <li><a class="menu-link active" data-page="dashboard">Dashboard</a></li>
+                <li><a class="menu-link" data-page="productos">Productos Maestro</a></li>
+                <li><a class="menu-link" data-page="stock">Stock</a></li>
+                <li><a class="menu-link" data-page="bodegas">Bodegas</a></li>
+                <li><a class="menu-link" data-page="movimientos">Movimientos</a></li>
+                <li><a class="menu-link" data-page="devoluciones">Devoluciones</a></li>
+                <li><a class="menu-link" data-page="alertas">Alertas</a></li>
+                <li><a class="menu-link" data-page="reportes">Reportes</a></li>
+                <li><a class="menu-link" data-page="auditoria">Auditoría</a></li>
+            </ul>
+            <div class="sidebar-footer">
+                <div class="user-info">Usuario: <span id="userEmail"></span></div>
+                <div class="user-role" id="userRole">Perfil: Cargando...</div>
+                <button class="btn btn-secondary" onclick="handleLogout()" style="width:100%; margin-top:0;">Cerrar Sesión</button>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <div class="header">
+                <h1 id="pageTitle">Dashboard</h1>
+            </div>
+
+            <!-- Dashboard -->
+            <div id="dashboard" class="page active">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">Productos Maestro</div>
+                        <div class="stat-value" id="stat-productos">0</div>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">Contraseña</label>
-                        <input type="password" class="form-input" id="registerPassword" required minlength="6">
+                    <div class="stat-card">
+                        <div class="stat-label">Bodegas</div>
+                        <div class="stat-value" id="stat-bodegas">0</div>
                     </div>
-                    <button type="submit" class="btn btn-primary" style="width: 100%;">Crear Cuenta</button>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <!-- App Container -->
-    <div class="app-container" id="appContainer">
-        <div class="app-header">
-            <h1>WMS Medical - Dashboard</h1>
-            <button type="button" class="btn btn-secondary" id="logoutBtn">Cerrar Sesión</button>
-        </div>
-        <div class="app-content">
-            <h2 class="page-title">Bienvenido al WMS</h2>
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-label">Productos Maestro</div>
-                    <div class="stat-value" id="statMaestro">0</div>
+                    <div class="stat-card">
+                        <div class="stat-label">Movimientos</div>
+                        <div class="stat-value" id="stat-movimientos">0</div>
+                    </div>
+                    <div class="stat-card warning">
+                        <div class="stat-label">Alertas Activas</div>
+                        <div class="stat-value" id="stat-alertas">0</div>
+                    </div>
                 </div>
-                <div class="stat-card">
-                    <div class="stat-label">Bodegas</div>
-                    <div class="stat-value" id="statBodegas">0</div>
+                <div class="card">
+                    <h2>Bienvenido a Celmedik Inventario</h2>
+                    <p style="color: var(--gray-500);">Sistema completo de Gestión de Almacén para Dispositivos Médicos y Medicamentos</p>
                 </div>
             </div>
-            <div class="card">
-                <h3>Sistema de Gestión de Almacén</h3>
-                <p>Para Dispositivos Médicos y Medicamentos</p>
-                <p style="margin-top: 16px; color: var(--gray-500);">Usuario: <strong id="userEmail"></strong></p>
+
+            <!-- Productos Maestro -->
+            <div id="productos" class="page">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Productos Maestro</h2>
+                        <button class="btn btn-primary btn-sm" onclick="openProductModal()">+ Nuevo Producto</button>
+                    </div>
+                    <div class="table-container">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>SKU</th><th>Descripción</th><th>Tipo</th><th>Fabricante</th>
+                                    <th>Presentación</th><th>Unidad de Venta</th><th>Almacenamiento</th><th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="productos-table">
+                                <tr><td colspan="8" class="empty-state">No hay productos registrados</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
-        </div>
+
+            <!-- Stock -->
+            <div id="stock" class="page">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Stock Actual</h2>
+                    </div>
+                    <div class="filter-bar" id="bodegaButtonsContainer">
+                        <label style="font-weight:600; color:var(--gray-700);">Bodega:</label>
+                        <button class="btn btn-sm" id="bodegaTotalBtn" onclick="selectBodega('TOTAL')" style="background:var(--primary);color:white;">Total</button>
+                    </div>
+                    <div class="filter-bar">
+                        <input type="text" class="form-input" id="stockFilterSKU" placeholder="Filtrar por SKU..." onkeyup="renderStock()">
+                        <input type="text" class="form-input" id="stockFilterDescripcion" placeholder="Filtrar por Descripción..." onkeyup="renderStock()">
+                        <input type="text" class="form-input" id="stockFilterLote" placeholder="Filtrar por Lote..." onkeyup="renderStock()">
+                        <input type="text" class="form-input" id="stockFilterUbicacion" placeholder="Filtrar por Ubicación..." onkeyup="renderStock()">
+                        <button class="btn btn-secondary btn-sm" onclick="clearStockFilters()" style="margin-top:0;">Limpiar Filtros</button>
+                    </div>
+                    <div class="table-container">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>SKU</th><th>Descripción</th><th>Unidad de Venta</th><th>Lote</th>
+                                    <th>Vence</th><th>Cantidad</th><th>Status</th><th>Ubicación</th>
+                                </tr>
+                            </thead>
+                            <tbody id="stock-table">
+                                <tr><td colspan="8" class="empty-state">No hay stock registrado</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bodegas -->
+            <div id="bodegas" class="page">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Bodegas</h2>
+                        <button class="btn btn-primary btn-sm" onclick="openBodegaModal()">+ Nueva Bodega</button>
+                    </div>
+                    <div class="table-container">
+                        <table class="table">
+                            <thead>
+                                <tr><th>Nombre</th><th>Ubicación</th><th>Capacidad</th><th>Temperatura</th><th>Estado</th><th>Acciones</th></tr>
+                            </thead>
+                            <tbody id="bodegas-table">
+                                <tr><td colspan="6" class="empty-state">No hay bodegas registradas</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Movimientos -->
+            <div id="movimientos" class="page">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Movimientos</h2>
+                        <button class="btn btn-primary btn-sm" onclick="openMovimientoModal()">+ Nuevo Movimiento</button>
+                    </div>
+                    <div class="filter-bar">
+                        <select class="form-select" id="movTipoFilter" onchange="renderMovimientos()" style="width:auto; min-width:150px;">
+                            <option value="">Todos los tipos</option>
+                            <option value="Entrada">Entrada</option>
+                            <option value="Salida">Salida</option>
+                            <option value="Ajuste">Ajuste</option>
+                        </select>
+                    </div>
+                    <div class="table-container">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Fecha</th><th>Tipo</th><th>SKU</th><th>Descripción</th><th>Lote</th>
+                                    <th>Vence</th><th>Cantidad</th><th>Bodega</th><th>Ubicación</th>
+                                    <th>Proveedor/Cliente</th><th>Referencia</th><th>Status</th><th>Usuario</th><th>Obs.</th>
+                                </tr>
+                            </thead>
+                            <tbody id="movimientos-table">
+                                <tr><td colspan="14" class="empty-state">No hay movimientos registrados</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Alertas -->
+            <div id="alertas" class="page">
+                <div class="card">
+                    <h2>Alertas del Sistema</h2>
+                    <div id="alertasListContainer"><p style="color:var(--gray-500);">No hay alertas activas.</p></div>
+                </div>
+            </div>
+
+            <!-- Reportes -->
+            <div id="reportes" class="page">
+                <div class="card">
+                    <h2>Reportes</h2>
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px,1fr)); gap:16px;">
+                        <button class="btn btn-primary" onclick="generarReporteInventario()" style="margin-top:0;">Reporte de Inventario</button>
+                        <button class="btn btn-primary" onclick="generarReporteVencimiento()" style="margin-top:0;">Reporte de Vencimientos</button>
+                        <button class="btn btn-primary" onclick="generarReporteMovimientos()" style="margin-top:0;">Reporte de Movimientos</button>
+                    </div>
+                </div>
+                <div id="reporteContainer"></div>
+            </div>
+
+            <!-- Auditoría -->
+            <div id="auditoria" class="page">
+                <div class="card">
+                    <h2>Auditoría del Sistema</h2>
+                    <div id="auditoriaListContainer"><p style="color:var(--gray-500);">No hay registros de auditoría.</p></div>
+                </div>
+            </div>
+
+            <!-- Devoluciones -->
+            <div id="devoluciones" class="page">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>Gestión de Devoluciones</h2>
+                        <button class="btn btn-primary btn-sm" onclick="openDevolucionModal()">+ Nueva Devolución</button>
+                    </div>
+                    <div class="filter-bar">
+                        <input type="text" class="form-input" id="devolucionFilterSKU" placeholder="Buscar por SKU..." onkeyup="renderDevoluciones()">
+                        <input type="text" class="form-input" id="devolucionFilterLote" placeholder="Buscar por Lote..." onkeyup="renderDevoluciones()">
+                    </div>
+                    <div class="table-container">
+                        <table class="table">
+                            <thead>
+                                <tr><th>Fecha</th><th>SKU</th><th>Descripción</th><th>Lote</th><th>Cantidad</th><th>Motivo</th><th>Status</th><th>Acciones</th></tr>
+                            </thead>
+                            <tbody id="devoluciones-table">
+                                <tr><td colspan="8" class="empty-state">No hay devoluciones registradas</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </main>
     </div>
+</div>
 
-    <script>
-        const firebaseConfig = {
-            apiKey: "AIzaSyCJ73iFZQaqCGVMZEnUA45HmSpXD_Z0oiE",
-            authDomain: "celmedik-inventario.firebaseapp.com",
-            projectId: "celmedik-inventario",
-            storageBucket: "celmedik-inventario.firebasestorage.app",
-            messagingSenderId: "1069071656431",
-            appId: "1:1069071656431:web:5ef4c84416c016a934821a",
-            databaseURL: "https://celmedik-inventario-default-rtdb.firebaseio.com"
-        };
+<!-- ===== MODAL: PRODUCTO ===== -->
+<div id="productModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Nuevo Producto Maestro</h2>
+            <button class="modal-close" onclick="closeProductModal()">&times;</button>
+        </div>
+        <form onsubmit="saveProduct(event)">
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">SKU</label>
+                    <input type="text" class="form-input" id="sku" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Descripción</label>
+                    <input type="text" class="form-input" id="descripcion" required>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Fabricante</label>
+                    <input type="text" class="form-input" id="fabricante" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Tipo</label>
+                    <select class="form-select" id="tipo" required>
+                        <option value="">Seleccionar...</option>
+                        <option value="Dispositivo Médico">Dispositivo Médico</option>
+                        <option value="Medicamento">Medicamento</option>
+                        <option value="Insumo">Insumo</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Presentación</label>
+                    <input type="text" class="form-input" id="presentacion" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Unidad de Venta</label>
+                    <input type="text" class="form-input" id="unidadVenta" required>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Almacenamiento</label>
+                    <select class="form-select" id="almacenamiento" required>
+                        <option value="">Seleccionar...</option>
+                        <option value="Temperatura Ambiente">Temperatura Ambiente</option>
+                        <option value="Refrigerado 2-8°C">Refrigerado 2-8°C</option>
+                        <option value="Congelado -20°C">Congelado -20°C</option>
+                    </select>
+                </div>
+            </div>
+            <div class="button-group">
+                <button type="button" class="btn btn-secondary" onclick="closeProductModal()" style="margin-top:0;">Cancelar</button>
+                <button type="submit" class="btn btn-primary" style="margin-top:0;">Guardar</button>
+            </div>
+        </form>
+    </div>
+</div>
 
-        firebase.initializeApp(firebaseConfig);
-        const auth = firebase.auth();
-        const db = firebase.database();
+<!-- ===== MODAL: BODEGA ===== -->
+<div id="bodegaModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Nueva Bodega</h2>
+            <button class="modal-close" onclick="closeBodegaModal()">&times;</button>
+        </div>
+        <form onsubmit="saveBodega(event)">
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Nombre</label>
+                    <input type="text" class="form-input" id="bodega-nombre" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Ubicación</label>
+                    <input type="text" class="form-input" id="bodega-ubicacion" required>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Capacidad (m³)</label>
+                    <input type="number" class="form-input" id="bodega-capacidad" min="1" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Temperatura</label>
+                    <select class="form-select" id="bodega-temperatura" required>
+                        <option value="">Seleccionar...</option>
+                        <option value="Ambiente">Ambiente</option>
+                        <option value="Refrigerado 2-8°C">Refrigerado 2-8°C</option>
+                        <option value="Congelado -20°C">Congelado -20°C</option>
+                    </select>
+                </div>
+            </div>
+            <div class="button-group">
+                <button type="button" class="btn btn-secondary" onclick="closeBodegaModal()" style="margin-top:0;">Cancelar</button>
+                <button type="submit" class="btn btn-primary" style="margin-top:0;">Guardar</button>
+            </div>
+        </form>
+    </div>
+</div>
 
-        // DOM Elements
-        const loginScreen = document.getElementById('loginScreen');
-        const appContainer = document.getElementById('appContainer');
-        const loginForm = document.getElementById('loginForm');
-        const registerForm = document.getElementById('registerForm');
-        const registerModal = document.getElementById('registerModal');
-        const registerBtn = document.getElementById('registerBtn');
-        const closeRegisterBtn = document.getElementById('closeRegisterBtn');
-        const logoutBtn = document.getElementById('logoutBtn');
-        const loginStatus = document.getElementById('loginStatus');
-        const registerStatus = document.getElementById('registerStatus');
-        const userEmail = document.getElementById('userEmail');
+<!-- ===== MODAL: MOVIMIENTO ===== -->
+<div id="movimientoModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Nuevo Movimiento</h2>
+            <button class="modal-close" onclick="closeMovimientoModal()">&times;</button>
+        </div>
+        <form onsubmit="saveMovimiento(event)">
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Tipo de Movimiento</label>
+                    <select class="form-select" id="mov-tipo" onchange="handleMovTipoChange()" required>
+                        <option value="">Seleccionar...</option>
+                        <option value="Entrada">Entrada</option>
+                        <option value="Salida">Salida</option>
+                        <option value="Ajuste">Ajuste</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Producto (SKU)</label>
+                    <input type="text" class="form-input" id="mov-producto" onchange="validateSKU()" required placeholder="Ej: MED-001">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Lote</label>
+                    <!-- FIX: El campo de lote cambia según el tipo (Entrada=texto, Salida=select) -->
+                    <div id="mov-lote-container">
+                        <input type="text" class="form-input" id="mov-lote-texto" placeholder="Ingrese lote" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Cantidad</label>
+                    <input type="number" class="form-input" id="mov-cantidad" min="1" required>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Bodega</label>
+                    <select class="form-select" id="mov-bodega" onchange="handleBodegaChange()" required>
+                        <option value="">Seleccionar bodega...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Ubicación</label>
+                    <input type="text" class="form-input" id="mov-ubicacion" placeholder="Ej: Estante A-1" required>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Fecha de Vencimiento</label>
+                    <input type="date" class="form-input" id="mov-vencimiento" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Referencia (Factura/Orden)</label>
+                    <input type="text" class="form-input" id="mov-referencia" required placeholder="Ej: FAC-2024-001">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Proveedor/Cliente</label>
+                    <input type="text" class="form-input" id="mov-proveedor-cliente" placeholder="Nombre del proveedor o cliente" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Estado del Movimiento</label>
+                    <select class="form-select" id="mov-status" required>
+                        <option value="Aprobado">Aprobado</option>
+                        <option value="Cuarentena">Cuarentena</option>
+                        <option value="Rechazado">Rechazado</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Observaciones</label>
+                <textarea class="form-input" id="mov-observaciones" placeholder="Notas adicionales sobre el movimiento"></textarea>
+            </div>
+            <div class="button-group">
+                <button type="button" class="btn btn-secondary" onclick="closeMovimientoModal()" style="margin-top:0;">Cancelar</button>
+                <button type="submit" class="btn btn-primary" style="margin-top:0;">Guardar</button>
+            </div>
+        </form>
+    </div>
+</div>
 
-        // Register Button Click
-        registerBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            registerModal.classList.add('active');
-        });
+<!-- ===== MODAL: DEVOLUCIÓN (IDs únicos, sin conflicto) ===== -->
+<div id="devolucionModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Nueva Devolución</h2>
+            <button class="modal-close" onclick="closeDevolucionModal()">&times;</button>
+        </div>
+        <form onsubmit="saveDevolucion(event)">
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Producto (SKU)</label>
+                    <input type="text" class="form-input" id="dev-sku" required placeholder="Ej: MED-001">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Lote</label>
+                    <input type="text" class="form-input" id="dev-lote" required placeholder="Ej: LOT-2024-01">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Cantidad a Devolver</label>
+                    <input type="number" class="form-input" id="dev-cantidad" min="1" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Motivo de Devolución</label>
+                    <select class="form-select" id="dev-motivo" required>
+                        <option value="">Seleccionar motivo...</option>
+                        <option value="Defecto">Defecto</option>
+                        <option value="Vencimiento">Vencimiento</option>
+                        <option value="Daño">Daño</option>
+                        <option value="Error de Entrada">Error de Entrada</option>
+                        <option value="Otro">Otro</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Status</label>
+                    <select class="form-select" id="dev-status" required>
+                        <option value="Pendiente">Pendiente</option>
+                        <option value="Aprobado">Aprobado</option>
+                        <option value="Rechazado">Rechazado</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Observaciones</label>
+                <textarea class="form-input" id="dev-observaciones" placeholder="Notas adicionales"></textarea>
+            </div>
+            <div class="button-group">
+                <button type="button" class="btn btn-secondary" onclick="closeDevolucionModal()" style="margin-top:0;">Cancelar</button>
+                <button type="submit" class="btn btn-primary" style="margin-top:0;">Guardar Devolución</button>
+            </div>
+        </form>
+    </div>
+</div>
 
-        // Close Register Modal
-        closeRegisterBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            registerModal.classList.remove('active');
-        });
+<script>
+    // ===== FIREBASE CONFIG =====
+    const firebaseConfig = {
+        apiKey: "AIzaSyCJ73iFZQaqCGVMZEnUA45HmSpXD_Z0oiE",
+        authDomain: "celmedik-inventario.firebaseapp.com",
+        projectId: "celmedik-inventario",
+        storageBucket: "celmedik-inventario.firebasestorage.app",
+        messagingSenderId: "1069071656431",
+        appId: "1:1069071656431:web:5ef4c84416c016a934821a",
+        databaseURL: "https://celmedik-inventario-default-rtdb.firebaseio.com"
+    };
 
-        // Close modal when clicking outside
-        registerModal.addEventListener('click', (e) => {
-            if (e.target === registerModal) {
-                registerModal.classList.remove('active');
-            }
-        });
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.database();
 
-        // Login Form Submit
-        loginForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            const email = document.getElementById('loginEmail').value;
-            const password = document.getElementById('loginPassword').value;
-            
-            auth.signInWithEmailAndPassword(email, password)
-                .then(() => {
-                    loginStatus.textContent = '';
-                })
-                .catch(error => {
-                    loginStatus.className = 'login-status error';
-                    loginStatus.textContent = 'Error: ' + error.message;
-                });
-        });
+    let currentUser = null;
+    let userPerfil = null;
+    let userData = { productos: {}, bodegas: {}, movimientos: {}, devoluciones: {} };
+    let selectedBodega = 'TOTAL';
+    let activeListeners = [];
 
-        // Register Form Submit
-        registerForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            const email = document.getElementById('registerEmail').value;
-            const password = document.getElementById('registerPassword').value;
-            
-            auth.createUserWithEmailAndPassword(email, password)
-                .then(() => {
-                    registerStatus.className = 'login-status success';
-                    registerStatus.textContent = 'Cuenta creada exitosamente. Inicia sesión.';
-                    registerForm.reset();
-                    setTimeout(() => {
-                        registerModal.classList.remove('active');
-                        document.getElementById('loginEmail').value = email;
-                    }, 2000);
-                })
-                .catch(error => {
-                    registerStatus.className = 'login-status error';
-                    registerStatus.textContent = 'Error: ' + error.message;
-                });
-        });
-
-        // Logout
-        logoutBtn.addEventListener('click', () => {
-            auth.signOut();
-        });
-
-        // Auth State Changed
+    // ===== AUTH =====
+    document.addEventListener('DOMContentLoaded', () => {
+        setupMenuListeners();
         auth.onAuthStateChanged(user => {
             if (user) {
-                loginScreen.style.display = 'none';
-                appContainer.classList.add('active');
-                userEmail.textContent = user.email;
+                currentUser = user;
+                loadUserProfile();
             } else {
-                loginScreen.style.display = 'flex';
-                appContainer.classList.remove('active');
-                loginStatus.textContent = '';
-                registerStatus.textContent = '';
-                loginForm.reset();
+                currentUser = null;
+                removeAllListeners();
+                showLogin();
             }
         });
-    </script>
+    });
+
+    function loadUserProfile() {
+        db.ref(`usuarios/${currentUser.uid}/perfil`).once('value', snapshot => {
+            userPerfil = snapshot.val() || 'Maestro';
+            document.getElementById('userRole').textContent = `Perfil: ${userPerfil}`;
+            showApp(currentUser);
+            loadUserData();
+        });
+    }
+
+    function showLogin() {
+        document.getElementById('loginScreen').style.display = 'flex';
+        document.getElementById('appScreen').classList.remove('active');
+    }
+
+    function showApp(user) {
+        document.getElementById('loginScreen').style.display = 'none';
+        document.getElementById('appScreen').classList.add('active');
+        document.getElementById('userEmail').textContent = user.email;
+    }
+
+    function handleLogin(e) {
+        e.preventDefault();
+        const email = document.getElementById('loginEmail').value;
+        const password = document.getElementById('loginPassword').value;
+        const status = document.getElementById('loginStatus');
+        status.className = 'status-message';
+        status.textContent = '';
+        auth.signInWithEmailAndPassword(email, password)
+            .then(() => { document.getElementById('loginForm').reset(); })
+            .catch(error => {
+                status.className = 'status-message error';
+                status.textContent = 'Error: ' + translateFirebaseError(error.code);
+            });
+    }
+
+    function toggleRegister() {
+        const form = document.getElementById('registerForm');
+        form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    }
+
+    function handleRegister(e) {
+        e.preventDefault();
+        const email = document.getElementById('registerEmail').value;
+        const password = document.getElementById('registerPassword').value;
+        const perfil = document.getElementById('registerPerfil').value;
+        auth.createUserWithEmailAndPassword(email, password)
+            .then(cred => {
+                db.ref(`usuarios/${cred.user.uid}/perfil`).set(perfil);
+                const status = document.getElementById('loginStatus');
+                status.className = 'status-message success';
+                status.textContent = 'Cuenta creada. Inicia sesión.';
+                toggleRegister();
+                document.getElementById('registerEmail').value = '';
+                document.getElementById('registerPassword').value = '';
+                document.getElementById('registerPerfil').value = '';
+                document.getElementById('loginEmail').value = email;
+            })
+            .catch(error => {
+                const status = document.getElementById('loginStatus');
+                status.className = 'status-message error';
+                status.textContent = 'Error: ' + translateFirebaseError(error.code);
+            });
+    }
+
+    function handleLogout() {
+        removeAllListeners();
+        auth.signOut();
+    }
+
+    function translateFirebaseError(code) {
+        const errors = {
+            'auth/user-not-found': 'Usuario no encontrado.',
+            'auth/wrong-password': 'Contraseña incorrecta.',
+            'auth/email-already-in-use': 'El email ya está en uso.',
+            'auth/invalid-email': 'Email inválido.',
+            'auth/weak-password': 'Contraseña muy débil (mínimo 6 caracteres).',
+            'auth/too-many-requests': 'Demasiados intentos. Espere un momento.',
+        };
+        return errors[code] || code;
+    }
+
+    // ===== NAVEGACIÓN =====
+    function setupMenuListeners() {
+        document.querySelectorAll('.menu-link').forEach(link => {
+            link.addEventListener('click', e => {
+                e.preventDefault();
+                navigateTo(link.getAttribute('data-page'));
+            });
+        });
+    }
+
+    function navigateTo(page) {
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.getElementById(page).classList.add('active');
+        document.querySelectorAll('.menu-link').forEach(l => l.classList.remove('active'));
+        document.querySelector(`[data-page="${page}"]`).classList.add('active');
+        const titles = {
+            dashboard: 'Dashboard', productos: 'Productos Maestro', stock: 'Stock',
+            bodegas: 'Bodegas', movimientos: 'Movimientos', devoluciones: 'Devoluciones',
+            alertas: 'Alertas', reportes: 'Reportes', auditoria: 'Auditoría'
+        };
+        document.getElementById('pageTitle').textContent = titles[page] || page;
+
+        // Renderizar vistas bajo demanda
+        if (page === 'alertas') renderAlertas();
+        if (page === 'auditoria') renderAuditoria();
+    }
+
+    // ===== DATA LOADING =====
+    function removeAllListeners() {
+        if (!currentUser) return;
+        const uid = currentUser.uid;
+        db.ref(`usuarios/${uid}/productos`).off();
+        db.ref(`usuarios/${uid}/bodegas`).off();
+        db.ref(`usuarios/${uid}/movimientos`).off();
+        db.ref(`usuarios/${uid}/devoluciones`).off();
+    }
+
+    function loadUserData() {
+        const uid = currentUser.uid;
+
+        db.ref(`usuarios/${uid}/productos`).on('value', snap => {
+            userData.productos = snap.val() || {};
+            renderProductos();
+            updateStats();
+        });
+
+        db.ref(`usuarios/${uid}/bodegas`).on('value', snap => {
+            userData.bodegas = snap.val() || {};
+            renderBodegas();
+            renderBodegaButtons();
+            updateBodegaSelect();
+            updateStats();
+        });
+
+        db.ref(`usuarios/${uid}/movimientos`).on('value', snap => {
+            userData.movimientos = snap.val() || {};
+            renderMovimientos();
+            renderStock();
+            updateStats();
+        });
+
+        db.ref(`usuarios/${uid}/devoluciones`).on('value', snap => {
+            userData.devoluciones = snap.val() || {};
+            renderDevoluciones();
+            updateStats();
+        });
+    }
+
+    function updateStats() {
+        document.getElementById('stat-productos').textContent = Object.keys(userData.productos || {}).length;
+        document.getElementById('stat-bodegas').textContent = Object.keys(userData.bodegas || {}).length;
+        document.getElementById('stat-movimientos').textContent = Object.keys(userData.movimientos || {}).length;
+        // Contar alertas activas
+        const alertCount = calcAlertas().length;
+        document.getElementById('stat-alertas').textContent = alertCount;
+    }
+
+    // ===== PRODUCTOS =====
+    function openProductModal() {
+        document.getElementById('productModal').classList.add('active');
+    }
+
+    function closeProductModal() {
+        document.getElementById('productModal').classList.remove('active');
+        ['sku','descripcion','fabricante','tipo','presentacion','unidadVenta','almacenamiento'].forEach(id => {
+            const el = document.getElementById(id);
+            el.value = '';
+            el.disabled = false;
+        });
+    }
+
+    function saveProduct(e) {
+        e.preventDefault();
+        const uid = currentUser.uid;
+        const sku = document.getElementById('sku').value.trim().toUpperCase();
+        if (!sku) { alert('SKU es requerido'); return; }
+        const producto = {
+            sku,
+            descripcion: document.getElementById('descripcion').value.trim(),
+            fabricante: document.getElementById('fabricante').value.trim(),
+            tipo: document.getElementById('tipo').value,
+            presentacion: document.getElementById('presentacion').value.trim(),
+            unidadVenta: document.getElementById('unidadVenta').value.trim(),
+            almacenamiento: document.getElementById('almacenamiento').value,
+            fecha: new Date().toISOString(),
+        };
+        db.ref(`usuarios/${uid}/productos/${sku}`).set(producto)
+            .then(() => closeProductModal())
+            .catch(err => alert('Error al guardar: ' + err.message));
+    }
+
+    function renderProductos() {
+        const tbody = document.getElementById('productos-table');
+        const productos = Object.values(userData.productos || {});
+        if (productos.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No hay productos registrados</td></tr>';
+            return;
+        }
+        tbody.innerHTML = productos.map(p => `
+            <tr>
+                <td><strong>${p.sku}</strong></td>
+                <td>${p.descripcion}</td>
+                <td>${p.tipo}</td>
+                <td>${p.fabricante}</td>
+                <td>${p.presentacion}</td>
+                <td>${p.unidadVenta || '-'}</td>
+                <td>${p.almacenamiento}</td>
+                <td><button class="btn btn-sm btn-primary" onclick="editProduct('${p.sku}')">Modificar</button></td>
+            </tr>
+        `).join('');
+    }
+
+    function editProduct(sku) {
+        const p = userData.productos[sku];
+        if (!p) return;
+        document.getElementById('sku').value = p.sku;
+        document.getElementById('sku').disabled = true;
+        document.getElementById('descripcion').value = p.descripcion;
+        document.getElementById('fabricante').value = p.fabricante;
+        document.getElementById('tipo').value = p.tipo;
+        document.getElementById('presentacion').value = p.presentacion;
+        document.getElementById('unidadVenta').value = p.unidadVenta;
+        document.getElementById('almacenamiento').value = p.almacenamiento;
+        document.getElementById('productModal').classList.add('active');
+    }
+
+    // ===== BODEGAS =====
+    function openBodegaModal() {
+        document.getElementById('bodegaModal').classList.add('active');
+    }
+
+    function closeBodegaModal() {
+        document.getElementById('bodegaModal').classList.remove('active');
+        ['bodega-nombre','bodega-ubicacion','bodega-capacidad','bodega-temperatura'].forEach(id => {
+            document.getElementById(id).value = '';
+        });
+    }
+
+    function saveBodega(e) {
+        e.preventDefault();
+        const uid = currentUser.uid;
+        const bodega = {
+            nombre: document.getElementById('bodega-nombre').value.trim(),
+            ubicacion: document.getElementById('bodega-ubicacion').value.trim(),
+            capacidad: document.getElementById('bodega-capacidad').value,
+            temperatura: document.getElementById('bodega-temperatura').value,
+            fecha: new Date().toISOString(),
+        };
+        db.ref(`usuarios/${uid}/bodegas/${Date.now()}`).set(bodega)
+            .then(() => closeBodegaModal())
+            .catch(err => alert('Error: ' + err.message));
+    }
+
+    function renderBodegas() {
+        const tbody = document.getElementById('bodegas-table');
+        const bodegas = Object.entries(userData.bodegas || {});
+        if (bodegas.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No hay bodegas registradas</td></tr>';
+            return;
+        }
+        tbody.innerHTML = bodegas.map(([id, b]) => `
+            <tr>
+                <td><strong>${b.nombre}</strong></td>
+                <td>${b.ubicacion}</td>
+                <td>${b.capacidad} m³</td>
+                <td>${b.temperatura}</td>
+                <td><span class="badge badge-success">Disponible</span></td>
+                <td><button class="btn btn-sm btn-danger" onclick="deleteBodega('${id}')">Eliminar</button></td>
+            </tr>
+        `).join('');
+    }
+
+    function deleteBodega(id) {
+        if (confirm('¿Eliminar esta bodega? Esta acción no se puede deshacer.')) {
+            db.ref(`usuarios/${currentUser.uid}/bodegas/${id}`).remove();
+        }
+    }
+
+    function updateBodegaSelect() {
+        const select = document.getElementById('mov-bodega');
+        const current = select.value;
+        select.innerHTML = '<option value="">Seleccionar bodega...</option>';
+        Object.values(userData.bodegas || {}).forEach(b => {
+            const opt = document.createElement('option');
+            opt.value = b.nombre;
+            opt.textContent = b.nombre;
+            select.appendChild(opt);
+        });
+        if (current) select.value = current;
+    }
+
+    // ===== MOVIMIENTOS =====
+    function openMovimientoModal() {
+        resetMovimientoModal();
+        document.getElementById('movimientoModal').classList.add('active');
+    }
+
+    function closeMovimientoModal() {
+        document.getElementById('movimientoModal').classList.remove('active');
+    }
+
+    function resetMovimientoModal() {
+        document.getElementById('mov-tipo').value = '';
+        document.getElementById('mov-producto').value = '';
+        document.getElementById('mov-cantidad').value = '';
+        document.getElementById('mov-bodega').value = '';
+        document.getElementById('mov-ubicacion').value = '';
+        document.getElementById('mov-vencimiento').value = '';
+        document.getElementById('mov-referencia').value = '';
+        document.getElementById('mov-proveedor-cliente').value = '';
+        document.getElementById('mov-observaciones').value = '';
+        document.getElementById('mov-status').value = 'Aprobado';
+        // Restaurar campo de lote a texto
+        const container = document.getElementById('mov-lote-container');
+        container.innerHTML = '<input type="text" class="form-input" id="mov-lote-texto" placeholder="Ingrese lote" required>';
+    }
+
+    // FIX: Función definida y funcional (era referenciada pero no existía antes)
+    function handleMovTipoChange() {
+        const tipo = document.getElementById('mov-tipo').value;
+        const sku = document.getElementById('mov-producto').value;
+        const container = document.getElementById('mov-lote-container');
+
+        if (tipo === 'Salida' && sku) {
+            // Mostrar select con lotes disponibles
+            loadAvailableLots(sku);
+        } else {
+            // Mostrar input de texto para Entrada/Ajuste
+            container.innerHTML = '<input type="text" class="form-input" id="mov-lote-texto" placeholder="Ingrese lote" required>';
+        }
+    }
+
+    function handleBodegaChange() {
+        // Para modal de movimiento, la ubicación es texto libre
+        // Si tienes ubicaciones predefinidas en Firebase, se pueden cargar aquí
+        const bodega = document.getElementById('mov-bodega').value;
+        if (bodega) {
+            // Opcionalmente cargar ubicaciones predefinidas desde Firebase
+            loadUbicaciones(bodega);
+        }
+    }
+
+    function loadUbicaciones(bodegaNombre) {
+        db.ref('ubicaciones_por_bodega').once('value', snapshot => {
+            const allUbicaciones = snapshot.val() || {};
+            const ubicaciones = allUbicaciones[bodegaNombre];
+            const input = document.getElementById('mov-ubicacion');
+
+            if (ubicaciones && (Array.isArray(ubicaciones) ? ubicaciones.length > 0 : Object.keys(ubicaciones).length > 0)) {
+                // Hay ubicaciones predefinidas: convertir a select
+                const select = document.createElement('select');
+                select.className = 'form-select';
+                select.id = 'mov-ubicacion';
+                select.required = true;
+                select.innerHTML = '<option value="">Seleccionar ubicación...</option>';
+
+                const arr = Array.isArray(ubicaciones) ? ubicaciones : Object.values(ubicaciones);
+                arr.forEach(ub => {
+                    if (ub && ub.nombre) {
+                        const opt = document.createElement('option');
+                        opt.value = ub.nombre;
+                        opt.textContent = ub.nombre;
+                        select.appendChild(opt);
+                    }
+                });
+                input.parentNode.replaceChild(select, input);
+            }
+            // Si no hay ubicaciones predefinidas, se mantiene el input de texto
+        }).catch(() => {
+            // Sin ubicaciones configuradas, el usuario escribe libremente
+        });
+    }
+
+    function getLoteValue() {
+        // FIX: Obtiene el valor del lote sea de input texto o select
+        const texto = document.getElementById('mov-lote-texto');
+        const select = document.getElementById('mov-lote-select');
+        if (texto) return texto.value;
+        if (select) return select.value;
+        return '';
+    }
+
+    function getUbicacionValue() {
+        const input = document.getElementById('mov-ubicacion');
+        return input ? input.value : '';
+    }
+
+    function saveMovimiento(e) {
+        e.preventDefault();
+        const uid = currentUser.uid;
+        const sku = document.getElementById('mov-producto').value.trim().toUpperCase();
+        const lote = getLoteValue().trim();
+
+        if (!userData.productos[sku]) {
+            alert(`El SKU "${sku}" no existe en el maestro de productos.`);
+            return;
+        }
+        if (!lote) {
+            alert('Debe ingresar o seleccionar un lote.');
+            return;
+        }
+
+        const tipo = document.getElementById('mov-tipo').value;
+        const cantidad = parseInt(document.getElementById('mov-cantidad').value);
+
+        // Validar stock disponible para Salida
+        if (tipo === 'Salida') {
+            const stockDisponible = calcStockForLot(sku, lote);
+            if (cantidad > stockDisponible) {
+                alert(`Stock insuficiente. Disponible para lote ${lote}: ${stockDisponible} unidades.`);
+                return;
+            }
+        }
+
+        const movimiento = {
+            tipo,
+            sku,
+            lote,
+            descripcion: userData.productos[sku]?.descripcion || '',
+            unidadVenta: userData.productos[sku]?.unidadVenta || '',
+            cantidad,
+            bodega: document.getElementById('mov-bodega').value,
+            ubicacion: getUbicacionValue(),
+            vence: document.getElementById('mov-vencimiento').value,
+            referencia: document.getElementById('mov-referencia').value.trim(),
+            proveedorCliente: document.getElementById('mov-proveedor-cliente').value.trim(),
+            status: document.getElementById('mov-status').value || 'Aprobado',
+            observaciones: document.getElementById('mov-observaciones').value.trim(),
+            fecha: new Date().toISOString(),
+            usuarioEmail: currentUser.email,
+        };
+
+        db.ref(`usuarios/${uid}/movimientos/${Date.now()}`).set(movimiento)
+            .then(() => closeMovimientoModal())
+            .catch(err => alert('Error al guardar: ' + err.message));
+    }
+
+    function calcStockForLot(sku, lote) {
+        let qty = 0;
+        Object.values(userData.movimientos || {}).forEach(m => {
+            if (m.sku === sku && m.lote === lote) {
+                if (m.tipo === 'Entrada') qty += parseInt(m.cantidad) || 0;
+                else if (m.tipo === 'Salida') qty -= parseInt(m.cantidad) || 0;
+            }
+        });
+        return qty;
+    }
+
+    function renderMovimientos() {
+        const tbody = document.getElementById('movimientos-table');
+        const filtro = document.getElementById('movTipoFilter')?.value || '';
+        let movArray = Object.values(userData.movimientos || {});
+        if (filtro) movArray = movArray.filter(m => m.tipo === filtro);
+        movArray.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+
+        if (movArray.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="14" class="empty-state">No hay movimientos registrados</td></tr>';
+            return;
+        }
+        tbody.innerHTML = movArray.map(m => {
+            const tipoClass = m.tipo === 'Entrada' ? 'badge-success' : m.tipo === 'Salida' ? 'badge-danger' : 'badge-warning';
+            const statusClass = m.status === 'Aprobado' ? 'badge-success' : m.status === 'Rechazado' ? 'badge-danger' : 'badge-warning';
+            return `
+                <tr>
+                    <td>${new Date(m.fecha).toLocaleDateString('es-CL')}</td>
+                    <td><span class="badge ${tipoClass}">${m.tipo}</span></td>
+                    <td>${m.sku}</td>
+                    <td>${m.descripcion || '-'}</td>
+                    <td>${m.lote || '-'}</td>
+                    <td>${m.vence ? new Date(m.vence + 'T00:00:00').toLocaleDateString('es-CL') : '-'}</td>
+                    <td>${m.cantidad}</td>
+                    <td>${m.bodega || '-'}</td>
+                    <td>${m.ubicacion || '-'}</td>
+                    <td>${m.proveedorCliente || '-'}</td>
+                    <td>${m.referencia || '-'}</td>
+                    <td><span class="badge ${statusClass}">${m.status || 'Aprobado'}</span></td>
+                    <td>${m.usuarioEmail || '-'}</td>
+                    <td>${m.observaciones || '-'}</td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function validateSKU() {
+        const sku = document.getElementById('mov-producto').value.trim().toUpperCase();
+        document.getElementById('mov-producto').value = sku;
+        if (sku && !userData.productos[sku]) {
+            alert(`El SKU "${sku}" no existe en el maestro de productos.`);
+            document.getElementById('mov-producto').value = '';
+            document.getElementById('mov-producto').focus();
+            return;
+        }
+        // Actualizar lotes si es Salida
+        const tipo = document.getElementById('mov-tipo').value;
+        if (tipo === 'Salida' && sku) loadAvailableLots(sku);
+    }
+
+    function loadAvailableLots(sku) {
+        const movimientos = userData.movimientos || {};
+        const lotesMap = {};
+
+        Object.values(movimientos).forEach(m => {
+            if (m.sku === sku) {
+                if (!lotesMap[m.lote]) lotesMap[m.lote] = { lote: m.lote, cantidad: 0, vence: m.vence };
+                if (m.tipo === 'Entrada') lotesMap[m.lote].cantidad += parseInt(m.cantidad) || 0;
+                if (m.tipo === 'Salida') lotesMap[m.lote].cantidad -= parseInt(m.cantidad) || 0;
+            }
+        });
+
+        const disponibles = Object.values(lotesMap).filter(l => l.cantidad > 0);
+        const container = document.getElementById('mov-lote-container');
+        container.innerHTML = '';
+
+        const select = document.createElement('select');
+        select.className = 'form-select';
+        select.id = 'mov-lote-select';
+        select.required = true;
+        select.onchange = () => {
+            const sel = disponibles.find(l => l.lote === select.value);
+            if (sel && sel.vence) document.getElementById('mov-vencimiento').value = sel.vence;
+        };
+        select.innerHTML = '<option value="">Seleccionar lote...</option>';
+
+        if (disponibles.length === 0) {
+            select.innerHTML += '<option disabled>No hay lotes con stock disponible</option>';
+        } else {
+            disponibles.forEach(l => {
+                const opt = document.createElement('option');
+                opt.value = l.lote;
+                opt.textContent = `${l.lote} (${l.cantidad} uds)`;
+                select.appendChild(opt);
+            });
+        }
+        container.appendChild(select);
+    }
+
+    // ===== STOCK =====
+    function selectBodega(bodega) {
+        selectedBodega = bodega;
+        updateBodegaButtons();
+        renderStock();
+    }
+
+    function updateBodegaButtons() {
+        document.getElementById('bodegaTotalBtn').style.background = selectedBodega === 'TOTAL' ? 'var(--primary)' : 'var(--gray-300)';
+        document.getElementById('bodegaTotalBtn').style.color = selectedBodega === 'TOTAL' ? 'white' : 'var(--gray-700)';
+        Object.entries(userData.bodegas || {}).forEach(([id, b]) => {
+            const btn = document.getElementById(`bodegaBtn_${id}`);
+            if (btn) {
+                btn.style.background = selectedBodega === b.nombre ? 'var(--primary)' : 'var(--gray-300)';
+                btn.style.color = selectedBodega === b.nombre ? 'white' : 'var(--gray-700)';
+            }
+        });
+    }
+
+    function renderBodegaButtons() {
+        const container = document.getElementById('bodegaButtonsContainer');
+        container.querySelectorAll('[id^="bodegaBtn_"]').forEach(b => b.remove());
+        Object.entries(userData.bodegas || {}).forEach(([id, b]) => {
+            const btn = document.createElement('button');
+            btn.className = 'btn btn-sm';
+            btn.id = `bodegaBtn_${id}`;
+            btn.textContent = b.nombre;
+            btn.style.width = 'auto';
+            btn.style.background = selectedBodega === b.nombre ? 'var(--primary)' : 'var(--gray-300)';
+            btn.style.color = selectedBodega === b.nombre ? 'white' : 'var(--gray-700)';
+            btn.onclick = () => selectBodega(b.nombre);
+            container.appendChild(btn);
+        });
+    }
+
+    function renderStock() {
+        const tbody = document.getElementById('stock-table');
+        // FIX: usar IDs correctos de filtros (pueden no existir aún en el DOM)
+        const filterSKU = (document.getElementById('stockFilterSKU')?.value || '').toLowerCase();
+        const filterDesc = (document.getElementById('stockFilterDescripcion')?.value || '').toLowerCase();
+        const filterLote = (document.getElementById('stockFilterLote')?.value || '').toLowerCase();
+        const filterUbic = (document.getElementById('stockFilterUbicacion')?.value || '').toLowerCase();
+
+        const movimientos = userData.movimientos || {};
+        const productos = userData.productos || {};
+        const stock = {};
+
+        // FIX: usar campo "vence" consistentemente (no "vencimiento")
+        Object.values(movimientos).forEach(m => {
+            const key = `${m.sku}|||${m.lote}|||${m.ubicacion}|||${m.bodega}`;
+            if (m.tipo === 'Entrada') {
+                if (!stock[key]) {
+                    stock[key] = {
+                        sku: m.sku, lote: m.lote, cantidad: 0,
+                        vence: m.vence,  // FIX: campo correcto
+                        ubicacion: m.ubicacion || '-',
+                        bodega: m.bodega || '-',
+                        status: m.status || 'Aprobado'
+                    };
+                }
+                stock[key].cantidad += parseInt(m.cantidad) || 0;
+                stock[key].status = m.status || 'Aprobado';
+            } else if (m.tipo === 'Salida') {
+                if (stock[key]) {
+                    stock[key].cantidad -= parseInt(m.cantidad) || 0;
+                }
+            }
+        });
+
+        const filtered = Object.values(stock).filter(s => {
+            const descripcion = (productos[s.sku]?.descripcion || '').toLowerCase();
+            const bodegaMatch = selectedBodega === 'TOTAL' || s.bodega === selectedBodega;
+            return s.cantidad > 0 &&
+                bodegaMatch &&
+                s.sku.toLowerCase().includes(filterSKU) &&
+                descripcion.includes(filterDesc) &&
+                (s.lote || '').toLowerCase().includes(filterLote) &&
+                (s.ubicacion || '').toLowerCase().includes(filterUbic);
+        });
+
+        if (filtered.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No hay stock registrado</td></tr>';
+            return;
+        }
+
+        const hoy = new Date();
+        tbody.innerHTML = filtered.map(s => {
+            const venceDate = s.vence ? new Date(s.vence + 'T00:00:00') : null;
+            const diasRestantes = venceDate ? Math.ceil((venceDate - hoy) / (1000 * 60 * 60 * 24)) : null;
+            let venceClass = '';
+            if (diasRestantes !== null) {
+                if (diasRestantes < 0) venceClass = 'style="color:var(--danger);font-weight:600;"';
+                else if (diasRestantes <= 90) venceClass = 'style="color:var(--warning);font-weight:600;"';
+            }
+            const statusClass = s.status === 'Aprobado' ? 'badge-success' : s.status === 'Rechazado' ? 'badge-danger' : 'badge-warning';
+            return `
+                <tr>
+                    <td><strong>${s.sku}</strong></td>
+                    <td>${productos[s.sku]?.descripcion || '-'}</td>
+                    <td>${productos[s.sku]?.unidadVenta || '-'}</td>
+                    <td>${s.lote || '-'}</td>
+                    <td ${venceClass}>${venceDate ? venceDate.toLocaleDateString('es-CL') : '-'}</td>
+                    <td><strong>${s.cantidad}</strong></td>
+                    <td><span class="badge ${statusClass}">${s.status}</span></td>
+                    <td>${s.ubicacion || '-'}</td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function clearStockFilters() {
+        ['stockFilterSKU','stockFilterDescripcion','stockFilterLote','stockFilterUbicacion'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = '';
+        });
+        renderStock();
+    }
+
+    // ===== ALERTAS =====
+    function calcAlertas() {
+        const alertas = [];
+        const hoy = new Date();
+        const movimientos = userData.movimientos || {};
+        const productos = userData.productos || {};
+        const stock = {};
+
+        Object.values(movimientos).forEach(m => {
+            const key = `${m.sku}|||${m.lote}`;
+            if (m.tipo === 'Entrada') {
+                if (!stock[key]) stock[key] = { sku: m.sku, lote: m.lote, cantidad: 0, vence: m.vence };
+                stock[key].cantidad += parseInt(m.cantidad) || 0;
+            } else if (m.tipo === 'Salida') {
+                if (stock[key]) stock[key].cantidad -= parseInt(m.cantidad) || 0;
+            }
+        });
+
+        Object.values(stock).filter(s => s.cantidad > 0).forEach(s => {
+            if (!s.vence) return;
+            const venceDate = new Date(s.vence + 'T00:00:00');
+            const dias = Math.ceil((venceDate - hoy) / (1000 * 60 * 60 * 24));
+            const desc = productos[s.sku]?.descripcion || s.sku;
+            if (dias < 0) {
+                alertas.push({ tipo: 'danger', titulo: `⚠️ VENCIDO: ${desc}`, texto: `Lote ${s.lote} vencido hace ${Math.abs(dias)} días. Stock: ${s.cantidad} unidades.` });
+            } else if (dias <= 90) {
+                alertas.push({ tipo: 'warning', titulo: `🔔 Próximo a vencer: ${desc}`, texto: `Lote ${s.lote} vence en ${dias} días (${new Date(s.vence + 'T00:00:00').toLocaleDateString('es-CL')}). Stock: ${s.cantidad} unidades.` });
+            }
+        });
+        return alertas;
+    }
+
+    function renderAlertas() {
+        const container = document.getElementById('alertasListContainer');
+        const alertas = calcAlertas();
+        if (alertas.length === 0) {
+            container.innerHTML = '<p style="color:var(--gray-500);">✅ No hay alertas activas.</p>';
+            return;
+        }
+        container.innerHTML = alertas.map(a => `
+            <div class="alert-box ${a.tipo === 'danger' ? 'danger' : ''}">
+                <div class="alert-title">${a.titulo}</div>
+                <div class="alert-text">${a.texto}</div>
+            </div>
+        `).join('');
+    }
+
+    // ===== REPORTES =====
+    function generarReporteInventario() {
+        const container = document.getElementById('reporteContainer');
+        const movimientos = userData.movimientos || {};
+        const productos = userData.productos || {};
+        const stock = {};
+
+        Object.values(movimientos).forEach(m => {
+            const key = `${m.sku}|||${m.lote}`;
+            if (m.tipo === 'Entrada') {
+                if (!stock[key]) stock[key] = { sku: m.sku, lote: m.lote, cantidad: 0, vence: m.vence, bodega: m.bodega, ubicacion: m.ubicacion };
+                stock[key].cantidad += parseInt(m.cantidad) || 0;
+            } else if (m.tipo === 'Salida') {
+                if (stock[key]) stock[key].cantidad -= parseInt(m.cantidad) || 0;
+            }
+        });
+
+        const rows = Object.values(stock).filter(s => s.cantidad > 0).map(s => `
+            <tr>
+                <td>${s.sku}</td>
+                <td>${productos[s.sku]?.descripcion || '-'}</td>
+                <td>${s.lote || '-'}</td>
+                <td>${s.cantidad}</td>
+                <td>${s.vence ? new Date(s.vence + 'T00:00:00').toLocaleDateString('es-CL') : '-'}</td>
+                <td>${s.bodega || '-'}</td>
+                <td>${s.ubicacion || '-'}</td>
+            </tr>
+        `).join('');
+
+        container.innerHTML = `<div class="card"><h2>Reporte de Inventario — ${new Date().toLocaleDateString('es-CL')}</h2>
+            <table class="table"><thead><tr><th>SKU</th><th>Descripción</th><th>Lote</th><th>Cantidad</th><th>Vencimiento</th><th>Bodega</th><th>Ubicación</th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="7" class="empty-state">Sin datos</td></tr>'}</tbody></table></div>`;
+    }
+
+    function generarReporteVencimiento() {
+        const container = document.getElementById('reporteContainer');
+        const movimientos = Object.values(userData.movimientos || {}).filter(m => m.tipo === 'Entrada' && m.vence);
+        movimientos.sort((a, b) => new Date(a.vence) - new Date(b.vence));
+        const hoy = new Date();
+
+        const rows = movimientos.map(m => {
+            const vence = new Date(m.vence + 'T00:00:00');
+            const dias = Math.ceil((vence - hoy) / (1000 * 60 * 60 * 24));
+            const color = dias < 0 ? 'color:var(--danger)' : dias <= 90 ? 'color:var(--warning)' : '';
+            return `<tr>
+                <td>${m.sku}</td><td>${m.descripcion || '-'}</td><td>${m.lote || '-'}</td>
+                <td style="${color}"><strong>${vence.toLocaleDateString('es-CL')}</strong></td>
+                <td style="${color}">${dias < 0 ? `Vencido hace ${Math.abs(dias)} días` : `${dias} días`}</td>
+                <td>${m.cantidad}</td>
+            </tr>`;
+        }).join('');
+
+        container.innerHTML = `<div class="card"><h2>Reporte de Vencimientos — ${new Date().toLocaleDateString('es-CL')}</h2>
+            <table class="table"><thead><tr><th>SKU</th><th>Descripción</th><th>Lote</th><th>Vencimiento</th><th>Estado</th><th>Cantidad</th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="6" class="empty-state">Sin datos</td></tr>'}</tbody></table></div>`;
+    }
+
+    function generarReporteMovimientos() {
+        const container = document.getElementById('reporteContainer');
+        const movimientos = Object.values(userData.movimientos || {}).sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+
+        const rows = movimientos.map(m => {
+            const tipoClass = m.tipo === 'Entrada' ? 'badge-success' : m.tipo === 'Salida' ? 'badge-danger' : 'badge-warning';
+            return `<tr>
+                <td>${new Date(m.fecha).toLocaleDateString('es-CL')}</td>
+                <td><span class="badge ${tipoClass}">${m.tipo}</span></td>
+                <td>${m.sku}</td><td>${m.lote || '-'}</td><td>${m.cantidad}</td>
+                <td>${m.bodega || '-'}</td><td>${m.referencia || '-'}</td><td>${m.usuarioEmail || '-'}</td>
+            </tr>`;
+        }).join('');
+
+        container.innerHTML = `<div class="card"><h2>Reporte de Movimientos — ${new Date().toLocaleDateString('es-CL')}</h2>
+            <table class="table"><thead><tr><th>Fecha</th><th>Tipo</th><th>SKU</th><th>Lote</th><th>Cantidad</th><th>Bodega</th><th>Referencia</th><th>Usuario</th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="8" class="empty-state">Sin datos</td></tr>'}</tbody></table></div>`;
+    }
+
+    // ===== AUDITORÍA =====
+    function renderAuditoria() {
+        const container = document.getElementById('auditoriaListContainer');
+        const movimientos = Object.values(userData.movimientos || {}).sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+        if (movimientos.length === 0) {
+            container.innerHTML = '<p style="color:var(--gray-500);">No hay registros de auditoría.</p>';
+            return;
+        }
+        const rows = movimientos.map(m => `
+            <tr>
+                <td>${new Date(m.fecha).toLocaleString('es-CL')}</td>
+                <td>${m.tipo}</td>
+                <td>${m.sku}</td>
+                <td>${m.lote || '-'}</td>
+                <td>${m.cantidad}</td>
+                <td>${m.usuarioEmail || '-'}</td>
+                <td>${m.referencia || '-'}</td>
+            </tr>
+        `).join('');
+        container.innerHTML = `<div class="table-container"><table class="table">
+            <thead><tr><th>Fecha/Hora</th><th>Tipo</th><th>SKU</th><th>Lote</th><th>Cantidad</th><th>Usuario</th><th>Referencia</th></tr></thead>
+            <tbody>${rows}</tbody></table></div>`;
+    }
+
+    // ===== DEVOLUCIONES =====
+    function openDevolucionModal() {
+        // FIX: IDs únicos para devoluciones, sin conflicto con movimientos
+        document.getElementById('dev-sku').value = '';
+        document.getElementById('dev-lote').value = '';
+        document.getElementById('dev-cantidad').value = '';
+        document.getElementById('dev-motivo').value = '';
+        document.getElementById('dev-status').value = 'Pendiente';
+        document.getElementById('dev-observaciones').value = '';
+        document.getElementById('devolucionModal').classList.add('active');
+    }
+
+    function closeDevolucionModal() {
+        document.getElementById('devolucionModal').classList.remove('active');
+    }
+
+    function saveDevolucion(e) {
+        e.preventDefault();
+        const uid = currentUser.uid;
+        const sku = document.getElementById('dev-sku').value.trim().toUpperCase();
+        const lote = document.getElementById('dev-lote').value.trim();
+
+        if (!userData.productos[sku]) {
+            alert(`El SKU "${sku}" no existe en el maestro de productos.`);
+            return;
+        }
+
+        const devolucion = {
+            sku,
+            descripcion: userData.productos[sku]?.descripcion || '',
+            lote,
+            cantidad: parseInt(document.getElementById('dev-cantidad').value),
+            motivo: document.getElementById('dev-motivo').value,
+            status: document.getElementById('dev-status').value,
+            observaciones: document.getElementById('dev-observaciones').value.trim(),
+            fecha: new Date().toISOString(),
+            usuarioEmail: currentUser.email,
+        };
+
+        db.ref(`usuarios/${uid}/devoluciones`).push(devolucion)
+            .then(() => closeDevolucionModal())
+            .catch(err => alert('Error al guardar devolución: ' + err.message));
+    }
+
+    function renderDevoluciones() {
+        const tbody = document.getElementById('devoluciones-table');
+        const filterSKU = (document.getElementById('devolucionFilterSKU')?.value || '').toLowerCase();
+        const filterLote = (document.getElementById('devolucionFilterLote')?.value || '').toLowerCase();
+
+        const devArray = Object.entries(userData.devoluciones || {}).map(([id, d]) => ({ id, ...d }));
+        const filtered = devArray.filter(d =>
+            (d.sku || '').toLowerCase().includes(filterSKU) &&
+            (d.lote || '').toLowerCase().includes(filterLote)
+        );
+        filtered.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+
+        if (filtered.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No hay devoluciones registradas</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = filtered.map(d => {
+            const statusClass = d.status === 'Aprobado' ? 'badge-aprobado' : d.status === 'Rechazado' ? 'badge-rechazado' : 'badge-pendiente';
+            return `
+                <tr>
+                    <td>${new Date(d.fecha).toLocaleDateString('es-CL')}</td>
+                    <td>${d.sku}</td>
+                    <td>${d.descripcion || '-'}</td>
+                    <td>${d.lote}</td>
+                    <td>${d.cantidad}</td>
+                    <td>${d.motivo}</td>
+                    <td><span class="badge ${statusClass}">${d.status}</span></td>
+                    <td><button class="btn btn-sm btn-danger" onclick="deleteDevolucion('${d.id}')">Eliminar</button></td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function deleteDevolucion(id) {
+        if (confirm('¿Eliminar esta devolución?')) {
+            db.ref(`usuarios/${currentUser.uid}/devoluciones/${id}`).remove();
+        }
+    }
+</script>
 </body>
 </html>
