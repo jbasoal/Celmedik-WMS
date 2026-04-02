@@ -30,9 +30,9 @@
             --danger-dim: rgba(239,68,68,0.12);
             --purple: #8b5cf6;
             --purple-dim: rgba(139,92,246,0.12);
-            --text: #e1e8f5;
-            --text2: #8a9bbf;
-            --text3: #4e5e80;
+            --text: #f2f7ff;
+            --text2: #c4d4ee;
+            --text3: #8fa3c8;
             --radius: 10px;
             --radius-lg: 14px;
             --shadow: 0 8px 40px rgba(0,0,0,0.55);
@@ -41,7 +41,7 @@
             --sidebar-w: 248px;
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; font-size: 13.5px; line-height: 1.55; -webkit-font-smoothing: antialiased; }
+        body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; font-size: 14.5px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
 
         /* ── SCROLLBAR ── */
         ::-webkit-scrollbar { width: 4px; height: 4px; }
@@ -421,6 +421,41 @@
 
         /* ── REGISTER PANEL ── */
         #registerPanel { display: none; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+
+        /* ── SKU AUTOCOMPLETE ── */
+        .sku-ac-wrap { position: relative; }
+        .sku-dropdown {
+            position: absolute; top: 100%; left: 0; right: 0; z-index: 500;
+            background: var(--surface2); border: 1px solid var(--border2);
+            border-top: none; border-radius: 0 0 var(--radius) var(--radius);
+            max-height: 220px; overflow-y: auto;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        .sku-dropdown-item {
+            padding: 9px 13px; cursor: pointer; transition: background 0.12s;
+            border-bottom: 1px solid var(--border);
+        }
+        .sku-dropdown-item:last-child { border-bottom: none; }
+        .sku-dropdown-item:hover { background: var(--bg4); }
+        .sku-dropdown-sku { font-family: var(--mono); font-size: 12px; color: var(--accent2); font-weight: 600; }
+        .sku-dropdown-desc { font-size: 13px; color: var(--text); margin-top: 2px; }
+        .sku-dropdown-meta { font-size: 11.5px; color: var(--text3); margin-top: 2px; }
+        .sku-dropdown-empty { padding: 12px 13px; color: var(--text3); font-size: 13px; }
+
+        /* ── FORM ERROR BANNER ── */
+        .form-error-banner {
+            background: var(--danger-dim); color: #fca5a5;
+            border: 1px solid rgba(239,68,68,0.35); border-radius: var(--radius);
+            padding: 10px 14px; margin-bottom: 14px; font-size: 13.5px;
+            display: none; animation: fadeIn 0.2s ease;
+        }
+
+        /* ── CONFIRM MODAL ── */
+        .confirm-detail { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 18px; font-size: 13.5px; line-height: 1.7; }
+
+        /* ── TABLA texto más legible ── */
+        tbody td { padding: 11px 14px; border-bottom: 1px solid var(--border); color: var(--text2); vertical-align: middle; font-size: 13.5px; }
+        thead th { font-size: 11px; }
     </style>
 </head>
 <body>
@@ -649,8 +684,8 @@
                         </div>
                         <div class="table-wrap">
                             <table><thead><tr>
-                                <th>SKU</th><th>Descripción</th><th>N° Reg. Sanitario</th><th>Tipo</th><th>Fabricante</th><th>Presentación</th><th>Ud. Venta</th><th>Stock mín.</th><th>Almac.</th><th></th>
-                            </tr></thead><tbody id="tProductos"><tr class="empty-row"><td colspan="10">No hay productos registrados</td></tr></tbody></table>
+                                <th>SKU</th><th>Descripción</th><th>N° Reg. Sanitario</th><th>Tipo</th><th>Fabricante</th><th>Proveedor</th><th>Presentación</th><th>Ud. Venta</th><th>Stock mín.</th><th>Almac.</th><th></th>
+                            </tr></thead><tbody id="tProductos"><tr class="empty-row"><td colspan="11">No hay productos registrados</td></tr></tbody></table>
                         </div>
                     </div>
                 </div>
@@ -826,6 +861,12 @@
                                 Cuarentena activa
                             </button>
                         </div>
+                        <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+                            <button class="btn btn-ghost btn-sm" onclick="printReport()" style="width:auto">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                                Imprimir / Exportar reporte
+                            </button>
+                        </div>
                     </div>
                     <div id="rptContainer"></div>
                 </div>
@@ -896,6 +937,12 @@
                 </div>
             </div>
             <div class="form-row">
+                <div class="form-group form-full">
+                    <label class="form-label">Proveedor / Distribuidor</label>
+                    <input type="text" class="form-input" id="p-proveedor" placeholder="Ej: Distribuidora Farmacéutica S.A.">
+                </div>
+            </div>
+            <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">Presentación <span style="color:var(--danger)">*</span></label>
                     <input type="text" class="form-input" id="p-pres" placeholder="Ej: Comprimidos 500mg x 20" required>
@@ -911,8 +958,11 @@
                     <label class="form-label">Condición almacenamiento</label>
                     <select class="form-select" id="p-almac">
                         <option value="Temperatura Ambiente">Temperatura Ambiente (15-25°C)</option>
-                        <option value="Lugar fresco y seco">Lugar fresco y seco</option>
+                        <option value="Lugar fresco y seco">Lugar fresco y seco (≤20°C)</option>
+                        <option value="Refrigerado">Refrigerado (2-8°C) — Cadena de frío</option>
+                        <option value="Congelado">Congelado (-20°C)</option>
                         <option value="Protegido de luz">Protegido de luz</option>
+                        <option value="Psicotrópico">Psicotrópico / Estupefaciente — Caja fuerte</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -981,6 +1031,7 @@
             <button class="modal-close" onclick="closeModal('movModal')">✕</button>
         </div>
         <form onsubmit="saveMovimiento(event)">
+            <div id="movModal-err" class="form-error-banner"></div>
             <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">Tipo <span style="color:var(--danger)">*</span></label>
@@ -993,7 +1044,10 @@
                 </div>
                 <div class="form-group">
                     <label class="form-label">SKU <span style="color:var(--danger)">*</span></label>
-                    <input type="text" class="form-input" id="m-sku" onchange="onSKUChange()" placeholder="Ej: MED-001" required>
+                    <div class="sku-ac-wrap">
+                        <input type="text" class="form-input" id="m-sku" oninput="skuAutocomplete(this,'m-sku-dd')" onblur="setTimeout(()=>hideDropdown('m-sku-dd'),200)" placeholder="Escriba SKU o nombre del producto..." autocomplete="off" required>
+                        <div id="m-sku-dd" class="sku-dropdown" style="display:none"></div>
+                    </div>
                 </div>
             </div>
             <div id="m-sku-info" style="margin-bottom:12px;display:none">
@@ -1067,10 +1121,15 @@
             <button class="modal-close" onclick="closeModal('cuarModal')">✕</button>
         </div>
         <form onsubmit="saveCuarentena(event)">
+            <div id="cuarModal-err" class="form-error-banner"></div>
             <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">SKU <span style="color:var(--danger)">*</span></label>
-                    <input type="text" class="form-input" id="q-sku" required>
+                    <div class="sku-ac-wrap">
+                        <input type="text" class="form-input" id="q-sku" oninput="skuAutocomplete(this,'q-sku-dd','q-sku-info')" onblur="setTimeout(()=>hideDropdown('q-sku-dd'),200)" placeholder="Escriba SKU o nombre..." autocomplete="off" required>
+                        <div id="q-sku-dd" class="sku-dropdown" style="display:none"></div>
+                    </div>
+                    <div id="q-sku-info" style="margin-top:6px;font-size:12.5px;color:var(--text3)"></div>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Lote <span style="color:var(--danger)">*</span></label>
@@ -1110,6 +1169,23 @@
     </div>
 </div>
 
+<!-- MODAL CONFIRMACIÓN -->
+<div id="confirmModal" class="modal">
+    <div class="modal-box" style="max-width:440px">
+        <div class="modal-header">
+            <div>
+                <div class="modal-title" id="confirmTitle">Confirmar acción</div>
+                <div class="modal-subtitle" id="confirmSubtitle"></div>
+            </div>
+        </div>
+        <div id="confirmBody" class="confirm-detail"></div>
+        <div class="btn-row">
+            <button type="button" class="btn btn-ghost" onclick="closeModal('confirmModal')">Cancelar</button>
+            <button type="button" class="btn btn-primary" id="confirmBtn">Confirmar</button>
+        </div>
+    </div>
+</div>
+
 <!-- DEVOLUCIÓN -->
 <div id="devModal" class="modal">
     <div class="modal-box">
@@ -1118,10 +1194,15 @@
             <button class="modal-close" onclick="closeModal('devModal')">✕</button>
         </div>
         <form onsubmit="saveDevolucion(event)">
+            <div id="devModal-err" class="form-error-banner"></div>
             <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">SKU <span style="color:var(--danger)">*</span></label>
-                    <input type="text" class="form-input" id="d-sku" required>
+                    <div class="sku-ac-wrap">
+                        <input type="text" class="form-input" id="d-sku" oninput="skuAutocomplete(this,'d-sku-dd','d-sku-info')" onblur="setTimeout(()=>hideDropdown('d-sku-dd'),200)" placeholder="Escriba SKU o nombre..." autocomplete="off" required>
+                        <div id="d-sku-dd" class="sku-dropdown" style="display:none"></div>
+                    </div>
+                    <div id="d-sku-info" style="margin-top:6px;font-size:12.5px;color:var(--text3)"></div>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Lote <span style="color:var(--danger)">*</span></label>
@@ -1326,6 +1407,9 @@ function calcStock() {
             stock[key].status = m.status || 'Aprobado';
         } else if (m.tipo === 'Salida') {
             if (stock[key]) stock[key].cantidad -= parseInt(m.cantidad)||0;
+        } else if (m.tipo === 'Ajuste') {
+            if (!stock[key]) stock[key] = { sku:m.sku, lote:m.lote, cantidad:0, vence:m.vence, bodega:m.bodega||'', ubicacion:m.ubicacion||'', status:m.status||'Aprobado' };
+            stock[key].cantidad += parseInt(m.cantidad)||0;
         }
     });
     return stock;
@@ -1387,14 +1471,15 @@ function renderProductos() {
         p.sku.toLowerCase().includes(fSKU) && (p.descripcion||'').toLowerCase().includes(fDesc)
     );
     const tb = document.getElementById('tProductos');
-    if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="10">No hay productos registrados</td></tr>'; return; }
+    if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="11">No hay productos registrados</td></tr>'; return; }
     tb.innerHTML = rows.map(p => `
         <tr>
             <td class="text-mono" style="color:var(--accent2)">${p.sku}</td>
-            <td style="color:var(--text)">${p.descripcion}</td>
+            <td style="color:var(--text);font-weight:500">${p.descripcion}</td>
             <td>${p.registroSanitario ? `<span class="rs-number">${p.registroSanitario}</span>` : '<span class="text-muted">—</span>'}</td>
             <td>${badgeTipo(p.tipo)}</td>
             <td>${p.fabricante||'—'}</td>
+            <td>${p.proveedor||'—'}</td>
             <td>${p.presentacion||'—'}</td>
             <td>${p.unidadVenta||'—'}</td>
             <td>${p.stockMin > 0 ? p.stockMin : '—'}</td>
@@ -1417,6 +1502,7 @@ function saveProducto(e) {
         registroSanitario: document.getElementById('p-rs').value.trim(),
         tipo: document.getElementById('p-tipo').value,
         fabricante: document.getElementById('p-fab').value.trim(),
+        proveedor: document.getElementById('p-proveedor').value.trim(),
         presentacion: document.getElementById('p-pres').value.trim(),
         unidadVenta: document.getElementById('p-udv').value.trim(),
         almacenamiento: document.getElementById('p-almac').value,
@@ -1435,6 +1521,7 @@ function editProducto(sku) {
     document.getElementById('p-rs').value = p.registroSanitario||'';
     document.getElementById('p-desc').value = p.descripcion||'';
     document.getElementById('p-fab').value = p.fabricante||'';
+    document.getElementById('p-proveedor').value = p.proveedor||'';
     document.getElementById('p-tipo').value = p.tipo||'';
     document.getElementById('p-pres').value = p.presentacion||'';
     document.getElementById('p-udv').value = p.unidadVenta||'';
@@ -1573,21 +1660,33 @@ function saveMovimiento(e) {
     const lote = getLoteValue().trim();
     const tipo = document.getElementById('m-tipo').value;
     const qty = parseInt(document.getElementById('m-qty').value);
+    const vence = document.getElementById('m-vence').value;
 
-    if (!data.productos[sku]) { alert(`SKU "${sku}" no existe en el maestro de productos.`); return; }
-    if (!lote) { alert('Ingrese o seleccione un lote.'); return; }
+    // Validaciones
+    if (!data.productos[sku]) { showFormError('movModal-err', `SKU "${sku}" no existe en el maestro de productos. Regístrelo primero.`); return; }
+    if (!lote) { showFormError('movModal-err', 'Debe ingresar o seleccionar un número de lote.'); return; }
+    if (!tipo) { showFormError('movModal-err', 'Seleccione el tipo de movimiento.'); return; }
+    if (!qty || qty < 1) { showFormError('movModal-err', 'La cantidad debe ser mayor a cero.'); return; }
 
-    if (tipo === 'Salida') {
-        const stock = calcStock();
-        const disponible = Object.values(stock).filter(s => s.sku === sku && s.lote === lote).reduce((a, s) => a + s.cantidad, 0);
-        if (qty > disponible) { alert(`Stock insuficiente. Disponible para lote ${lote}: ${disponible} ud.`); return; }
+    // Validación fecha vencimiento
+    if (vence) {
+        const venceDate = new Date(vence + 'T00:00:00');
+        const hoy = new Date(); hoy.setHours(0,0,0,0);
+        if (tipo === 'Entrada' && venceDate < hoy) {
+            showFormError('movModal-err', 'La fecha de vencimiento no puede ser una fecha pasada para una entrada. Verifique el dato.');
+            return;
+        }
+    } else if (tipo === 'Entrada') {
+        showFormError('movModal-err', 'La fecha de vencimiento es obligatoria para registrar una entrada.');
+        return;
     }
 
+    const prod = data.productos[sku];
     const mov = {
         tipo, sku, lote,
-        descripcion: data.productos[sku]?.descripcion || '',
+        descripcion: prod?.descripcion || '',
         cantidad: qty,
-        vence: document.getElementById('m-vence').value,
+        vence,
         status: document.getElementById('m-status').value,
         bodega: document.getElementById('m-bodega').value,
         ubicacion: document.getElementById('m-ubic').value.trim(),
@@ -1598,9 +1697,35 @@ function saveMovimiento(e) {
         usuario: currentUser.email
     };
 
+    if (tipo === 'Salida') {
+        const stock = calcStock();
+        const disponible = Object.values(stock).filter(s => s.sku === sku && s.lote === lote).reduce((a, s) => a + s.cantidad, 0);
+        if (qty > disponible) {
+            showFormError('movModal-err', `Stock insuficiente. Disponible para lote ${lote}: ${disponible} ud. Está intentando sacar ${qty} ud.`);
+            return;
+        }
+        // Confirmación para salidas
+        showConfirm(
+            'Confirmar Salida',
+            'Revise los datos antes de confirmar',
+            `<strong style="font-size:14px">${prod?.descripcion||sku}</strong><br>
+             <span style="color:var(--text3)">SKU:</span> <strong>${sku}</strong> &nbsp;·&nbsp; <span style="color:var(--text3)">Lote:</span> <strong>${lote}</strong><br>
+             <span style="color:var(--text3)">Cantidad:</span> <strong style="color:var(--danger)">${qty} ud.</strong><br>
+             <span style="color:var(--text3)">Bodega:</span> ${mov.bodega||'—'} &nbsp;·&nbsp; <span style="color:var(--text3)">Destino:</span> ${mov.proveedor||'—'}<br>
+             <span style="color:var(--text3)">Referencia:</span> ${mov.referencia||'—'}`,
+            'Confirmar Salida',
+            'btn-danger',
+            () => persistMovimiento(mov)
+        );
+    } else {
+        persistMovimiento(mov);
+    }
+}
+
+function persistMovimiento(mov) {
     db.ref(`usuarios/${currentUser.uid}/movimientos/${Date.now()}`).set(mov)
-        .then(() => { logAudit(tipo, 'Movimientos', sku, lote, `Qty: ${qty} | Ref: ${mov.referencia}`); closeModal('movModal'); })
-        .catch(err => alert('Error: ' + err.message));
+        .then(() => { logAudit(mov.tipo, 'Movimientos', mov.sku, mov.lote, `Qty: ${mov.cantidad} | Ref: ${mov.referencia}`); closeModal('movModal'); })
+        .catch(err => showFormError('movModal-err', 'Error al guardar: ' + err.message));
 }
 
 function renderMovimientos() {
@@ -1942,6 +2067,103 @@ function renderAuditoria() {
     });
 }
 
+// ══ SKU AUTOCOMPLETE ══
+function skuAutocomplete(input, dropdownId, infoId) {
+    const val = input.value.trim().toUpperCase();
+    const dropdown = document.getElementById(dropdownId);
+    if (!val) { dropdown.style.display = 'none'; if(infoId){ const i=document.getElementById(infoId); if(i) i.textContent=''; } return; }
+
+    const matches = Object.values(data.productos||{}).filter(p =>
+        p.sku.includes(val) ||
+        (p.descripcion||'').toUpperCase().includes(val) ||
+        (p.principioActivo||'').toUpperCase().includes(val) ||
+        (p.fabricante||'').toUpperCase().includes(val)
+    ).slice(0, 10);
+
+    if (!matches.length) {
+        dropdown.innerHTML = '<div class="sku-dropdown-empty">No se encontraron productos con ese criterio</div>';
+        dropdown.style.display = 'block';
+        return;
+    }
+    dropdown.innerHTML = matches.map(p => `
+        <div class="sku-dropdown-item" onmousedown="selectSKUInto('${p.sku}','${input.id}','${dropdownId}','${infoId||''}')">
+            <div class="sku-dropdown-sku">${p.sku}</div>
+            <div class="sku-dropdown-desc">${p.descripcion||''}</div>
+            <div class="sku-dropdown-meta">${p.tipo||''} · ${p.fabricante||''}${p.registroSanitario ? ' · RS: '+p.registroSanitario : ''}${p.proveedor ? ' · '+p.proveedor : ''}</div>
+        </div>`).join('');
+    dropdown.style.display = 'block';
+}
+
+function hideDropdown(dropdownId) {
+    const d = document.getElementById(dropdownId); if(d) d.style.display='none';
+}
+
+function selectSKUInto(sku, inputId, dropdownId, infoId) {
+    const input = document.getElementById(inputId);
+    if (input) input.value = sku;
+    hideDropdown(dropdownId);
+    // Fill info label for secondary modals
+    if (infoId) {
+        const prod = data.productos[sku];
+        const info = document.getElementById(infoId);
+        if (info && prod) info.innerHTML = `<span style="color:var(--accent2);font-weight:600">${prod.descripcion}</span> · ${prod.fabricante||''}${prod.registroSanitario?' · RS: '+prod.registroSanitario:''}`;
+    }
+    // If it's the movimientos modal SKU field, trigger full info + lote logic
+    if (inputId === 'm-sku') {
+        onSKUChange();
+        const tipo = document.getElementById('m-tipo').value;
+        if (tipo === 'Salida') loadLotesDisponibles(sku);
+    }
+}
+
+// ══ FORM ERRORS ══
+function showFormError(bannerId, msg) {
+    const el = document.getElementById(bannerId);
+    if (!el) return;
+    el.textContent = msg;
+    el.style.display = 'block';
+    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    setTimeout(() => { el.style.display = 'none'; }, 6000);
+}
+
+// ══ CONFIRM DIALOG ══
+let _confirmCb = null;
+function showConfirm(title, subtitle, bodyHtml, btnLabel, btnCls, callback) {
+    document.getElementById('confirmTitle').textContent = title;
+    document.getElementById('confirmSubtitle').textContent = subtitle || '';
+    document.getElementById('confirmBody').innerHTML = bodyHtml;
+    const btn = document.getElementById('confirmBtn');
+    btn.textContent = btnLabel || 'Confirmar';
+    btn.className = `btn ${btnCls||'btn-primary'}`;
+    _confirmCb = callback;
+    btn.onclick = () => { closeModal('confirmModal'); if(_confirmCb) _confirmCb(); };
+    openModal('confirmModal');
+}
+
+// ══ PRINT REPORT ══
+function printReport() {
+    const rpt = document.getElementById('rptContainer');
+    if (!rpt || !rpt.innerHTML.trim()) { alert('Primero genere un reporte.'); return; }
+    const w = window.open('', '_blank');
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Reporte Celmedik WMS</title>
+    <style>body{font-family:Arial,sans-serif;font-size:12px;padding:20px;color:#111}
+    table{width:100%;border-collapse:collapse;margin-top:12px}
+    th{background:#1a2a4a;color:#fff;padding:7px 10px;text-align:left;font-size:11px}
+    td{padding:6px 10px;border-bottom:1px solid #ddd}tr:nth-child(even){background:#f5f7fa}
+    h2{color:#1a2a4a}.subtitle{color:#555;font-size:11px;margin-top:3px}
+    .badge{padding:2px 8px;border-radius:99px;font-size:10px;font-weight:600}
+    .footer{margin-top:20px;font-size:10px;color:#888;border-top:1px solid #ddd;padding-top:8px}
+    @media print{.no-print{display:none}}</style></head><body>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+        <div><strong style="font-size:16px;color:#1a2a4a">Celmedik WMS</strong><br><span style="color:#555;font-size:11px">Sistema de Gestión de Almacén Farmacéutico · NT 147 BPA</span></div>
+        <div style="text-align:right;font-size:11px;color:#555">Generado: ${new Date().toLocaleString('es-CL')}<br>Usuario: ${currentUser?.email||'—'}</div>
+    </div>
+    ${rpt.innerHTML}
+    <div class="footer">Documento generado por Celmedik WMS · Norma Técnica N°147 ISP Chile · ${new Date().toLocaleDateString('es-CL')}</div>
+    <script>window.onload=()=>{window.print();}<\/script></body></html>`);
+    w.document.close();
+}
+
 // ══ MODAL HELPERS ══
 function openModal(id) {
     const m = document.getElementById(id);
@@ -1951,7 +2173,7 @@ function openModal(id) {
 function closeModal(id) {
     const m = document.getElementById(id); if (m) m.classList.remove('active');
     if (id === 'productModal') {
-        ['p-sku','p-rs','p-desc','p-fab','p-tipo','p-pres','p-udv','p-principio'].forEach(i => { const el = document.getElementById(i); if(el) { el.value=''; el.disabled=false; } });
+        ['p-sku','p-rs','p-desc','p-fab','p-proveedor','p-tipo','p-pres','p-udv','p-principio'].forEach(i => { const el = document.getElementById(i); if(el) { el.value=''; el.disabled=false; } });
         document.getElementById('p-min').value = '0';
     }
 }
