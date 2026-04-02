@@ -3,492 +3,779 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Celmedik Inventario - WMS Completo</title>
+    <title>Celmedik WMS</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
         :root {
-            --primary: #2563eb; --primary-dark: #1d4ed8; --success: #059669; --warning: #d97706; --danger: #dc2626;
-            --gray-50: #f9fafb; --gray-100: #f3f4f6; --gray-200: #e5e7eb; --gray-300: #d1d5db; --gray-500: #6b7280;
-            --gray-700: #374151; --gray-800: #1f2937; --gray-900: #111827;
+            --bg: #0f1117;
+            --bg2: #161921;
+            --bg3: #1e2330;
+            --bg4: #252b3b;
+            --surface: #1a1f2e;
+            --surface2: #222840;
+            --border: rgba(255,255,255,0.07);
+            --border2: rgba(255,255,255,0.12);
+            --accent: #3b82f6;
+            --accent2: #60a5fa;
+            --accent-dim: rgba(59,130,246,0.15);
+            --success: #10b981;
+            --success-dim: rgba(16,185,129,0.15);
+            --warning: #f59e0b;
+            --warning-dim: rgba(245,158,11,0.15);
+            --danger: #ef4444;
+            --danger-dim: rgba(239,68,68,0.15);
+            --purple: #8b5cf6;
+            --purple-dim: rgba(139,92,246,0.15);
+            --text: #e8eaf0;
+            --text2: #9ba3b8;
+            --text3: #636b82;
+            --radius: 10px;
+            --radius-lg: 14px;
+            --shadow: 0 4px 24px rgba(0,0,0,0.4);
+            --font: 'DM Sans', sans-serif;
+            --mono: 'DM Mono', monospace;
         }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--gray-100); min-height: 100vh; }
-        
-        .login-screen { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(135deg, var(--gray-900) 0%, var(--gray-800) 100%); display: flex; align-items: center; justify-content: center; z-index: 2000; }
-        .login-box { background: white; padding: 40px; border-radius: 16px; width: 100%; max-width: 400px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
-        .login-logo { text-align: center; margin-bottom: 30px; }
-        .login-logo h1 { font-size: 28px; color: var(--gray-800); margin-bottom: 8px; }
-        .login-logo p { color: var(--gray-500); font-size: 14px; }
-        .form-group { margin-bottom: 16px; }
-        .form-label { display: block; font-size: 14px; font-weight: 500; color: var(--gray-700); margin-bottom: 6px; }
-        .form-input, .form-select { width: 100%; padding: 10px 12px; border: 1px solid var(--gray-300); border-radius: 8px; font-size: 14px; font-family: inherit; }
-        .form-input:focus, .form-select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
-        .btn { padding: 10px 16px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; border: none; transition: all 0.2s; display: inline-flex; align-items: center; gap: 8px; }
-        .btn-primary { background: var(--primary); color: white; width: 100%; justify-content: center; }
-        .btn-primary:hover { background: var(--primary-dark); }
-        .btn-secondary { background: var(--gray-200); color: var(--gray-700); width: 100%; justify-content: center; margin-top: 12px; }
-        .btn-secondary:hover { background: var(--gray-300); }
-        .btn-danger { background: var(--danger); color: white; }
-        .btn-danger:hover { background: #b91c1c; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; font-size: 14px; line-height: 1.5; }
+
+        /* ── SCROLLBAR ── */
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 99px; }
+
+        /* ── LOGIN ── */
+        .login-screen {
+            position: fixed; inset: 0; background: var(--bg);
+            display: flex; align-items: center; justify-content: center; z-index: 2000;
+        }
+        .login-screen::before {
+            content: ''; position: absolute; inset: 0;
+            background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(59,130,246,0.12) 0%, transparent 70%);
+            pointer-events: none;
+        }
+        .login-card {
+            background: var(--surface); border: 1px solid var(--border2);
+            border-radius: 20px; padding: 44px 40px; width: 100%; max-width: 420px;
+            box-shadow: 0 24px 80px rgba(0,0,0,0.6); position: relative; z-index: 1;
+            animation: fadeUp 0.4s ease;
+        }
+        @keyframes fadeUp { from { opacity:0; transform: translateY(16px); } to { opacity:1; transform: translateY(0); } }
+        .login-logo { text-align: center; margin-bottom: 36px; }
+        .login-logo-mark {
+            width: 48px; height: 48px; background: var(--accent); border-radius: 12px;
+            display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;
+            font-size: 22px; font-weight: 600; color: white; letter-spacing: -1px;
+        }
+        .login-logo h1 { font-size: 22px; font-weight: 600; color: var(--text); letter-spacing: -0.5px; }
+        .login-logo p { font-size: 13px; color: var(--text3); margin-top: 4px; }
+        .status-msg { padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; display: none; }
+        .status-msg.error { background: var(--danger-dim); color: #fca5a5; border: 1px solid rgba(239,68,68,0.2); display: block; }
+        .status-msg.success { background: var(--success-dim); color: #6ee7b7; border: 1px solid rgba(16,185,129,0.2); display: block; }
+
+        /* ── FORMS ── */
+        .form-group { margin-bottom: 14px; }
+        .form-label { display: block; font-size: 12px; font-weight: 500; color: var(--text2); margin-bottom: 6px; letter-spacing: 0.3px; text-transform: uppercase; }
+        .form-input, .form-select, .form-textarea {
+            width: 100%; padding: 10px 13px; background: var(--bg3); border: 1px solid var(--border2);
+            border-radius: var(--radius); font-size: 14px; color: var(--text); font-family: var(--font);
+            transition: border-color 0.2s, box-shadow 0.2s; outline: none;
+        }
+        .form-input:focus, .form-select:focus, .form-textarea:focus {
+            border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+        }
+        .form-input::placeholder { color: var(--text3); }
+        .form-select { cursor: pointer; }
+        .form-select option { background: var(--bg3); }
+        .form-textarea { resize: vertical; min-height: 72px; }
+
+        /* ── BUTTONS ── */
+        .btn {
+            padding: 10px 18px; border-radius: var(--radius); font-size: 14px; font-weight: 500;
+            cursor: pointer; border: none; transition: all 0.15s; display: inline-flex;
+            align-items: center; gap: 7px; font-family: var(--font); white-space: nowrap;
+        }
+        .btn-primary { background: var(--accent); color: white; width: 100%; justify-content: center; }
+        .btn-primary:hover { background: var(--accent2); transform: translateY(-1px); }
+        .btn-ghost { background: transparent; color: var(--text2); border: 1px solid var(--border2); width: 100%; justify-content: center; margin-top: 8px; }
+        .btn-ghost:hover { background: var(--bg3); color: var(--text); }
         .btn-sm { padding: 6px 12px; font-size: 12px; width: auto; margin-top: 0; }
-        .status-message { padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 14px; display: none; }
-        .status-message.error { background: #fee2e2; color: #991b1b; display: block; }
-        .status-message.success { background: #d1fae5; color: #065f46; display: block; }
-        
+        .btn-danger-sm { background: var(--danger-dim); color: #fca5a5; border: 1px solid rgba(239,68,68,0.2); }
+        .btn-danger-sm:hover { background: var(--danger); color: white; }
+        .btn-success-sm { background: var(--success-dim); color: #6ee7b7; border: 1px solid rgba(16,185,129,0.2); }
+        .btn-success-sm:hover { background: var(--success); color: white; }
+        .btn-icon { padding: 7px 10px; background: var(--bg3); border: 1px solid var(--border); color: var(--text2); }
+        .btn-icon:hover { background: var(--bg4); color: var(--text); }
+
+        /* ── APP LAYOUT ── */
         .app-screen { display: none; }
         .app-screen.active { display: flex; }
-        .container { display: flex; min-height: 100vh; width: 100%; }
-        .sidebar { width: 260px; background: var(--gray-900); color: white; padding: 20px; position: fixed; height: 100vh; overflow-y: auto; z-index: 100; }
-        .sidebar-header { margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid var(--gray-700); }
-        .sidebar-header h1 { font-size: 20px; font-weight: 700; margin-bottom: 5px; }
-        .sidebar-header p { font-size: 12px; color: var(--gray-500); }
-        .sidebar-menu { list-style: none; margin-bottom: 30px; }
-        .sidebar-menu li { margin-bottom: 4px; }
-        .sidebar-menu a { color: #9ca3af; text-decoration: none; padding: 10px 15px; border-radius: 8px; display: block; transition: all 0.2s; cursor: pointer; }
-        .sidebar-menu a:hover, .sidebar-menu a.active { background: var(--primary); color: white; }
-        .sidebar-footer { border-top: 1px solid var(--gray-700); padding-top: 20px; }
-        .user-info { font-size: 12px; color: #9ca3af; margin-bottom: 8px; word-break: break-all; }
-        .user-role { font-size: 11px; color: #6b7280; margin-bottom: 12px; background: var(--gray-800); padding: 4px 8px; border-radius: 4px; display: inline-block; }
-        
-        .main-content { margin-left: 260px; flex: 1; padding: 24px; }
-        .header { background: white; padding: 20px; border-radius: 12px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; }
-        .header h1 { font-size: 24px; color: var(--gray-800); }
+        .layout { display: flex; min-height: 100vh; }
+
+        /* ── SIDEBAR ── */
+        .sidebar {
+            width: 240px; background: var(--surface); border-right: 1px solid var(--border);
+            padding: 20px 12px; position: fixed; height: 100vh; overflow-y: auto;
+            display: flex; flex-direction: column; z-index: 100;
+        }
+        .sidebar-logo { padding: 8px 8px 24px; border-bottom: 1px solid var(--border); margin-bottom: 16px; display: flex; align-items: center; gap: 10px; }
+        .sidebar-logo-mark {
+            width: 32px; height: 32px; background: var(--accent); border-radius: 8px;
+            display: flex; align-items: center; justify-content: center; color: white; font-size: 14px; font-weight: 600; flex-shrink: 0;
+        }
+        .sidebar-logo-text h2 { font-size: 15px; font-weight: 600; color: var(--text); letter-spacing: -0.3px; }
+        .sidebar-logo-text p { font-size: 11px; color: var(--text3); }
+        .nav-section { font-size: 10px; font-weight: 600; color: var(--text3); letter-spacing: 1px; text-transform: uppercase; padding: 0 8px; margin: 16px 0 6px; }
+        .nav-link {
+            display: flex; align-items: center; gap: 9px; padding: 9px 10px; border-radius: 8px;
+            color: var(--text2); text-decoration: none; cursor: pointer; transition: all 0.15s;
+            font-size: 13.5px; font-weight: 400; margin-bottom: 1px;
+        }
+        .nav-link:hover { background: var(--bg3); color: var(--text); }
+        .nav-link.active { background: var(--accent-dim); color: var(--accent2); font-weight: 500; }
+        .nav-link .nav-icon { width: 18px; text-align: center; font-size: 15px; flex-shrink: 0; }
+        .nav-badge { margin-left: auto; background: var(--danger); color: white; font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 99px; min-width: 18px; text-align: center; }
+        .sidebar-footer { margin-top: auto; border-top: 1px solid var(--border); padding-top: 14px; }
+        .user-card { display: flex; align-items: center; gap: 9px; padding: 8px; border-radius: 8px; margin-bottom: 8px; }
+        .user-avatar { width: 30px; height: 30px; border-radius: 8px; background: var(--accent-dim); border: 1px solid var(--accent); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; color: var(--accent2); flex-shrink: 0; }
+        .user-info-text { flex: 1; min-width: 0; }
+        .user-email { font-size: 12px; color: var(--text); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .user-role-tag { font-size: 10px; color: var(--text3); }
+        .btn-logout { width: 100%; background: transparent; border: 1px solid var(--border2); color: var(--text3); font-size: 12px; padding: 7px 12px; border-radius: 7px; cursor: pointer; font-family: var(--font); transition: all 0.15s; }
+        .btn-logout:hover { background: var(--danger-dim); color: #fca5a5; border-color: rgba(239,68,68,0.2); }
+
+        /* ── MAIN CONTENT ── */
+        .main { margin-left: 240px; flex: 1; display: flex; flex-direction: column; min-height: 100vh; }
+        .topbar {
+            background: var(--surface); border-bottom: 1px solid var(--border);
+            padding: 0 28px; height: 56px; display: flex; align-items: center; justify-content: space-between;
+            position: sticky; top: 0; z-index: 50;
+        }
+        .topbar-title { font-size: 16px; font-weight: 600; color: var(--text); letter-spacing: -0.3px; }
+        .topbar-actions { display: flex; align-items: center; gap: 8px; }
+        .content { padding: 24px 28px; flex: 1; }
         .page { display: none; }
-        .page.active { display: block; }
-        .card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        .card h2 { font-size: 18px; margin-bottom: 16px; color: var(--gray-800); }
-        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 24px; }
-        .stat-card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-left: 4px solid var(--primary); }
-        .stat-card.warning { border-left-color: var(--warning); }
-        .stat-card.danger { border-left-color: var(--danger); }
-        .stat-label { font-size: 13px; color: var(--gray-500); margin-bottom: 8px; }
-        .stat-value { font-size: 28px; font-weight: 700; color: var(--gray-800); }
-        
-        .table { width: 100%; border-collapse: collapse; margin-top: 0; font-size: 14px; }
-        .table th { background: var(--gray-100); padding: 12px; text-align: left; font-weight: 600; color: var(--gray-700); border-bottom: 1px solid var(--gray-200); }
-        .table td { padding: 12px; border-bottom: 1px solid var(--gray-200); vertical-align: middle; }
-        .table tr:hover td { background: var(--gray-50); }
-        
-        .badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 500; }
-        .badge-success { background: #d1fae5; color: #065f46; }
-        .badge-warning { background: #fef3c7; color: #92400e; }
-        .badge-danger { background: #fee2e2; color: #991b1b; }
-        .badge-pendiente { background: #fef3c7; color: #92400e; }
-        .badge-aprobado { background: #d1fae5; color: #065f46; }
-        .badge-rechazado { background: #fee2e2; color: #991b1b; }
-        
-        .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; overflow-y: auto; padding: 20px; }
-        .modal.active { display: flex; }
-        .modal-content { background: white; border-radius: 12px; padding: 24px; max-width: 600px; width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,0.3); margin: auto; }
-        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .modal-header h2 { font-size: 18px; color: var(--gray-800); }
-        .modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--gray-500); line-height: 1; }
-        .modal-close:hover { color: var(--gray-800); }
-        
-        .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 0; }
-        .form-group { margin-bottom: 16px; }
-        .button-group { display: flex; gap: 12px; margin-top: 20px; }
-        .button-group .btn { flex: 1; margin-top: 0; }
-        .empty-state { text-align: center; padding: 40px; color: var(--gray-500); }
-        .filter-bar { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
-        .filter-bar .form-input, .filter-bar .form-select { width: auto; min-width: 150px; margin-bottom: 0; }
-        .alert-box { background: #fef3c7; border-left: 4px solid var(--warning); padding: 16px; border-radius: 8px; margin-bottom: 16px; }
-        .alert-box.danger { background: #fee2e2; border-left-color: var(--danger); }
-        .alert-title { font-weight: 600; color: var(--gray-800); margin-bottom: 4px; }
-        .alert-text { font-size: 14px; color: var(--gray-700); }
-        .table-container { overflow-x: auto; }
-        textarea.form-input { resize: vertical; min-height: 80px; }
+        .page.active { display: block; animation: fadeIn 0.2s ease; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        /* ── CARDS ── */
+        .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 20px; margin-bottom: 16px; }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; flex-wrap: wrap; gap: 10px; }
+        .card-title { font-size: 15px; font-weight: 600; color: var(--text); }
+        .card-subtitle { font-size: 12px; color: var(--text3); margin-top: 2px; }
+
+        /* ── STATS ── */
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 20px; }
+        .stat-card {
+            background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+            padding: 18px 20px; position: relative; overflow: hidden; transition: border-color 0.2s;
+        }
+        .stat-card:hover { border-color: var(--border2); }
+        .stat-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
+        .stat-card.blue::before { background: var(--accent); }
+        .stat-card.green::before { background: var(--success); }
+        .stat-card.warning::before { background: var(--warning); }
+        .stat-card.danger::before { background: var(--danger); }
+        .stat-card.purple::before { background: var(--purple); }
+        .stat-icon { font-size: 20px; margin-bottom: 10px; }
+        .stat-value { font-size: 28px; font-weight: 600; color: var(--text); letter-spacing: -1px; font-family: var(--mono); }
+        .stat-label { font-size: 12px; color: var(--text3); margin-top: 4px; font-weight: 400; }
+
+        /* ── TABLES ── */
+        .table-wrap { overflow-x: auto; border-radius: var(--radius); }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        thead th {
+            background: var(--bg3); padding: 10px 14px; text-align: left;
+            font-size: 11px; font-weight: 600; color: var(--text3); letter-spacing: 0.5px;
+            text-transform: uppercase; border-bottom: 1px solid var(--border); white-space: nowrap;
+        }
+        tbody td { padding: 11px 14px; border-bottom: 1px solid var(--border); color: var(--text2); vertical-align: middle; }
+        tbody tr:last-child td { border-bottom: none; }
+        tbody tr:hover td { background: rgba(255,255,255,0.02); }
+        .empty-row td { text-align: center; padding: 40px; color: var(--text3); font-size: 13px; }
+
+        /* ── BADGES ── */
+        .badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 99px; font-size: 11px; font-weight: 500; white-space: nowrap; }
+        .badge-success { background: var(--success-dim); color: #6ee7b7; border: 1px solid rgba(16,185,129,0.2); }
+        .badge-warning { background: var(--warning-dim); color: #fcd34d; border: 1px solid rgba(245,158,11,0.2); }
+        .badge-danger { background: var(--danger-dim); color: #fca5a5; border: 1px solid rgba(239,68,68,0.2); }
+        .badge-blue { background: var(--accent-dim); color: var(--accent2); border: 1px solid rgba(59,130,246,0.2); }
+        .badge-purple { background: var(--purple-dim); color: #c4b5fd; border: 1px solid rgba(139,92,246,0.2); }
+        .badge-gray { background: rgba(255,255,255,0.05); color: var(--text2); border: 1px solid var(--border2); }
+
+        /* ── FILTER BAR ── */
+        .filter-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+        .filter-bar .form-input, .filter-bar .form-select { width: auto; min-width: 140px; padding: 8px 12px; font-size: 13px; }
+        .filter-section-label { font-size: 12px; color: var(--text3); font-weight: 500; white-space: nowrap; }
+
+        /* ── MODALS ── */
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(4px); }
+        .modal.active { display: flex; animation: fadeIn 0.15s ease; }
+        .modal-box {
+            background: var(--surface); border: 1px solid var(--border2); border-radius: var(--radius-lg);
+            padding: 28px; max-width: 620px; width: 100%; max-height: 90vh; overflow-y: auto;
+            box-shadow: var(--shadow); animation: fadeUp 0.2s ease;
+        }
+        .modal-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 22px; }
+        .modal-title { font-size: 17px; font-weight: 600; color: var(--text); letter-spacing: -0.3px; }
+        .modal-subtitle { font-size: 12px; color: var(--text3); margin-top: 3px; }
+        .modal-close { background: var(--bg3); border: 1px solid var(--border); border-radius: 7px; width: 28px; height: 28px; cursor: pointer; color: var(--text2); font-size: 16px; display: flex; align-items: center; justify-content: center; transition: all 0.15s; flex-shrink: 0; }
+        .modal-close:hover { background: var(--danger-dim); color: #fca5a5; }
+        .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+        .form-full { grid-column: 1 / -1; }
+        .btn-row { display: flex; gap: 10px; margin-top: 22px; }
+        .btn-row .btn { flex: 1; }
+
+        /* ── ISP SPECIFIC COMPONENTS ── */
+        .isp-tag { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 600; color: var(--accent2); background: var(--accent-dim); padding: 2px 7px; border-radius: 4px; letter-spacing: 0.5px; }
+        .section-divider { display: flex; align-items: center; gap: 10px; margin: 20px 0 14px; }
+        .section-divider-line { flex: 1; height: 1px; background: var(--border); }
+        .section-divider-text { font-size: 11px; font-weight: 600; color: var(--text3); letter-spacing: 0.5px; text-transform: uppercase; white-space: nowrap; }
+        .alert-banner { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; border-radius: var(--radius); margin-bottom: 12px; }
+        .alert-banner.danger { background: var(--danger-dim); border: 1px solid rgba(239,68,68,0.2); }
+        .alert-banner.warning { background: var(--warning-dim); border: 1px solid rgba(245,158,11,0.2); }
+        .alert-banner.success { background: var(--success-dim); border: 1px solid rgba(16,185,129,0.2); }
+        .alert-banner-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+        .alert-banner-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 3px; }
+        .alert-banner-text { font-size: 12px; color: var(--text2); }
+
+        /* ── LOT HISTORY ── */
+        .lot-timeline { list-style: none; position: relative; padding-left: 20px; }
+        .lot-timeline::before { content: ''; position: absolute; left: 6px; top: 0; bottom: 0; width: 1px; background: var(--border2); }
+        .lot-timeline-item { position: relative; padding-bottom: 18px; }
+        .lot-timeline-item::before { content: ''; position: absolute; left: -17px; top: 5px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); border: 2px solid var(--surface); }
+        .lot-timeline-item.salida::before { background: var(--danger); }
+        .lot-timeline-item.ajuste::before { background: var(--warning); }
+        .lot-timeline-date { font-size: 11px; color: var(--text3); font-family: var(--mono); }
+        .lot-timeline-desc { font-size: 13px; color: var(--text); margin-top: 2px; }
+        .lot-timeline-meta { font-size: 11px; color: var(--text3); margin-top: 2px; }
+
+        /* ── FEFO indicator ── */
+        .fefo-indicator { display: flex; align-items: center; gap: 6px; font-size: 11px; }
+        .fefo-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+        .fefo-dot.ok { background: var(--success); }
+        .fefo-dot.warn { background: var(--warning); }
+        .fefo-dot.exp { background: var(--danger); }
+        .fefo-dot.first { background: var(--accent); box-shadow: 0 0 0 2px var(--accent-dim); }
+
+        /* ── CUARENTENA ── */
+        .cuarentena-badge { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; background: var(--warning-dim); color: #fcd34d; border: 1px solid rgba(245,158,11,0.3); }
+
+        /* ── RETIRO MERCADO ── */
+        .recall-card { border: 1px solid rgba(239,68,68,0.3); background: var(--danger-dim); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 8px; }
+        .recall-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .recall-lote { font-size: 14px; font-weight: 600; color: #fca5a5; font-family: var(--mono); }
+        .recall-detail { font-size: 12px; color: var(--text2); }
+
+        /* ── REGISTRO SANITARIO ── */
+        .rs-number { font-family: var(--mono); font-size: 12px; color: var(--accent2); background: var(--accent-dim); padding: 2px 7px; border-radius: 4px; }
+
+        /* ── RESPONSIVE HELPERS ── */
+        .flex-between { display: flex; justify-content: space-between; align-items: center; }
+        .text-mono { font-family: var(--mono); font-size: 12px; }
+        .text-muted { color: var(--text3); }
+        .text-sm { font-size: 12px; }
+        .mt-1 { margin-top: 6px; }
+        .mb-1 { margin-bottom: 6px; }
+        .gap-1 { gap: 6px; }
+        .hidden { display: none !important; }
+
+        /* ── REGISTER PANEL ── */
+        #registerPanel { display: none; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
     </style>
 </head>
 <body>
 
-<!-- ===== LOGIN SCREEN ===== -->
+<!-- ══════════════════════════════════════
+     LOGIN
+══════════════════════════════════════ -->
 <div class="login-screen" id="loginScreen">
-    <div class="login-box">
+    <div class="login-card">
         <div class="login-logo">
-            <h1>Celmedik</h1>
-            <p>Sistema de Gestión de Almacén</p>
+            <div class="login-logo-mark">C</div>
+            <h1>Celmedik WMS</h1>
+            <p>Sistema de Gestión de Almacén Farmacéutico</p>
         </div>
-        <div class="status-message" id="loginStatus"></div>
-        <form id="loginForm" onsubmit="handleLogin(event)">
+        <div class="status-msg" id="loginStatus"></div>
+        <form onsubmit="handleLogin(event)">
             <div class="form-group">
                 <label class="form-label">Email</label>
-                <input type="email" class="form-input" id="loginEmail" placeholder="tu@email.com" required>
+                <input type="email" class="form-input" id="loginEmail" placeholder="usuario@empresa.com" required>
             </div>
             <div class="form-group">
                 <label class="form-label">Contraseña</label>
                 <input type="password" class="form-input" id="loginPassword" placeholder="••••••••" required>
             </div>
-            <button type="submit" class="btn btn-primary">Iniciar Sesión</button>
-            <button type="button" class="btn btn-secondary" onclick="toggleRegister()">Crear nueva cuenta</button>
+            <button type="submit" class="btn btn-primary">Iniciar sesión</button>
+            <button type="button" class="btn btn-ghost" onclick="toggleRegister()">Crear nueva cuenta</button>
         </form>
-        <div id="registerForm" style="display: none; margin-top: 20px;">
-            <h3 style="margin-bottom: 16px; color: var(--gray-800);">Crear Cuenta</h3>
-            <form onsubmit="handleRegister(event)">
-                <div class="form-group">
-                    <label class="form-label">Email</label>
-                    <input type="email" class="form-input" id="registerEmail" required>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Contraseña (mínimo 6 caracteres)</label>
-                    <input type="password" class="form-input" id="registerPassword" minlength="6" required>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Perfil</label>
-                    <select class="form-select" id="registerPerfil" required>
-                        <option value="">Seleccionar...</option>
-                        <option value="Maestro">Maestro (Acceso completo)</option>
-                        <option value="Operador">Operador (Solo movimientos)</option>
-                        <option value="Visualizador">Visualizador (Solo lectura)</option>
-                    </select>
-                </div>
-                <button type="submit" class="btn btn-primary">Crear Cuenta</button>
-                <button type="button" class="btn btn-secondary" onclick="toggleRegister()">Volver</button>
-            </form>
+        <div id="registerPanel">
+            <div class="form-group">
+                <label class="form-label">Email</label>
+                <input type="email" class="form-input" id="regEmail" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Contraseña</label>
+                <input type="password" class="form-input" id="regPassword" minlength="6" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Perfil</label>
+                <select class="form-select" id="regPerfil" required>
+                    <option value="">Seleccionar...</option>
+                    <option value="Maestro">Maestro (Acceso completo)</option>
+                    <option value="Operador">Operador (Movimientos)</option>
+                    <option value="Visualizador">Visualizador (Solo lectura)</option>
+                </select>
+            </div>
+            <button type="button" class="btn btn-primary" onclick="handleRegister()">Crear cuenta</button>
+            <button type="button" class="btn btn-ghost" onclick="toggleRegister()">Cancelar</button>
         </div>
     </div>
 </div>
 
-<!-- ===== APP SCREEN ===== -->
+<!-- ══════════════════════════════════════
+     APP
+══════════════════════════════════════ -->
 <div class="app-screen" id="appScreen">
-    <div class="container">
+    <div class="layout">
+
+        <!-- SIDEBAR -->
         <aside class="sidebar">
-            <div class="sidebar-header">
-                <h1>Celmedik</h1>
-                <p>Inventario WMS</p>
+            <div class="sidebar-logo">
+                <div class="sidebar-logo-mark">C</div>
+                <div class="sidebar-logo-text">
+                    <h2>Celmedik</h2>
+                    <p>WMS Farmacéutico</p>
+                </div>
             </div>
-            <ul class="sidebar-menu">
-                <li><a class="menu-link active" data-page="dashboard">Dashboard</a></li>
-                <li><a class="menu-link" data-page="productos">Productos Maestro</a></li>
-                <li><a class="menu-link" data-page="stock">Stock</a></li>
-                <li><a class="menu-link" data-page="bodegas">Bodegas</a></li>
-                <li><a class="menu-link" data-page="movimientos">Movimientos</a></li>
-                <li><a class="menu-link" data-page="devoluciones">Devoluciones</a></li>
-                <li><a class="menu-link" data-page="alertas">Alertas</a></li>
-                <li><a class="menu-link" data-page="reportes">Reportes</a></li>
-                <li><a class="menu-link" data-page="auditoria">Auditoría</a></li>
-            </ul>
+
+            <div class="nav-section">Principal</div>
+            <a class="nav-link active" data-page="dashboard"><span class="nav-icon">◈</span> Dashboard</a>
+            <a class="nav-link" data-page="alertas"><span class="nav-icon">◉</span> Alertas <span class="nav-badge" id="alertBadge" style="display:none">0</span></a>
+
+            <div class="nav-section">Inventario</div>
+            <a class="nav-link" data-page="productos"><span class="nav-icon">⊞</span> Productos Maestro</a>
+            <a class="nav-link" data-page="stock"><span class="nav-icon">⊟</span> Stock Actual</a>
+            <a class="nav-link" data-page="bodegas"><span class="nav-icon">⊡</span> Bodegas</a>
+
+            <div class="nav-section">Operaciones</div>
+            <a class="nav-link" data-page="movimientos"><span class="nav-icon">⇄</span> Movimientos</a>
+            <a class="nav-link" data-page="cuarentena"><span class="nav-icon">⊘</span> Cuarentena</a>
+            <a class="nav-link" data-page="devoluciones"><span class="nav-icon">↩</span> Devoluciones</a>
+            <a class="nav-link" data-page="retiro"><span class="nav-icon">⚠</span> Retiro Mercado</a>
+
+            <div class="nav-section">Trazabilidad</div>
+            <a class="nav-link" data-page="trazabilidad"><span class="nav-icon">⟳</span> Trazabilidad Lotes</a>
+
+            <div class="nav-section">Reportes</div>
+            <a class="nav-link" data-page="reportes"><span class="nav-icon">⊞</span> Reportes ISP</a>
+            <a class="nav-link" data-page="auditoria"><span class="nav-icon">≡</span> Auditoría</a>
+
             <div class="sidebar-footer">
-                <div class="user-info">Usuario: <span id="userEmail"></span></div>
-                <div class="user-role" id="userRole">Perfil: Cargando...</div>
-                <button class="btn btn-secondary" onclick="handleLogout()" style="width:100%; margin-top:0;">Cerrar Sesión</button>
+                <div class="user-card">
+                    <div class="user-avatar" id="userInitial">U</div>
+                    <div class="user-info-text">
+                        <div class="user-email" id="userEmail">—</div>
+                        <div class="user-role-tag" id="userRole">Cargando...</div>
+                    </div>
+                </div>
+                <button class="btn-logout" onclick="handleLogout()">Cerrar sesión</button>
             </div>
         </aside>
 
-        <main class="main-content">
-            <div class="header">
-                <h1 id="pageTitle">Dashboard</h1>
-            </div>
-
-            <!-- Dashboard -->
-            <div id="dashboard" class="page active">
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-label">Productos Maestro</div>
-                        <div class="stat-value" id="stat-productos">0</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-label">Bodegas</div>
-                        <div class="stat-value" id="stat-bodegas">0</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-label">Movimientos</div>
-                        <div class="stat-value" id="stat-movimientos">0</div>
-                    </div>
-                    <div class="stat-card warning">
-                        <div class="stat-label">Alertas Activas</div>
-                        <div class="stat-value" id="stat-alertas">0</div>
-                    </div>
-                </div>
-                <div class="card">
-                    <h2>Bienvenido a Celmedik Inventario</h2>
-                    <p style="color: var(--gray-500);">Sistema completo de Gestión de Almacén para Dispositivos Médicos y Medicamentos</p>
+        <!-- MAIN -->
+        <main class="main">
+            <div class="topbar">
+                <div class="topbar-title" id="pageTitle">Dashboard</div>
+                <div class="topbar-actions">
+                    <span class="isp-tag">NT 147 · BPA</span>
                 </div>
             </div>
 
-            <!-- Productos Maestro -->
-            <div id="productos" class="page">
-                <div class="card">
-                    <div class="card-header">
-                        <h2>Productos Maestro</h2>
-                        <button class="btn btn-primary btn-sm" onclick="openProductModal()">+ Nuevo Producto</button>
+            <div class="content">
+
+                <!-- ── DASHBOARD ── -->
+                <div id="dashboard" class="page active">
+                    <div class="stats-grid">
+                        <div class="stat-card blue">
+                            <div class="stat-icon">⊞</div>
+                            <div class="stat-value" id="st-productos">0</div>
+                            <div class="stat-label">Productos registrados</div>
+                        </div>
+                        <div class="stat-card green">
+                            <div class="stat-icon">⊟</div>
+                            <div class="stat-value" id="st-lotes">0</div>
+                            <div class="stat-label">Lotes en stock</div>
+                        </div>
+                        <div class="stat-card warning">
+                            <div class="stat-icon">⇄</div>
+                            <div class="stat-value" id="st-movimientos">0</div>
+                            <div class="stat-label">Movimientos totales</div>
+                        </div>
+                        <div class="stat-card danger">
+                            <div class="stat-icon">◉</div>
+                            <div class="stat-value" id="st-alertas">0</div>
+                            <div class="stat-label">Alertas activas</div>
+                        </div>
+                        <div class="stat-card purple">
+                            <div class="stat-icon">⊘</div>
+                            <div class="stat-value" id="st-cuarentena">0</div>
+                            <div class="stat-label">Lotes en cuarentena</div>
+                        </div>
                     </div>
-                    <div class="table-container">
-                        <table class="table">
-                            <thead>
-                                <tr>
-                                    <th>SKU</th><th>Descripción</th><th>Tipo</th><th>Fabricante</th>
-                                    <th>Presentación</th><th>Unidad de Venta</th><th>Almacenamiento</th><th>Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody id="productos-table">
-                                <tr><td colspan="8" class="empty-state">No hay productos registrados</td></tr>
-                            </tbody>
-                        </table>
+                    <div class="card">
+                        <div class="card-header">
+                            <div>
+                                <div class="card-title">Resumen de alertas activas</div>
+                                <div class="card-subtitle">Productos próximos a vencer o vencidos</div>
+                            </div>
+                        </div>
+                        <div id="dashAlertasContainer"><p class="text-muted text-sm">Sin alertas activas ✓</p></div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Stock -->
-            <div id="stock" class="page">
-                <div class="card">
-                    <div class="card-header">
-                        <h2>Stock Actual</h2>
-                    </div>
-                    <div class="filter-bar" id="bodegaButtonsContainer">
-                        <label style="font-weight:600; color:var(--gray-700);">Bodega:</label>
-                        <button class="btn btn-sm" id="bodegaTotalBtn" onclick="selectBodega('TOTAL')" style="background:var(--primary);color:white;">Total</button>
-                    </div>
-                    <div class="filter-bar">
-                        <input type="text" class="form-input" id="stockFilterSKU" placeholder="Filtrar por SKU..." onkeyup="renderStock()">
-                        <input type="text" class="form-input" id="stockFilterDescripcion" placeholder="Filtrar por Descripción..." onkeyup="renderStock()">
-                        <input type="text" class="form-input" id="stockFilterLote" placeholder="Filtrar por Lote..." onkeyup="renderStock()">
-                        <input type="text" class="form-input" id="stockFilterUbicacion" placeholder="Filtrar por Ubicación..." onkeyup="renderStock()">
-                        <button class="btn btn-secondary btn-sm" onclick="clearStockFilters()" style="margin-top:0;">Limpiar Filtros</button>
-                    </div>
-                    <div class="table-container">
-                        <table class="table">
-                            <thead>
-                                <tr>
-                                    <th>SKU</th><th>Descripción</th><th>Unidad de Venta</th><th>Lote</th>
-                                    <th>Vence</th><th>Cantidad</th><th>Status</th><th>Ubicación</th>
-                                </tr>
-                            </thead>
-                            <tbody id="stock-table">
-                                <tr><td colspan="8" class="empty-state">No hay stock registrado</td></tr>
-                            </tbody>
-                        </table>
+                <!-- ── PRODUCTOS MAESTRO ── -->
+                <div id="productos" class="page">
+                    <div class="card">
+                        <div class="card-header">
+                            <div>
+                                <div class="card-title">Productos Maestro</div>
+                                <div class="card-subtitle">Incluye N° registro sanitario ISP (NT 147)</div>
+                            </div>
+                            <button class="btn btn-primary btn-sm" onclick="openModal('productModal')">+ Nuevo producto</button>
+                        </div>
+                        <div class="filter-bar">
+                            <input type="text" class="form-input" id="fProdSKU" placeholder="Buscar SKU..." onkeyup="renderProductos()">
+                            <input type="text" class="form-input" id="fProdDesc" placeholder="Buscar descripción..." onkeyup="renderProductos()">
+                        </div>
+                        <div class="table-wrap">
+                            <table><thead><tr>
+                                <th>SKU</th><th>Descripción</th><th>N° Reg. Sanitario</th><th>Tipo</th><th>Fabricante</th><th>Presentación</th><th>Ud. Venta</th><th>Stock mín.</th><th>Almac.</th><th></th>
+                            </tr></thead><tbody id="tProductos"><tr class="empty-row"><td colspan="10">No hay productos registrados</td></tr></tbody></table>
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Bodegas -->
-            <div id="bodegas" class="page">
-                <div class="card">
-                    <div class="card-header">
-                        <h2>Bodegas</h2>
-                        <button class="btn btn-primary btn-sm" onclick="openBodegaModal()">+ Nueva Bodega</button>
-                    </div>
-                    <div class="table-container">
-                        <table class="table">
-                            <thead>
-                                <tr><th>Nombre</th><th>Ubicación</th><th>Capacidad</th><th>Temperatura</th><th>Estado</th><th>Acciones</th></tr>
-                            </thead>
-                            <tbody id="bodegas-table">
-                                <tr><td colspan="6" class="empty-state">No hay bodegas registradas</td></tr>
-                            </tbody>
-                        </table>
+                <!-- ── STOCK ── -->
+                <div id="stock" class="page">
+                    <div class="card">
+                        <div class="card-header">
+                            <div>
+                                <div class="card-title">Stock Actual</div>
+                                <div class="card-subtitle">Ordenado por FEFO — Vencimiento más próximo primero</div>
+                            </div>
+                        </div>
+                        <div class="filter-bar" id="bodegaBtns">
+                            <span class="filter-section-label">Bodega:</span>
+                            <button class="btn btn-sm btn-icon active-bodega" id="btnTOTAL" onclick="selBodega('TOTAL')" style="background:var(--accent);color:white;border-color:var(--accent)">Todas</button>
+                        </div>
+                        <div class="filter-bar">
+                            <input type="text" class="form-input" id="fStockSKU" placeholder="SKU..." onkeyup="renderStock()">
+                            <input type="text" class="form-input" id="fStockLote" placeholder="Lote..." onkeyup="renderStock()">
+                            <input type="text" class="form-input" id="fStockUbic" placeholder="Ubicación..." onkeyup="renderStock()">
+                            <button class="btn btn-ghost btn-sm" onclick="clearStockFilters()">Limpiar</button>
+                        </div>
+                        <div class="table-wrap">
+                            <table><thead><tr>
+                                <th>FEFO</th><th>SKU</th><th>Descripción</th><th>N° Reg. ISP</th><th>Lote</th><th>Vencimiento</th><th>Días</th><th>Qty</th><th>Ud.</th><th>Status</th><th>Bodega</th><th>Ubicación</th><th>Acciones</th>
+                            </tr></thead><tbody id="tStock"><tr class="empty-row"><td colspan="13">No hay stock registrado</td></tr></tbody></table>
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Movimientos -->
-            <div id="movimientos" class="page">
-                <div class="card">
-                    <div class="card-header">
-                        <h2>Movimientos</h2>
-                        <button class="btn btn-primary btn-sm" onclick="openMovimientoModal()">+ Nuevo Movimiento</button>
-                    </div>
-                    <div class="filter-bar">
-                        <select class="form-select" id="movTipoFilter" onchange="renderMovimientos()" style="width:auto; min-width:150px;">
-                            <option value="">Todos los tipos</option>
-                            <option value="Entrada">Entrada</option>
-                            <option value="Salida">Salida</option>
-                            <option value="Ajuste">Ajuste</option>
-                        </select>
-                    </div>
-                    <div class="table-container">
-                        <table class="table">
-                            <thead>
-                                <tr>
-                                    <th>Fecha</th><th>Tipo</th><th>SKU</th><th>Descripción</th><th>Lote</th>
-                                    <th>Vence</th><th>Cantidad</th><th>Bodega</th><th>Ubicación</th>
-                                    <th>Proveedor/Cliente</th><th>Referencia</th><th>Status</th><th>Usuario</th><th>Obs.</th>
-                                </tr>
-                            </thead>
-                            <tbody id="movimientos-table">
-                                <tr><td colspan="14" class="empty-state">No hay movimientos registrados</td></tr>
-                            </tbody>
-                        </table>
+                <!-- ── BODEGAS ── -->
+                <div id="bodegas" class="page">
+                    <div class="card">
+                        <div class="card-header">
+                            <div><div class="card-title">Bodegas</div></div>
+                            <button class="btn btn-primary btn-sm" onclick="openModal('bodegaModal')">+ Nueva bodega</button>
+                        </div>
+                        <div class="table-wrap">
+                            <table><thead><tr><th>Nombre</th><th>Ubicación</th><th>Capacidad</th><th>Tipo</th><th>Estado</th><th></th></tr></thead>
+                            <tbody id="tBodegas"><tr class="empty-row"><td colspan="6">No hay bodegas registradas</td></tr></tbody></table>
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Alertas -->
-            <div id="alertas" class="page">
-                <div class="card">
-                    <h2>Alertas del Sistema</h2>
-                    <div id="alertasListContainer"><p style="color:var(--gray-500);">No hay alertas activas.</p></div>
-                </div>
-            </div>
-
-            <!-- Reportes -->
-            <div id="reportes" class="page">
-                <div class="card">
-                    <h2>Reportes</h2>
-                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px,1fr)); gap:16px;">
-                        <button class="btn btn-primary" onclick="generarReporteInventario()" style="margin-top:0;">Reporte de Inventario</button>
-                        <button class="btn btn-primary" onclick="generarReporteVencimiento()" style="margin-top:0;">Reporte de Vencimientos</button>
-                        <button class="btn btn-primary" onclick="generarReporteMovimientos()" style="margin-top:0;">Reporte de Movimientos</button>
+                <!-- ── MOVIMIENTOS ── -->
+                <div id="movimientos" class="page">
+                    <div class="card">
+                        <div class="card-header">
+                            <div><div class="card-title">Movimientos</div><div class="card-subtitle">Trazabilidad completa según NT 147</div></div>
+                            <button class="btn btn-primary btn-sm" onclick="openModal('movModal')">+ Nuevo movimiento</button>
+                        </div>
+                        <div class="filter-bar">
+                            <select class="form-select" id="fMovTipo" onchange="renderMovimientos()" style="width:auto">
+                                <option value="">Todos los tipos</option>
+                                <option value="Entrada">Entrada</option>
+                                <option value="Salida">Salida</option>
+                                <option value="Ajuste">Ajuste</option>
+                            </select>
+                            <input type="text" class="form-input" id="fMovSKU" placeholder="SKU..." onkeyup="renderMovimientos()">
+                            <input type="text" class="form-input" id="fMovLote" placeholder="Lote..." onkeyup="renderMovimientos()">
+                        </div>
+                        <div class="table-wrap">
+                            <table><thead><tr>
+                                <th>Fecha</th><th>Tipo</th><th>SKU</th><th>Descripción</th><th>Lote</th><th>Vence</th><th>Qty</th><th>Bodega</th><th>Ubicación</th><th>Proveedor/Cliente</th><th>Referencia</th><th>Status</th><th>Usuario</th><th>Obs.</th>
+                            </tr></thead><tbody id="tMovimientos"><tr class="empty-row"><td colspan="14">No hay movimientos registrados</td></tr></tbody></table>
+                        </div>
                     </div>
                 </div>
-                <div id="reporteContainer"></div>
-            </div>
 
-            <!-- Auditoría -->
-            <div id="auditoria" class="page">
-                <div class="card">
-                    <h2>Auditoría del Sistema</h2>
-                    <div id="auditoriaListContainer"><p style="color:var(--gray-500);">No hay registros de auditoría.</p></div>
-                </div>
-            </div>
-
-            <!-- Devoluciones -->
-            <div id="devoluciones" class="page">
-                <div class="card">
-                    <div class="card-header">
-                        <h2>Gestión de Devoluciones</h2>
-                        <button class="btn btn-primary btn-sm" onclick="openDevolucionModal()">+ Nueva Devolución</button>
-                    </div>
-                    <div class="filter-bar">
-                        <input type="text" class="form-input" id="devolucionFilterSKU" placeholder="Buscar por SKU..." onkeyup="renderDevoluciones()">
-                        <input type="text" class="form-input" id="devolucionFilterLote" placeholder="Buscar por Lote..." onkeyup="renderDevoluciones()">
-                    </div>
-                    <div class="table-container">
-                        <table class="table">
-                            <thead>
-                                <tr><th>Fecha</th><th>SKU</th><th>Descripción</th><th>Lote</th><th>Cantidad</th><th>Motivo</th><th>Status</th><th>Acciones</th></tr>
-                            </thead>
-                            <tbody id="devoluciones-table">
-                                <tr><td colspan="8" class="empty-state">No hay devoluciones registradas</td></tr>
-                            </tbody>
-                        </table>
+                <!-- ── CUARENTENA ── -->
+                <div id="cuarentena" class="page">
+                    <div class="card">
+                        <div class="card-header">
+                            <div><div class="card-title">Gestión de Cuarentena</div><div class="card-subtitle">Lotes bloqueados pendientes de liberación QA — NT 147</div></div>
+                            <button class="btn btn-primary btn-sm" onclick="openModal('cuarModal')">+ Ingresar a cuarentena</button>
+                        </div>
+                        <div class="table-wrap">
+                            <table><thead><tr>
+                                <th>Fecha ingreso</th><th>SKU</th><th>Descripción</th><th>Lote</th><th>Qty</th><th>Motivo</th><th>Responsable</th><th>Obs.</th><th>Status</th><th>Acciones</th>
+                            </tr></thead><tbody id="tCuarentena"><tr class="empty-row"><td colspan="10">No hay lotes en cuarentena</td></tr></tbody></table>
+                        </div>
                     </div>
                 </div>
-            </div>
 
+                <!-- ── DEVOLUCIONES ── -->
+                <div id="devoluciones" class="page">
+                    <div class="card">
+                        <div class="card-header">
+                            <div><div class="card-title">Devoluciones</div></div>
+                            <button class="btn btn-primary btn-sm" onclick="openModal('devModal')">+ Nueva devolución</button>
+                        </div>
+                        <div class="filter-bar">
+                            <input type="text" class="form-input" id="fDevSKU" placeholder="SKU..." onkeyup="renderDevoluciones()">
+                            <input type="text" class="form-input" id="fDevLote" placeholder="Lote..." onkeyup="renderDevoluciones()">
+                        </div>
+                        <div class="table-wrap">
+                            <table><thead><tr>
+                                <th>Fecha</th><th>SKU</th><th>Descripción</th><th>Lote</th><th>Qty</th><th>Motivo</th><th>Status</th><th></th>
+                            </tr></thead><tbody id="tDevoluciones"><tr class="empty-row"><td colspan="8">No hay devoluciones</td></tr></tbody></table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── RETIRO DE MERCADO ── -->
+                <div id="retiro" class="page">
+                    <div class="card">
+                        <div class="card-header">
+                            <div><div class="card-title">Retiro de Mercado</div><div class="card-subtitle">Trazabilidad inversa por lote — Resolución Exenta N°3853/2020</div></div>
+                        </div>
+                        <div class="alert-banner warning" style="margin-bottom:16px">
+                            <div class="alert-banner-icon">⚠</div>
+                            <div>
+                                <div class="alert-banner-title">Herramienta de simulación de retiro</div>
+                                <div class="alert-banner-text">Ingrese un número de lote para identificar todos los movimientos asociados y destinatarios afectados. Permite generar el reporte para notificar al ISP.</div>
+                            </div>
+                        </div>
+                        <div class="filter-bar">
+                            <input type="text" class="form-input" id="retiroLote" placeholder="Número de lote a rastrear..." style="flex:1; max-width:300px">
+                            <input type="text" class="form-input" id="retiroSKU" placeholder="SKU (opcional)..." style="max-width:200px">
+                            <button class="btn btn-primary btn-sm" onclick="ejecutarRetiro()">Rastrear lote</button>
+                        </div>
+                        <div id="retiroResults"></div>
+                    </div>
+                </div>
+
+                <!-- ── TRAZABILIDAD ── -->
+                <div id="trazabilidad" class="page">
+                    <div class="card">
+                        <div class="card-header">
+                            <div><div class="card-title">Trazabilidad de Lotes</div><div class="card-subtitle">Historial completo de movimientos por lote — NT 147</div></div>
+                        </div>
+                        <div class="filter-bar">
+                            <input type="text" class="form-input" id="trazLote" placeholder="Número de lote..." style="flex:1; max-width:280px">
+                            <input type="text" class="form-input" id="trazSKU" placeholder="SKU..." style="max-width:200px">
+                            <button class="btn btn-primary btn-sm" onclick="buscarTrazabilidad()">Consultar</button>
+                        </div>
+                        <div id="trazResults"></div>
+                    </div>
+                </div>
+
+                <!-- ── ALERTAS ── -->
+                <div id="alertas" class="page">
+                    <div class="card">
+                        <div class="card-header">
+                            <div><div class="card-title">Alertas del Sistema</div><div class="card-subtitle">Vencimientos próximos y stock bajo mínimo</div></div>
+                        </div>
+                        <div id="alertasContainer"><p class="text-muted text-sm">Sin alertas activas ✓</p></div>
+                    </div>
+                </div>
+
+                <!-- ── REPORTES ── -->
+                <div id="reportes" class="page">
+                    <div class="card">
+                        <div class="card-header">
+                            <div><div class="card-title">Reportes ISP</div><div class="card-subtitle">Formatos para fiscalización ANAMED / NT 147</div></div>
+                        </div>
+                        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin-bottom:20px">
+                            <button class="btn btn-primary" onclick="rptInventario()" style="margin-top:0">📋 Inventario general</button>
+                            <button class="btn btn-primary" onclick="rptVencimientos()" style="margin-top:0">📅 Vencimientos</button>
+                            <button class="btn btn-primary" onclick="rptMovimientos()" style="margin-top:0">⇄ Movimientos</button>
+                            <button class="btn btn-primary" onclick="rptCuarentena()" style="margin-top:0">⊘ Cuarentena activa</button>
+                        </div>
+                    </div>
+                    <div id="rptContainer"></div>
+                </div>
+
+                <!-- ── AUDITORÍA ── -->
+                <div id="auditoria" class="page">
+                    <div class="card">
+                        <div class="card-header">
+                            <div><div class="card-title">Auditoría del Sistema</div><div class="card-subtitle">Registro inmutable de todas las acciones — trazabilidad NT 147</div></div>
+                        </div>
+                        <div class="table-wrap">
+                            <table><thead><tr>
+                                <th>Fecha / Hora</th><th>Acción</th><th>Módulo</th><th>SKU</th><th>Lote</th><th>Detalle</th><th>Usuario</th>
+                            </tr></thead><tbody id="tAuditoria"><tr class="empty-row"><td colspan="7">No hay registros</td></tr></tbody></table>
+                        </div>
+                    </div>
+                </div>
+
+            </div><!-- /content -->
         </main>
     </div>
 </div>
 
-<!-- ===== MODAL: PRODUCTO ===== -->
+<!-- ══════════════════════════════════════
+     MODALES
+══════════════════════════════════════ -->
+
+<!-- PRODUCTO -->
 <div id="productModal" class="modal">
-    <div class="modal-content">
+    <div class="modal-box">
         <div class="modal-header">
-            <h2>Nuevo Producto Maestro</h2>
-            <button class="modal-close" onclick="closeProductModal()">&times;</button>
+            <div><div class="modal-title">Producto Maestro</div><div class="modal-subtitle">Registro según NT 147 — ANAMED ISP</div></div>
+            <button class="modal-close" onclick="closeModal('productModal')">✕</button>
         </div>
-        <form onsubmit="saveProduct(event)">
+        <form onsubmit="saveProducto(event)">
+            <div class="section-divider"><div class="section-divider-line"></div><div class="section-divider-text">Identificación</div><div class="section-divider-line"></div></div>
             <div class="form-row">
                 <div class="form-group">
-                    <label class="form-label">SKU</label>
-                    <input type="text" class="form-input" id="sku" required>
+                    <label class="form-label">SKU <span style="color:var(--danger)">*</span></label>
+                    <input type="text" class="form-input" id="p-sku" placeholder="Ej: MED-001" required>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Descripción</label>
-                    <input type="text" class="form-input" id="descripcion" required>
+                    <label class="form-label">N° Registro Sanitario ISP <span style="color:var(--accent2)" title="Requerido NT 147">★</span></label>
+                    <input type="text" class="form-input" id="p-rs" placeholder="Ej: F-12345/21">
                 </div>
             </div>
             <div class="form-row">
-                <div class="form-group">
-                    <label class="form-label">Fabricante</label>
-                    <input type="text" class="form-input" id="fabricante" required>
+                <div class="form-group form-full">
+                    <label class="form-label">Descripción / Nombre comercial <span style="color:var(--danger)">*</span></label>
+                    <input type="text" class="form-input" id="p-desc" placeholder="Nombre del medicamento o dispositivo" required>
                 </div>
+            </div>
+            <div class="section-divider"><div class="section-divider-line"></div><div class="section-divider-text">Clasificación</div><div class="section-divider-line"></div></div>
+            <div class="form-row">
                 <div class="form-group">
-                    <label class="form-label">Tipo</label>
-                    <select class="form-select" id="tipo" required>
+                    <label class="form-label">Tipo <span style="color:var(--danger)">*</span></label>
+                    <select class="form-select" id="p-tipo" required>
                         <option value="">Seleccionar...</option>
-                        <option value="Dispositivo Médico">Dispositivo Médico</option>
                         <option value="Medicamento">Medicamento</option>
+                        <option value="Dispositivo Médico">Dispositivo Médico</option>
                         <option value="Insumo">Insumo</option>
+                        <option value="Psicotrópico">Psicotrópico / Estupefaciente</option>
                     </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Fabricante <span style="color:var(--danger)">*</span></label>
+                    <input type="text" class="form-input" id="p-fab" placeholder="Laboratorio fabricante" required>
                 </div>
             </div>
             <div class="form-row">
                 <div class="form-group">
-                    <label class="form-label">Presentación</label>
-                    <input type="text" class="form-input" id="presentacion" required>
+                    <label class="form-label">Presentación <span style="color:var(--danger)">*</span></label>
+                    <input type="text" class="form-input" id="p-pres" placeholder="Ej: Comprimidos 500mg x 20" required>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Unidad de Venta</label>
-                    <input type="text" class="form-input" id="unidadVenta" required>
+                    <label class="form-label">Unidad de venta</label>
+                    <input type="text" class="form-input" id="p-udv" placeholder="Ej: Caja, Unidad, Frasco">
                 </div>
             </div>
+            <div class="section-divider"><div class="section-divider-line"></div><div class="section-divider-text">Almacenamiento y control</div><div class="section-divider-line"></div></div>
             <div class="form-row">
                 <div class="form-group">
-                    <label class="form-label">Almacenamiento</label>
-                    <select class="form-select" id="almacenamiento" required>
-                        <option value="">Seleccionar...</option>
-                        <option value="Temperatura Ambiente">Temperatura Ambiente</option>
-                        <option value="Refrigerado 2-8°C">Refrigerado 2-8°C</option>
-                        <option value="Congelado -20°C">Congelado -20°C</option>
+                    <label class="form-label">Condición almacenamiento</label>
+                    <select class="form-select" id="p-almac">
+                        <option value="Temperatura Ambiente">Temperatura Ambiente (15-25°C)</option>
+                        <option value="Lugar fresco y seco">Lugar fresco y seco</option>
+                        <option value="Protegido de luz">Protegido de luz</option>
                     </select>
                 </div>
+                <div class="form-group">
+                    <label class="form-label">Stock mínimo</label>
+                    <input type="number" class="form-input" id="p-min" placeholder="Ej: 10" min="0" value="0">
+                </div>
             </div>
-            <div class="button-group">
-                <button type="button" class="btn btn-secondary" onclick="closeProductModal()" style="margin-top:0;">Cancelar</button>
-                <button type="submit" class="btn btn-primary" style="margin-top:0;">Guardar</button>
+            <div class="form-group">
+                <label class="form-label">Principio activo / Composición</label>
+                <input type="text" class="form-input" id="p-principio" placeholder="Ej: Paracetamol 500mg">
+            </div>
+            <div class="btn-row">
+                <button type="button" class="btn btn-ghost" onclick="closeModal('productModal')">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Guardar producto</button>
             </div>
         </form>
     </div>
 </div>
 
-<!-- ===== MODAL: BODEGA ===== -->
+<!-- BODEGA -->
 <div id="bodegaModal" class="modal">
-    <div class="modal-content">
+    <div class="modal-box">
         <div class="modal-header">
-            <h2>Nueva Bodega</h2>
-            <button class="modal-close" onclick="closeBodegaModal()">&times;</button>
+            <div><div class="modal-title">Nueva Bodega</div></div>
+            <button class="modal-close" onclick="closeModal('bodegaModal')">✕</button>
         </div>
         <form onsubmit="saveBodega(event)">
             <div class="form-row">
                 <div class="form-group">
-                    <label class="form-label">Nombre</label>
-                    <input type="text" class="form-input" id="bodega-nombre" required>
+                    <label class="form-label">Nombre <span style="color:var(--danger)">*</span></label>
+                    <input type="text" class="form-input" id="b-nombre" required>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Ubicación</label>
-                    <input type="text" class="form-input" id="bodega-ubicacion" required>
+                    <label class="form-label">Tipo</label>
+                    <select class="form-select" id="b-tipo">
+                        <option value="General">General</option>
+                        <option value="Cuarentena">Cuarentena</option>
+                        <option value="Devoluciones">Devoluciones</option>
+                        <option value="Rechazados">Rechazados</option>
+                    </select>
                 </div>
             </div>
             <div class="form-row">
                 <div class="form-group">
-                    <label class="form-label">Capacidad (m³)</label>
-                    <input type="number" class="form-input" id="bodega-capacidad" min="1" required>
+                    <label class="form-label">Ubicación <span style="color:var(--danger)">*</span></label>
+                    <input type="text" class="form-input" id="b-ubic" required>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Temperatura</label>
-                    <select class="form-select" id="bodega-temperatura" required>
-                        <option value="">Seleccionar...</option>
-                        <option value="Ambiente">Ambiente</option>
-                        <option value="Refrigerado 2-8°C">Refrigerado 2-8°C</option>
-                        <option value="Congelado -20°C">Congelado -20°C</option>
-                    </select>
+                    <label class="form-label">Capacidad (m³)</label>
+                    <input type="number" class="form-input" id="b-cap" min="1">
                 </div>
             </div>
-            <div class="button-group">
-                <button type="button" class="btn btn-secondary" onclick="closeBodegaModal()" style="margin-top:0;">Cancelar</button>
-                <button type="submit" class="btn btn-primary" style="margin-top:0;">Guardar</button>
+            <div class="btn-row">
+                <button type="button" class="btn btn-ghost" onclick="closeModal('bodegaModal')">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Guardar bodega</button>
             </div>
         </form>
     </div>
 </div>
 
-<!-- ===== MODAL: MOVIMIENTO ===== -->
-<div id="movimientoModal" class="modal">
-    <div class="modal-content">
+<!-- MOVIMIENTO -->
+<div id="movModal" class="modal">
+    <div class="modal-box">
         <div class="modal-header">
-            <h2>Nuevo Movimiento</h2>
-            <button class="modal-close" onclick="closeMovimientoModal()">&times;</button>
+            <div><div class="modal-title">Nuevo Movimiento</div><div class="modal-subtitle">Trazabilidad NT 147</div></div>
+            <button class="modal-close" onclick="closeModal('movModal')">✕</button>
         </div>
         <form onsubmit="saveMovimiento(event)">
             <div class="form-row">
                 <div class="form-group">
-                    <label class="form-label">Tipo de Movimiento</label>
-                    <select class="form-select" id="mov-tipo" onchange="handleMovTipoChange()" required>
+                    <label class="form-label">Tipo <span style="color:var(--danger)">*</span></label>
+                    <select class="form-select" id="m-tipo" onchange="onMovTipoChange()" required>
                         <option value="">Seleccionar...</option>
                         <option value="Entrada">Entrada</option>
                         <option value="Salida">Salida</option>
@@ -496,102 +783,155 @@
                     </select>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Producto (SKU)</label>
-                    <input type="text" class="form-input" id="mov-producto" onchange="validateSKU()" required placeholder="Ej: MED-001">
+                    <label class="form-label">SKU <span style="color:var(--danger)">*</span></label>
+                    <input type="text" class="form-input" id="m-sku" onchange="onSKUChange()" placeholder="Ej: MED-001" required>
+                </div>
+            </div>
+            <div id="m-sku-info" style="margin-bottom:12px;display:none">
+                <div class="alert-banner success" style="padding:10px 12px">
+                    <div class="alert-banner-text" id="m-sku-info-text"></div>
                 </div>
             </div>
             <div class="form-row">
                 <div class="form-group">
-                    <label class="form-label">Lote</label>
-                    <!-- FIX: El campo de lote cambia según el tipo (Entrada=texto, Salida=select) -->
-                    <div id="mov-lote-container">
-                        <input type="text" class="form-input" id="mov-lote-texto" placeholder="Ingrese lote" required>
-                    </div>
+                    <label class="form-label">Lote <span style="color:var(--danger)">*</span></label>
+                    <div id="m-lote-wrap"><input type="text" class="form-input" id="m-lote-texto" placeholder="Número de lote" required></div>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Cantidad</label>
-                    <input type="number" class="form-input" id="mov-cantidad" min="1" required>
+                    <label class="form-label">Cantidad <span style="color:var(--danger)">*</span></label>
+                    <input type="number" class="form-input" id="m-qty" min="1" required>
                 </div>
             </div>
             <div class="form-row">
                 <div class="form-group">
-                    <label class="form-label">Bodega</label>
-                    <select class="form-select" id="mov-bodega" onchange="handleBodegaChange()" required>
-                        <option value="">Seleccionar bodega...</option>
-                    </select>
+                    <label class="form-label">Fecha de vencimiento <span style="color:var(--danger)">*</span></label>
+                    <input type="date" class="form-input" id="m-vence" required>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Ubicación</label>
-                    <input type="text" class="form-input" id="mov-ubicacion" placeholder="Ej: Estante A-1" required>
-                </div>
-            </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label class="form-label">Fecha de Vencimiento</label>
-                    <input type="date" class="form-input" id="mov-vencimiento" required>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Referencia (Factura/Orden)</label>
-                    <input type="text" class="form-input" id="mov-referencia" required placeholder="Ej: FAC-2024-001">
-                </div>
-            </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label class="form-label">Proveedor/Cliente</label>
-                    <input type="text" class="form-input" id="mov-proveedor-cliente" placeholder="Nombre del proveedor o cliente" required>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Estado del Movimiento</label>
-                    <select class="form-select" id="mov-status" required>
+                    <label class="form-label">Status / Calidad</label>
+                    <select class="form-select" id="m-status">
                         <option value="Aprobado">Aprobado</option>
                         <option value="Cuarentena">Cuarentena</option>
                         <option value="Rechazado">Rechazado</option>
                     </select>
                 </div>
             </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Bodega <span style="color:var(--danger)">*</span></label>
+                    <select class="form-select" id="m-bodega" required>
+                        <option value="">Seleccionar...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Ubicación</label>
+                    <input type="text" class="form-input" id="m-ubic" placeholder="Ej: Estante A-3">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Proveedor / Cliente</label>
+                    <input type="text" class="form-input" id="m-proveedor" placeholder="Nombre">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Referencia (Factura / OC)</label>
+                    <input type="text" class="form-input" id="m-ref" placeholder="Ej: FAC-2024-001">
+                </div>
+            </div>
             <div class="form-group">
                 <label class="form-label">Observaciones</label>
-                <textarea class="form-input" id="mov-observaciones" placeholder="Notas adicionales sobre el movimiento"></textarea>
+                <textarea class="form-textarea" id="m-obs" placeholder="Notas adicionales..."></textarea>
             </div>
-            <div class="button-group">
-                <button type="button" class="btn btn-secondary" onclick="closeMovimientoModal()" style="margin-top:0;">Cancelar</button>
-                <button type="submit" class="btn btn-primary" style="margin-top:0;">Guardar</button>
+            <div class="btn-row">
+                <button type="button" class="btn btn-ghost" onclick="closeModal('movModal')">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Registrar movimiento</button>
             </div>
         </form>
     </div>
 </div>
 
-<!-- ===== MODAL: DEVOLUCIÓN (IDs únicos, sin conflicto) ===== -->
-<div id="devolucionModal" class="modal">
-    <div class="modal-content">
+<!-- CUARENTENA -->
+<div id="cuarModal" class="modal">
+    <div class="modal-box">
         <div class="modal-header">
-            <h2>Nueva Devolución</h2>
-            <button class="modal-close" onclick="closeDevolucionModal()">&times;</button>
+            <div><div class="modal-title">Ingresar a Cuarentena</div><div class="modal-subtitle">Bloqueo de lote pendiente liberación QA — NT 147</div></div>
+            <button class="modal-close" onclick="closeModal('cuarModal')">✕</button>
         </div>
-        <form onsubmit="saveDevolucion(event)">
+        <form onsubmit="saveCuarentena(event)">
             <div class="form-row">
                 <div class="form-group">
-                    <label class="form-label">Producto (SKU)</label>
-                    <input type="text" class="form-input" id="dev-sku" required placeholder="Ej: MED-001">
+                    <label class="form-label">SKU <span style="color:var(--danger)">*</span></label>
+                    <input type="text" class="form-input" id="q-sku" required>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Lote</label>
-                    <input type="text" class="form-input" id="dev-lote" required placeholder="Ej: LOT-2024-01">
+                    <label class="form-label">Lote <span style="color:var(--danger)">*</span></label>
+                    <input type="text" class="form-input" id="q-lote" required>
                 </div>
             </div>
             <div class="form-row">
                 <div class="form-group">
-                    <label class="form-label">Cantidad a Devolver</label>
-                    <input type="number" class="form-input" id="dev-cantidad" min="1" required>
+                    <label class="form-label">Cantidad afectada <span style="color:var(--danger)">*</span></label>
+                    <input type="number" class="form-input" id="q-qty" min="1" required>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Motivo de Devolución</label>
-                    <select class="form-select" id="dev-motivo" required>
-                        <option value="">Seleccionar motivo...</option>
+                    <label class="form-label">Responsable QA</label>
+                    <input type="text" class="form-input" id="q-resp" placeholder="Nombre del responsable">
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Motivo <span style="color:var(--danger)">*</span></label>
+                <select class="form-select" id="q-motivo" required>
+                    <option value="">Seleccionar...</option>
+                    <option value="Revisión calidad">Revisión de calidad</option>
+                    <option value="Sospecha deterioro">Sospecha de deterioro</option>
+                    <option value="Alerta ISP">Alerta del ISP</option>
+                    <option value="Recepción pendiente">Recepción pendiente de aprobación</option>
+                    <option value="Otro">Otro</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Observaciones</label>
+                <textarea class="form-textarea" id="q-obs" placeholder="Describa el motivo detallado..."></textarea>
+            </div>
+            <div class="btn-row">
+                <button type="button" class="btn btn-ghost" onclick="closeModal('cuarModal')">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Ingresar a cuarentena</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- DEVOLUCIÓN -->
+<div id="devModal" class="modal">
+    <div class="modal-box">
+        <div class="modal-header">
+            <div><div class="modal-title">Nueva Devolución</div></div>
+            <button class="modal-close" onclick="closeModal('devModal')">✕</button>
+        </div>
+        <form onsubmit="saveDevolucion(event)">
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">SKU <span style="color:var(--danger)">*</span></label>
+                    <input type="text" class="form-input" id="d-sku" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Lote <span style="color:var(--danger)">*</span></label>
+                    <input type="text" class="form-input" id="d-lote" required>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Cantidad <span style="color:var(--danger)">*</span></label>
+                    <input type="number" class="form-input" id="d-qty" min="1" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Motivo <span style="color:var(--danger)">*</span></label>
+                    <select class="form-select" id="d-motivo" required>
+                        <option value="">Seleccionar...</option>
                         <option value="Defecto">Defecto</option>
                         <option value="Vencimiento">Vencimiento</option>
-                        <option value="Daño">Daño</option>
-                        <option value="Error de Entrada">Error de Entrada</option>
+                        <option value="Daño">Daño físico</option>
+                        <option value="Error de entrada">Error de entrada</option>
                         <option value="Otro">Otro</option>
                     </select>
                 </div>
@@ -599,7 +939,7 @@
             <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">Status</label>
-                    <select class="form-select" id="dev-status" required>
+                    <select class="form-select" id="d-status">
                         <option value="Pendiente">Pendiente</option>
                         <option value="Aprobado">Aprobado</option>
                         <option value="Rechazado">Rechazado</option>
@@ -608,938 +948,828 @@
             </div>
             <div class="form-group">
                 <label class="form-label">Observaciones</label>
-                <textarea class="form-input" id="dev-observaciones" placeholder="Notas adicionales"></textarea>
+                <textarea class="form-textarea" id="d-obs"></textarea>
             </div>
-            <div class="button-group">
-                <button type="button" class="btn btn-secondary" onclick="closeDevolucionModal()" style="margin-top:0;">Cancelar</button>
-                <button type="submit" class="btn btn-primary" style="margin-top:0;">Guardar Devolución</button>
+            <div class="btn-row">
+                <button type="button" class="btn btn-ghost" onclick="closeModal('devModal')">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Guardar devolución</button>
             </div>
         </form>
     </div>
 </div>
 
 <script>
-    // ===== FIREBASE CONFIG =====
-    const firebaseConfig = {
-        apiKey: "AIzaSyCJ73iFZQaqCGVMZEnUA45HmSpXD_Z0oiE",
-        authDomain: "celmedik-inventario.firebaseapp.com",
-        projectId: "celmedik-inventario",
-        storageBucket: "celmedik-inventario.firebasestorage.app",
-        messagingSenderId: "1069071656431",
-        appId: "1:1069071656431:web:5ef4c84416c016a934821a",
-        databaseURL: "https://celmedik-inventario-default-rtdb.firebaseio.com"
-    };
+// ══ FIREBASE ══
+const firebaseConfig = {
+    apiKey: "AIzaSyCJ73iFZQaqCGVMZEnUA45HmSpXD_Z0oiE",
+    authDomain: "celmedik-inventario.firebaseapp.com",
+    projectId: "celmedik-inventario",
+    storageBucket: "celmedik-inventario.firebasestorage.app",
+    messagingSenderId: "1069071656431",
+    appId: "1:1069071656431:web:5ef4c84416c016a934821a",
+    databaseURL: "https://celmedik-inventario-default-rtdb.firebaseio.com"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.database();
 
-    firebase.initializeApp(firebaseConfig);
-    const auth = firebase.auth();
-    const db = firebase.database();
+let currentUser = null, userPerfil = null;
+let data = { productos:{}, bodegas:{}, movimientos:{}, cuarentena:{}, devoluciones:{}, auditoria:{} };
+let selectedBodega = 'TOTAL';
 
-    let currentUser = null;
-    let userPerfil = null;
-    let userData = { productos: {}, bodegas: {}, movimientos: {}, devoluciones: {} };
-    let selectedBodega = 'TOTAL';
-    let activeListeners = [];
+// ══ AUTH ══
+document.addEventListener('DOMContentLoaded', () => {
+    setupNav();
+    auth.onAuthStateChanged(u => {
+        if (u) { currentUser = u; loadProfile(); }
+        else { currentUser = null; detachListeners(); showScreen('login'); }
+    });
+});
 
-    // ===== AUTH =====
-    document.addEventListener('DOMContentLoaded', () => {
-        setupMenuListeners();
-        auth.onAuthStateChanged(user => {
-            if (user) {
-                currentUser = user;
-                loadUserProfile();
-            } else {
-                currentUser = null;
-                removeAllListeners();
-                showLogin();
-            }
-        });
+function loadProfile() {
+    db.ref(`usuarios/${currentUser.uid}/perfil`).once('value', s => {
+        userPerfil = s.val() || 'Maestro';
+        document.getElementById('userRole').textContent = `Perfil: ${userPerfil}`;
+        document.getElementById('userEmail').textContent = currentUser.email;
+        document.getElementById('userInitial').textContent = currentUser.email[0].toUpperCase();
+        showScreen('app');
+        attachListeners();
+    });
+}
+
+function showScreen(which) {
+    document.getElementById('loginScreen').style.display = which === 'login' ? 'flex' : 'none';
+    document.getElementById('appScreen').classList.toggle('active', which === 'app');
+}
+
+function handleLogin(e) {
+    e.preventDefault();
+    const email = document.getElementById('loginEmail').value;
+    const pass = document.getElementById('loginPassword').value;
+    setLoginStatus('', '');
+    auth.signInWithEmailAndPassword(email, pass)
+        .catch(err => setLoginStatus('error', translateError(err.code)));
+}
+
+function handleRegister() {
+    const email = document.getElementById('regEmail').value;
+    const pass = document.getElementById('regPassword').value;
+    const perfil = document.getElementById('regPerfil').value;
+    if (!email || !pass || !perfil) return setLoginStatus('error', 'Complete todos los campos');
+    auth.createUserWithEmailAndPassword(email, pass)
+        .then(c => { db.ref(`usuarios/${c.user.uid}/perfil`).set(perfil); setLoginStatus('success', 'Cuenta creada. Iniciando sesión...'); toggleRegister(); })
+        .catch(err => setLoginStatus('error', translateError(err.code)));
+}
+
+function handleLogout() { detachListeners(); auth.signOut(); }
+
+function setLoginStatus(type, msg) {
+    const el = document.getElementById('loginStatus');
+    el.className = 'status-msg' + (type ? ' ' + type : '');
+    el.textContent = msg;
+    el.style.display = msg ? 'block' : 'none';
+}
+
+function toggleRegister() {
+    const p = document.getElementById('registerPanel');
+    p.style.display = p.style.display === 'none' || !p.style.display ? 'block' : 'none';
+}
+
+function translateError(code) {
+    const m = { 'auth/user-not-found':'Usuario no encontrado','auth/wrong-password':'Contraseña incorrecta','auth/invalid-credential':'Credenciales inválidas','auth/email-already-in-use':'Email ya registrado','auth/weak-password':'Contraseña muy corta','auth/too-many-requests':'Demasiados intentos. Espere.' };
+    return m[code] || code;
+}
+
+// ══ NAVIGATION ══
+function setupNav() {
+    document.querySelectorAll('.nav-link[data-page]').forEach(l => {
+        l.addEventListener('click', e => { e.preventDefault(); navigateTo(l.dataset.page); });
+    });
+}
+
+function navigateTo(page) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+    const pg = document.getElementById(page);
+    if (pg) pg.classList.add('active');
+    const lnk = document.querySelector(`.nav-link[data-page="${page}"]`);
+    if (lnk) lnk.classList.add('active');
+    const titles = { dashboard:'Dashboard', productos:'Productos Maestro', stock:'Stock Actual', bodegas:'Bodegas', movimientos:'Movimientos', cuarentena:'Cuarentena', devoluciones:'Devoluciones', retiro:'Retiro de Mercado', trazabilidad:'Trazabilidad de Lotes', alertas:'Alertas', reportes:'Reportes ISP', auditoria:'Auditoría' };
+    document.getElementById('pageTitle').textContent = titles[page] || page;
+    if (page === 'alertas') renderAlertas();
+    if (page === 'auditoria') renderAuditoria();
+}
+
+// ══ DATA LISTENERS ══
+function attachListeners() {
+    const uid = currentUser.uid;
+    db.ref(`usuarios/${uid}/productos`).on('value', s => { data.productos = s.val()||{}; renderProductos(); updateStats(); });
+    db.ref(`usuarios/${uid}/bodegas`).on('value', s => { data.bodegas = s.val()||{}; renderBodegas(); renderBodegaBtns(); updateBodegaSelect(); updateStats(); });
+    db.ref(`usuarios/${uid}/movimientos`).on('value', s => { data.movimientos = s.val()||{}; renderMovimientos(); renderStock(); updateStats(); });
+    db.ref(`usuarios/${uid}/cuarentena`).on('value', s => { data.cuarentena = s.val()||{}; renderCuarentena(); updateStats(); });
+    db.ref(`usuarios/${uid}/devoluciones`).on('value', s => { data.devoluciones = s.val()||{}; renderDevoluciones(); });
+}
+
+function detachListeners() {
+    if (!currentUser) return;
+    const uid = currentUser.uid;
+    ['productos','bodegas','movimientos','cuarentena','devoluciones'].forEach(k => db.ref(`usuarios/${uid}/${k}`).off());
+}
+
+// ══ AUDIT LOG ══
+function logAudit(accion, modulo, sku, lote, detalle) {
+    if (!currentUser) return;
+    const entry = { fecha: new Date().toISOString(), accion, modulo, sku: sku||'', lote: lote||'', detalle: detalle||'', usuario: currentUser.email };
+    db.ref(`usuarios/${currentUser.uid}/auditoria`).push(entry);
+}
+
+// ══ STATS ══
+function updateStats() {
+    const prods = Object.keys(data.productos||{}).length;
+    const movs = Object.keys(data.movimientos||{}).length;
+    // Calcular lotes en stock
+    const stockMap = calcStock();
+    const lotesEnStock = Object.values(stockMap).filter(s => s.cantidad > 0).length;
+    const cuarCount = Object.values(data.cuarentena||{}).filter(q => q.status === 'Pendiente').length;
+    const alertCount = calcAlertas().length;
+
+    document.getElementById('st-productos').textContent = prods;
+    document.getElementById('st-lotes').textContent = lotesEnStock;
+    document.getElementById('st-movimientos').textContent = movs;
+    document.getElementById('st-alertas').textContent = alertCount;
+    document.getElementById('st-cuarentena').textContent = cuarCount;
+
+    const badge = document.getElementById('alertBadge');
+    badge.textContent = alertCount;
+    badge.style.display = alertCount > 0 ? 'inline-block' : 'none';
+
+    renderDashAlertas();
+}
+
+// ══ STOCK CALC (FEFO) ══
+function calcStock() {
+    const stock = {};
+    Object.values(data.movimientos||{}).forEach(m => {
+        const key = `${m.sku}|${m.lote}|${m.bodega||''}|${m.ubicacion||''}`;
+        if (m.tipo === 'Entrada') {
+            if (!stock[key]) stock[key] = { sku:m.sku, lote:m.lote, cantidad:0, vence:m.vence, bodega:m.bodega||'', ubicacion:m.ubicacion||'', status:m.status||'Aprobado' };
+            stock[key].cantidad += parseInt(m.cantidad)||0;
+            stock[key].status = m.status || 'Aprobado';
+        } else if (m.tipo === 'Salida') {
+            if (stock[key]) stock[key].cantidad -= parseInt(m.cantidad)||0;
+        }
+    });
+    return stock;
+}
+
+// ══ ALERTAS CALC ══
+function calcAlertas() {
+    const alertas = [];
+    const hoy = new Date();
+    const stock = calcStock();
+    const prods = data.productos||{};
+
+    Object.values(stock).filter(s => s.cantidad > 0).forEach(s => {
+        if (!s.vence) return;
+        const vD = new Date(s.vence + 'T00:00:00');
+        const dias = Math.ceil((vD - hoy) / 86400000);
+        const desc = prods[s.sku]?.descripcion || s.sku;
+        if (dias < 0) alertas.push({ tipo:'exp', titulo:`VENCIDO: ${desc}`, texto:`Lote ${s.lote} — vencido hace ${Math.abs(dias)} días. Stock: ${s.cantidad} ud.`, dias });
+        else if (dias <= 30) alertas.push({ tipo:'danger', titulo:`Vence en ${dias} días: ${desc}`, texto:`Lote ${s.lote} — vence el ${fmtDate(s.vence)}. Stock: ${s.cantidad} ud.`, dias });
+        else if (dias <= 90) alertas.push({ tipo:'warning', titulo:`Próximo a vencer: ${desc}`, texto:`Lote ${s.lote} — vence en ${dias} días (${fmtDate(s.vence)}). Stock: ${s.cantidad} ud.`, dias });
     });
 
-    function loadUserProfile() {
-        db.ref(`usuarios/${currentUser.uid}/perfil`).once('value', snapshot => {
-            userPerfil = snapshot.val() || 'Maestro';
-            document.getElementById('userRole').textContent = `Perfil: ${userPerfil}`;
-            showApp(currentUser);
-            loadUserData();
-        });
+    // Stock bajo mínimo
+    Object.values(prods).forEach(p => {
+        if (!p.stockMin || p.stockMin <= 0) return;
+        const totalStock = Object.values(stock).filter(s => s.sku === p.sku && s.cantidad > 0).reduce((a, s) => a + s.cantidad, 0);
+        if (totalStock < p.stockMin) alertas.push({ tipo:'info', titulo:`Stock bajo mínimo: ${p.descripcion}`, texto:`Stock actual: ${totalStock} ud. Mínimo: ${p.stockMin} ud.`, dias: 9999 });
+    });
+
+    alertas.sort((a, b) => a.dias - b.dias);
+    return alertas;
+}
+
+function renderDashAlertas() {
+    const c = document.getElementById('dashAlertasContainer');
+    const alertas = calcAlertas().slice(0, 5);
+    if (!alertas.length) { c.innerHTML = '<p class="text-muted text-sm">Sin alertas activas ✓</p>'; return; }
+    c.innerHTML = alertas.map(a => {
+        const cls = a.tipo === 'exp' || a.tipo === 'danger' ? 'danger' : a.tipo === 'warning' ? 'warning' : 'success';
+        return `<div class="alert-banner ${cls}"><div class="alert-banner-icon">${cls === 'danger' ? '⚠' : '◉'}</div><div><div class="alert-banner-title">${a.titulo}</div><div class="alert-banner-text">${a.texto}</div></div></div>`;
+    }).join('');
+}
+
+function renderAlertas() {
+    const c = document.getElementById('alertasContainer');
+    const alertas = calcAlertas();
+    if (!alertas.length) { c.innerHTML = '<p class="text-muted text-sm">✓ Sin alertas activas</p>'; return; }
+    c.innerHTML = alertas.map(a => {
+        const cls = a.tipo === 'exp' || a.tipo === 'danger' ? 'danger' : a.tipo === 'warning' ? 'warning' : 'success';
+        return `<div class="alert-banner ${cls}"><div class="alert-banner-icon">${cls === 'danger' ? '⚠' : '◉'}</div><div><div class="alert-banner-title">${a.titulo}</div><div class="alert-banner-text">${a.texto}</div></div></div>`;
+    }).join('');
+}
+
+// ══ PRODUCTOS ══
+function renderProductos() {
+    const fSKU = (document.getElementById('fProdSKU')?.value||'').toLowerCase();
+    const fDesc = (document.getElementById('fProdDesc')?.value||'').toLowerCase();
+    const rows = Object.values(data.productos||{}).filter(p =>
+        p.sku.toLowerCase().includes(fSKU) && (p.descripcion||'').toLowerCase().includes(fDesc)
+    );
+    const tb = document.getElementById('tProductos');
+    if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="10">No hay productos registrados</td></tr>'; return; }
+    tb.innerHTML = rows.map(p => `
+        <tr>
+            <td class="text-mono" style="color:var(--accent2)">${p.sku}</td>
+            <td style="color:var(--text)">${p.descripcion}</td>
+            <td>${p.registroSanitario ? `<span class="rs-number">${p.registroSanitario}</span>` : '<span class="text-muted">—</span>'}</td>
+            <td>${badgeTipo(p.tipo)}</td>
+            <td>${p.fabricante||'—'}</td>
+            <td>${p.presentacion||'—'}</td>
+            <td>${p.unidadVenta||'—'}</td>
+            <td>${p.stockMin > 0 ? p.stockMin : '—'}</td>
+            <td><span class="badge badge-gray" style="font-size:10px">${p.almacenamiento||'Ambiente'}</span></td>
+            <td><button class="btn btn-sm btn-icon" onclick="editProducto('${p.sku}')">✎</button></td>
+        </tr>`).join('');
+}
+
+function badgeTipo(tipo) {
+    const m = { 'Medicamento':'badge-success','Dispositivo Médico':'badge-blue','Insumo':'badge-gray','Psicotrópico':'badge-danger' };
+    return `<span class="badge ${m[tipo]||'badge-gray'}">${tipo||'—'}</span>`;
+}
+
+function saveProducto(e) {
+    e.preventDefault();
+    const sku = document.getElementById('p-sku').value.trim().toUpperCase();
+    if (!sku) return;
+    const p = {
+        sku, descripcion: document.getElementById('p-desc').value.trim(),
+        registroSanitario: document.getElementById('p-rs').value.trim(),
+        tipo: document.getElementById('p-tipo').value,
+        fabricante: document.getElementById('p-fab').value.trim(),
+        presentacion: document.getElementById('p-pres').value.trim(),
+        unidadVenta: document.getElementById('p-udv').value.trim(),
+        almacenamiento: document.getElementById('p-almac').value,
+        stockMin: parseInt(document.getElementById('p-min').value)||0,
+        principioActivo: document.getElementById('p-principio').value.trim(),
+        fecha: new Date().toISOString()
+    };
+    db.ref(`usuarios/${currentUser.uid}/productos/${sku}`).set(p)
+        .then(() => { logAudit('Crear/Editar', 'Productos', sku, '', p.descripcion); closeModal('productModal'); })
+        .catch(err => alert('Error: ' + err.message));
+}
+
+function editProducto(sku) {
+    const p = data.productos[sku]; if (!p) return;
+    document.getElementById('p-sku').value = p.sku; document.getElementById('p-sku').disabled = true;
+    document.getElementById('p-rs').value = p.registroSanitario||'';
+    document.getElementById('p-desc').value = p.descripcion||'';
+    document.getElementById('p-fab').value = p.fabricante||'';
+    document.getElementById('p-tipo').value = p.tipo||'';
+    document.getElementById('p-pres').value = p.presentacion||'';
+    document.getElementById('p-udv').value = p.unidadVenta||'';
+    document.getElementById('p-almac').value = p.almacenamiento||'Temperatura Ambiente';
+    document.getElementById('p-min').value = p.stockMin||0;
+    document.getElementById('p-principio').value = p.principioActivo||'';
+    openModal('productModal');
+}
+
+// ══ BODEGAS ══
+function saveBodega(e) {
+    e.preventDefault();
+    const b = {
+        nombre: document.getElementById('b-nombre').value.trim(),
+        tipo: document.getElementById('b-tipo').value,
+        ubicacion: document.getElementById('b-ubic').value.trim(),
+        capacidad: document.getElementById('b-cap').value||'',
+        fecha: new Date().toISOString()
+    };
+    db.ref(`usuarios/${currentUser.uid}/bodegas/${Date.now()}`).set(b)
+        .then(() => { logAudit('Crear', 'Bodegas', '', '', b.nombre); closeModal('bodegaModal'); });
+}
+
+function renderBodegas() {
+    const tb = document.getElementById('tBodegas');
+    const rows = Object.entries(data.bodegas||{});
+    if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="6">No hay bodegas registradas</td></tr>'; return; }
+    tb.innerHTML = rows.map(([id, b]) => `
+        <tr>
+            <td style="color:var(--text);font-weight:500">${b.nombre}</td>
+            <td>${b.ubicacion}</td>
+            <td>${b.capacidad ? b.capacidad + ' m³' : '—'}</td>
+            <td><span class="badge ${b.tipo === 'Cuarentena' ? 'badge-warning' : b.tipo === 'Rechazados' ? 'badge-danger' : 'badge-success'}">${b.tipo||'General'}</span></td>
+            <td><span class="badge badge-success">Activa</span></td>
+            <td><button class="btn btn-sm btn-danger-sm" onclick="deleteBodega('${id}')">Eliminar</button></td>
+        </tr>`).join('');
+}
+
+function deleteBodega(id) {
+    if (confirm('¿Eliminar esta bodega?')) db.ref(`usuarios/${currentUser.uid}/bodegas/${id}`).remove();
+}
+
+function renderBodegaBtns() {
+    const c = document.getElementById('bodegaBtns');
+    c.querySelectorAll('[data-bodega-btn]').forEach(b => b.remove());
+    Object.entries(data.bodegas||{}).forEach(([id, b]) => {
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-sm btn-icon'; btn.dataset.bodegaBtn = id;
+        btn.textContent = b.nombre;
+        btn.style.cssText = selectedBodega === b.nombre ? 'background:var(--accent);color:white;border-color:var(--accent)' : '';
+        btn.onclick = () => selBodega(b.nombre);
+        c.appendChild(btn);
+    });
+}
+
+function selBodega(nombre) {
+    selectedBodega = nombre;
+    document.getElementById('btnTOTAL').style.cssText = nombre === 'TOTAL' ? 'background:var(--accent);color:white;border-color:var(--accent)' : '';
+    document.querySelectorAll('[data-bodega-btn]').forEach(b => {
+        b.style.cssText = b.textContent === nombre ? 'background:var(--accent);color:white;border-color:var(--accent)' : '';
+    });
+    renderStock();
+}
+
+function updateBodegaSelect() {
+    const sel = document.getElementById('m-bodega');
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">Seleccionar...</option>';
+    Object.values(data.bodegas||{}).forEach(b => {
+        const o = document.createElement('option'); o.value = b.nombre; o.textContent = b.nombre; sel.appendChild(o);
+    });
+    if (cur) sel.value = cur;
+}
+
+// ══ MOVIMIENTOS ══
+function onMovTipoChange() {
+    const tipo = document.getElementById('m-tipo').value;
+    const sku = document.getElementById('m-sku').value.trim().toUpperCase();
+    if (tipo === 'Salida' && sku) loadLotesDisponibles(sku);
+    else resetLoteInput();
+}
+
+function onSKUChange() {
+    const sku = document.getElementById('m-sku').value.trim().toUpperCase();
+    document.getElementById('m-sku').value = sku;
+    const prod = data.productos[sku];
+    const info = document.getElementById('m-sku-info');
+    if (prod) {
+        document.getElementById('m-sku-info-text').innerHTML = `<strong style="color:var(--text)">${prod.descripcion}</strong> — ${prod.tipo} · ${prod.fabricante}${prod.registroSanitario ? ` · RS: <span class="rs-number">${prod.registroSanitario}</span>` : ''}`;
+        info.style.display = 'block';
+    } else if (sku) {
+        document.getElementById('m-sku-info-text').innerHTML = `<span style="color:var(--danger)">⚠ SKU no encontrado en maestro de productos</span>`;
+        info.style.display = 'block';
+    } else { info.style.display = 'none'; }
+    const tipo = document.getElementById('m-tipo').value;
+    if (tipo === 'Salida' && sku && prod) loadLotesDisponibles(sku);
+}
+
+function resetLoteInput() {
+    document.getElementById('m-lote-wrap').innerHTML = '<input type="text" class="form-input" id="m-lote-texto" placeholder="Número de lote" required>';
+}
+
+function getLoteValue() {
+    return (document.getElementById('m-lote-texto') || document.getElementById('m-lote-select'))?.value || '';
+}
+
+function loadLotesDisponibles(sku) {
+    const stock = calcStock();
+    const lotes = Object.values(stock).filter(s => s.sku === sku && s.cantidad > 0)
+        .sort((a, b) => new Date(a.vence) - new Date(b.vence)); // FEFO
+
+    const wrap = document.getElementById('m-lote-wrap');
+    const sel = document.createElement('select');
+    sel.className = 'form-select'; sel.id = 'm-lote-select'; sel.required = true;
+    sel.innerHTML = '<option value="">Seleccionar lote (FEFO)...</option>';
+    if (!lotes.length) sel.innerHTML += '<option disabled>Sin stock disponible</option>';
+    lotes.forEach(l => {
+        const dias = Math.ceil((new Date(l.vence + 'T00:00:00') - new Date()) / 86400000);
+        const opt = document.createElement('option');
+        opt.value = l.lote;
+        opt.textContent = `${l.lote} — Vence: ${fmtDate(l.vence)} (${dias}d) — Stock: ${l.cantidad}`;
+        sel.appendChild(opt);
+    });
+    sel.onchange = () => {
+        const sel2 = lotes.find(l => l.lote === sel.value);
+        if (sel2) document.getElementById('m-vence').value = sel2.vence;
+    };
+    wrap.innerHTML = ''; wrap.appendChild(sel);
+    // Auto-select el primero (FEFO)
+    if (lotes.length) { sel.value = lotes[0].lote; document.getElementById('m-vence').value = lotes[0].vence; }
+}
+
+function saveMovimiento(e) {
+    e.preventDefault();
+    const sku = document.getElementById('m-sku').value.trim().toUpperCase();
+    const lote = getLoteValue().trim();
+    const tipo = document.getElementById('m-tipo').value;
+    const qty = parseInt(document.getElementById('m-qty').value);
+
+    if (!data.productos[sku]) { alert(`SKU "${sku}" no existe en el maestro de productos.`); return; }
+    if (!lote) { alert('Ingrese o seleccione un lote.'); return; }
+
+    if (tipo === 'Salida') {
+        const stock = calcStock();
+        const disponible = Object.values(stock).filter(s => s.sku === sku && s.lote === lote).reduce((a, s) => a + s.cantidad, 0);
+        if (qty > disponible) { alert(`Stock insuficiente. Disponible para lote ${lote}: ${disponible} ud.`); return; }
     }
 
-    function showLogin() {
-        document.getElementById('loginScreen').style.display = 'flex';
-        document.getElementById('appScreen').classList.remove('active');
+    const mov = {
+        tipo, sku, lote,
+        descripcion: data.productos[sku]?.descripcion || '',
+        cantidad: qty,
+        vence: document.getElementById('m-vence').value,
+        status: document.getElementById('m-status').value,
+        bodega: document.getElementById('m-bodega').value,
+        ubicacion: document.getElementById('m-ubic').value.trim(),
+        proveedor: document.getElementById('m-proveedor').value.trim(),
+        referencia: document.getElementById('m-ref').value.trim(),
+        observaciones: document.getElementById('m-obs').value.trim(),
+        fecha: new Date().toISOString(),
+        usuario: currentUser.email
+    };
+
+    db.ref(`usuarios/${currentUser.uid}/movimientos/${Date.now()}`).set(mov)
+        .then(() => { logAudit(tipo, 'Movimientos', sku, lote, `Qty: ${qty} | Ref: ${mov.referencia}`); closeModal('movModal'); })
+        .catch(err => alert('Error: ' + err.message));
+}
+
+function renderMovimientos() {
+    const fTipo = document.getElementById('fMovTipo')?.value||'';
+    const fSKU = (document.getElementById('fMovSKU')?.value||'').toLowerCase();
+    const fLote = (document.getElementById('fMovLote')?.value||'').toLowerCase();
+    let rows = Object.values(data.movimientos||{});
+    if (fTipo) rows = rows.filter(m => m.tipo === fTipo);
+    if (fSKU) rows = rows.filter(m => (m.sku||'').toLowerCase().includes(fSKU));
+    if (fLote) rows = rows.filter(m => (m.lote||'').toLowerCase().includes(fLote));
+    rows.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+    const tb = document.getElementById('tMovimientos');
+    if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="14">No hay movimientos</td></tr>'; return; }
+    tb.innerHTML = rows.map(m => {
+        const tC = m.tipo === 'Entrada' ? 'badge-success' : m.tipo === 'Salida' ? 'badge-danger' : 'badge-warning';
+        const sC = m.status === 'Aprobado' ? 'badge-success' : m.status === 'Rechazado' ? 'badge-danger' : 'badge-warning';
+        return `<tr>
+            <td class="text-mono" style="font-size:11px">${fmtDateTime(m.fecha)}</td>
+            <td><span class="badge ${tC}">${m.tipo}</span></td>
+            <td class="text-mono" style="color:var(--accent2)">${m.sku}</td>
+            <td>${m.descripcion||'—'}</td>
+            <td class="text-mono" style="font-size:11px">${m.lote||'—'}</td>
+            <td>${m.vence ? fmtDate(m.vence) : '—'}</td>
+            <td style="font-weight:600;color:var(--text)">${m.cantidad}</td>
+            <td>${m.bodega||'—'}</td>
+            <td>${m.ubicacion||'—'}</td>
+            <td>${m.proveedor||'—'}</td>
+            <td>${m.referencia||'—'}</td>
+            <td><span class="badge ${sC}">${m.status||'—'}</span></td>
+            <td style="font-size:11px;color:var(--text3)">${m.usuario||'—'}</td>
+            <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.observaciones||'—'}</td>
+        </tr>`;
+    }).join('');
+}
+
+// ══ STOCK (FEFO ORDER) ══
+function renderStock() {
+    const fSKU = (document.getElementById('fStockSKU')?.value||'').toLowerCase();
+    const fLote = (document.getElementById('fStockLote')?.value||'').toLowerCase();
+    const fUbic = (document.getElementById('fStockUbic')?.value||'').toLowerCase();
+    const stock = calcStock();
+    const prods = data.productos||{};
+    const hoy = new Date();
+
+    let rows = Object.values(stock).filter(s => {
+        const bMatch = selectedBodega === 'TOTAL' || s.bodega === selectedBodega;
+        return s.cantidad > 0 && bMatch &&
+            s.sku.toLowerCase().includes(fSKU) &&
+            (s.lote||'').toLowerCase().includes(fLote) &&
+            (s.ubicacion||'').toLowerCase().includes(fUbic);
+    });
+
+    // Ordenar FEFO
+    rows.sort((a, b) => new Date(a.vence + 'T00:00:00') - new Date(b.vence + 'T00:00:00'));
+
+    const tb = document.getElementById('tStock');
+    if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="13">No hay stock registrado</td></tr>'; return; }
+
+    tb.innerHTML = rows.map((s, i) => {
+        const vD = s.vence ? new Date(s.vence + 'T00:00:00') : null;
+        const dias = vD ? Math.ceil((vD - hoy) / 86400000) : null;
+        const dotCls = dias === null ? '' : dias < 0 ? 'exp' : dias <= 30 ? 'exp' : dias <= 90 ? 'warn' : 'ok';
+        const isFirst = i === 0;
+        const statusCls = s.status === 'Aprobado' ? 'badge-success' : s.status === 'Rechazado' ? 'badge-danger' : 'badge-warning';
+        const diasStr = dias === null ? '—' : dias < 0 ? `<span style="color:var(--danger);font-weight:600">Vencido</span>` : `<span style="color:${dias<=30?'var(--danger)':dias<=90?'var(--warning)':'var(--text2)'}">${dias}d</span>`;
+        const rs = prods[s.sku]?.registroSanitario;
+        return `<tr>
+            <td><div class="fefo-indicator"><div class="fefo-dot ${isFirst ? 'first' : dotCls}"></div>${isFirst ? '<span style="color:var(--accent2);font-size:10px;font-weight:600">FEFO</span>' : ''}</div></td>
+            <td class="text-mono" style="color:var(--accent2)">${s.sku}</td>
+            <td style="color:var(--text)">${prods[s.sku]?.descripcion||'—'}</td>
+            <td>${rs ? `<span class="rs-number">${rs}</span>` : '<span class="text-muted">—</span>'}</td>
+            <td class="text-mono" style="font-size:11px">${s.lote}</td>
+            <td>${vD ? fmtDate(s.vence) : '—'}</td>
+            <td>${diasStr}</td>
+            <td style="font-weight:600;color:var(--text)">${s.cantidad}</td>
+            <td>${prods[s.sku]?.unidadVenta||'—'}</td>
+            <td><span class="badge ${statusCls}">${s.status}</span></td>
+            <td>${s.bodega||'—'}</td>
+            <td>${s.ubicacion||'—'}</td>
+            <td><button class="btn btn-sm btn-icon" style="font-size:10px" onclick="verTrazabilidadLote('${s.sku}','${s.lote}')">Trazar</button></td>
+        </tr>`;
+    }).join('');
+}
+
+function clearStockFilters() {
+    ['fStockSKU','fStockLote','fStockUbic'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
+    renderStock();
+}
+
+// ══ CUARENTENA ══
+function saveCuarentena(e) {
+    e.preventDefault();
+    const sku = document.getElementById('q-sku').value.trim().toUpperCase();
+    const q = {
+        sku, lote: document.getElementById('q-lote').value.trim(),
+        cantidad: parseInt(document.getElementById('q-qty').value),
+        motivo: document.getElementById('q-motivo').value,
+        responsable: document.getElementById('q-resp').value.trim(),
+        observaciones: document.getElementById('q-obs').value.trim(),
+        descripcion: data.productos[sku]?.descripcion || '',
+        status: 'Pendiente',
+        fechaIngreso: new Date().toISOString(),
+        usuario: currentUser.email
+    };
+    db.ref(`usuarios/${currentUser.uid}/cuarentena`).push(q)
+        .then(() => { logAudit('Ingresar', 'Cuarentena', sku, q.lote, q.motivo); closeModal('cuarModal'); })
+        .catch(err => alert('Error: ' + err.message));
+}
+
+function renderCuarentena() {
+    const tb = document.getElementById('tCuarentena');
+    const rows = Object.entries(data.cuarentena||{}).sort((a, b) => new Date(b[1].fechaIngreso) - new Date(a[1].fechaIngreso));
+    if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="10">No hay lotes en cuarentena</td></tr>'; return; }
+    tb.innerHTML = rows.map(([id, q]) => `
+        <tr>
+            <td class="text-mono" style="font-size:11px">${fmtDate(q.fechaIngreso)}</td>
+            <td class="text-mono" style="color:var(--accent2)">${q.sku}</td>
+            <td>${q.descripcion||'—'}</td>
+            <td class="text-mono" style="font-size:11px">${q.lote}</td>
+            <td style="font-weight:600;color:var(--text)">${q.cantidad}</td>
+            <td>${q.motivo}</td>
+            <td>${q.responsable||'—'}</td>
+            <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.observaciones||'—'}</td>
+            <td><span class="badge ${q.status==='Liberado'?'badge-success':q.status==='Destruido'?'badge-danger':'badge-warning'}">${q.status}</span></td>
+            <td style="display:flex;gap:4px;flex-wrap:wrap">
+                ${q.status==='Pendiente'?`<button class="btn btn-sm btn-success-sm" onclick="liberarCuarentena('${id}')">Liberar</button><button class="btn btn-sm btn-danger-sm" onclick="destruirCuarentena('${id}')">Destruir</button>`:''}
+            </td>
+        </tr>`).join('');
+}
+
+function liberarCuarentena(id) {
+    if (confirm('¿Liberar este lote de cuarentena?')) {
+        db.ref(`usuarios/${currentUser.uid}/cuarentena/${id}`).update({ status: 'Liberado', fechaLiberacion: new Date().toISOString(), usuarioLibera: currentUser.email })
+            .then(() => logAudit('Liberar', 'Cuarentena', data.cuarentena[id]?.sku, data.cuarentena[id]?.lote, 'Liberado QA'));
     }
+}
 
-    function showApp(user) {
-        document.getElementById('loginScreen').style.display = 'none';
-        document.getElementById('appScreen').classList.add('active');
-        document.getElementById('userEmail').textContent = user.email;
+function destruirCuarentena(id) {
+    if (confirm('¿Marcar como destruido?')) {
+        db.ref(`usuarios/${currentUser.uid}/cuarentena/${id}`).update({ status: 'Destruido', fechaDestroy: new Date().toISOString(), usuarioDestroy: currentUser.email })
+            .then(() => logAudit('Destruir', 'Cuarentena', data.cuarentena[id]?.sku, data.cuarentena[id]?.lote, 'Destruido'));
     }
-
-    function handleLogin(e) {
-        e.preventDefault();
-        const email = document.getElementById('loginEmail').value;
-        const password = document.getElementById('loginPassword').value;
-        const status = document.getElementById('loginStatus');
-        status.className = 'status-message';
-        status.textContent = '';
-        auth.signInWithEmailAndPassword(email, password)
-            .then(() => { document.getElementById('loginForm').reset(); })
-            .catch(error => {
-                status.className = 'status-message error';
-                status.textContent = 'Error: ' + translateFirebaseError(error.code);
-            });
-    }
-
-    function toggleRegister() {
-        const form = document.getElementById('registerForm');
-        form.style.display = form.style.display === 'none' ? 'block' : 'none';
-    }
-
-    function handleRegister(e) {
-        e.preventDefault();
-        const email = document.getElementById('registerEmail').value;
-        const password = document.getElementById('registerPassword').value;
-        const perfil = document.getElementById('registerPerfil').value;
-        auth.createUserWithEmailAndPassword(email, password)
-            .then(cred => {
-                db.ref(`usuarios/${cred.user.uid}/perfil`).set(perfil);
-                const status = document.getElementById('loginStatus');
-                status.className = 'status-message success';
-                status.textContent = 'Cuenta creada. Inicia sesión.';
-                toggleRegister();
-                document.getElementById('registerEmail').value = '';
-                document.getElementById('registerPassword').value = '';
-                document.getElementById('registerPerfil').value = '';
-                document.getElementById('loginEmail').value = email;
-            })
-            .catch(error => {
-                const status = document.getElementById('loginStatus');
-                status.className = 'status-message error';
-                status.textContent = 'Error: ' + translateFirebaseError(error.code);
-            });
-    }
-
-    function handleLogout() {
-        removeAllListeners();
-        auth.signOut();
-    }
-
-    function translateFirebaseError(code) {
-        const errors = {
-            'auth/user-not-found': 'Usuario no encontrado.',
-            'auth/wrong-password': 'Contraseña incorrecta.',
-            'auth/email-already-in-use': 'El email ya está en uso.',
-            'auth/invalid-email': 'Email inválido.',
-            'auth/weak-password': 'Contraseña muy débil (mínimo 6 caracteres).',
-            'auth/too-many-requests': 'Demasiados intentos. Espere un momento.',
-        };
-        return errors[code] || code;
-    }
-
-    // ===== NAVEGACIÓN =====
-    function setupMenuListeners() {
-        document.querySelectorAll('.menu-link').forEach(link => {
-            link.addEventListener('click', e => {
-                e.preventDefault();
-                navigateTo(link.getAttribute('data-page'));
-            });
-        });
-    }
-
-    function navigateTo(page) {
-        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-        document.getElementById(page).classList.add('active');
-        document.querySelectorAll('.menu-link').forEach(l => l.classList.remove('active'));
-        document.querySelector(`[data-page="${page}"]`).classList.add('active');
-        const titles = {
-            dashboard: 'Dashboard', productos: 'Productos Maestro', stock: 'Stock',
-            bodegas: 'Bodegas', movimientos: 'Movimientos', devoluciones: 'Devoluciones',
-            alertas: 'Alertas', reportes: 'Reportes', auditoria: 'Auditoría'
-        };
-        document.getElementById('pageTitle').textContent = titles[page] || page;
-
-        // Renderizar vistas bajo demanda
-        if (page === 'alertas') renderAlertas();
-        if (page === 'auditoria') renderAuditoria();
-    }
-
-    // ===== DATA LOADING =====
-    function removeAllListeners() {
-        if (!currentUser) return;
-        const uid = currentUser.uid;
-        db.ref(`usuarios/${uid}/productos`).off();
-        db.ref(`usuarios/${uid}/bodegas`).off();
-        db.ref(`usuarios/${uid}/movimientos`).off();
-        db.ref(`usuarios/${uid}/devoluciones`).off();
-    }
-
-    function loadUserData() {
-        const uid = currentUser.uid;
-
-        db.ref(`usuarios/${uid}/productos`).on('value', snap => {
-            userData.productos = snap.val() || {};
-            renderProductos();
-            updateStats();
-        });
-
-        db.ref(`usuarios/${uid}/bodegas`).on('value', snap => {
-            userData.bodegas = snap.val() || {};
-            renderBodegas();
-            renderBodegaButtons();
-            updateBodegaSelect();
-            updateStats();
-        });
-
-        db.ref(`usuarios/${uid}/movimientos`).on('value', snap => {
-            userData.movimientos = snap.val() || {};
-            renderMovimientos();
-            renderStock();
-            updateStats();
-        });
-
-        db.ref(`usuarios/${uid}/devoluciones`).on('value', snap => {
-            userData.devoluciones = snap.val() || {};
-            renderDevoluciones();
-            updateStats();
-        });
-    }
-
-    function updateStats() {
-        document.getElementById('stat-productos').textContent = Object.keys(userData.productos || {}).length;
-        document.getElementById('stat-bodegas').textContent = Object.keys(userData.bodegas || {}).length;
-        document.getElementById('stat-movimientos').textContent = Object.keys(userData.movimientos || {}).length;
-        // Contar alertas activas
-        const alertCount = calcAlertas().length;
-        document.getElementById('stat-alertas').textContent = alertCount;
-    }
-
-    // ===== PRODUCTOS =====
-    function openProductModal() {
-        document.getElementById('productModal').classList.add('active');
-    }
-
-    function closeProductModal() {
-        document.getElementById('productModal').classList.remove('active');
-        ['sku','descripcion','fabricante','tipo','presentacion','unidadVenta','almacenamiento'].forEach(id => {
-            const el = document.getElementById(id);
-            el.value = '';
-            el.disabled = false;
-        });
-    }
-
-    function saveProduct(e) {
-        e.preventDefault();
-        const uid = currentUser.uid;
-        const sku = document.getElementById('sku').value.trim().toUpperCase();
-        if (!sku) { alert('SKU es requerido'); return; }
-        const producto = {
-            sku,
-            descripcion: document.getElementById('descripcion').value.trim(),
-            fabricante: document.getElementById('fabricante').value.trim(),
-            tipo: document.getElementById('tipo').value,
-            presentacion: document.getElementById('presentacion').value.trim(),
-            unidadVenta: document.getElementById('unidadVenta').value.trim(),
-            almacenamiento: document.getElementById('almacenamiento').value,
-            fecha: new Date().toISOString(),
-        };
-        db.ref(`usuarios/${uid}/productos/${sku}`).set(producto)
-            .then(() => closeProductModal())
-            .catch(err => alert('Error al guardar: ' + err.message));
-    }
-
-    function renderProductos() {
-        const tbody = document.getElementById('productos-table');
-        const productos = Object.values(userData.productos || {});
-        if (productos.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No hay productos registrados</td></tr>';
-            return;
-        }
-        tbody.innerHTML = productos.map(p => `
-            <tr>
-                <td><strong>${p.sku}</strong></td>
-                <td>${p.descripcion}</td>
-                <td>${p.tipo}</td>
-                <td>${p.fabricante}</td>
-                <td>${p.presentacion}</td>
-                <td>${p.unidadVenta || '-'}</td>
-                <td>${p.almacenamiento}</td>
-                <td><button class="btn btn-sm btn-primary" onclick="editProduct('${p.sku}')">Modificar</button></td>
-            </tr>
-        `).join('');
-    }
-
-    function editProduct(sku) {
-        const p = userData.productos[sku];
-        if (!p) return;
-        document.getElementById('sku').value = p.sku;
-        document.getElementById('sku').disabled = true;
-        document.getElementById('descripcion').value = p.descripcion;
-        document.getElementById('fabricante').value = p.fabricante;
-        document.getElementById('tipo').value = p.tipo;
-        document.getElementById('presentacion').value = p.presentacion;
-        document.getElementById('unidadVenta').value = p.unidadVenta;
-        document.getElementById('almacenamiento').value = p.almacenamiento;
-        document.getElementById('productModal').classList.add('active');
-    }
-
-    // ===== BODEGAS =====
-    function openBodegaModal() {
-        document.getElementById('bodegaModal').classList.add('active');
-    }
-
-    function closeBodegaModal() {
-        document.getElementById('bodegaModal').classList.remove('active');
-        ['bodega-nombre','bodega-ubicacion','bodega-capacidad','bodega-temperatura'].forEach(id => {
-            document.getElementById(id).value = '';
-        });
-    }
-
-    function saveBodega(e) {
-        e.preventDefault();
-        const uid = currentUser.uid;
-        const bodega = {
-            nombre: document.getElementById('bodega-nombre').value.trim(),
-            ubicacion: document.getElementById('bodega-ubicacion').value.trim(),
-            capacidad: document.getElementById('bodega-capacidad').value,
-            temperatura: document.getElementById('bodega-temperatura').value,
-            fecha: new Date().toISOString(),
-        };
-        db.ref(`usuarios/${uid}/bodegas/${Date.now()}`).set(bodega)
-            .then(() => closeBodegaModal())
-            .catch(err => alert('Error: ' + err.message));
-    }
-
-    function renderBodegas() {
-        const tbody = document.getElementById('bodegas-table');
-        const bodegas = Object.entries(userData.bodegas || {});
-        if (bodegas.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No hay bodegas registradas</td></tr>';
-            return;
-        }
-        tbody.innerHTML = bodegas.map(([id, b]) => `
-            <tr>
-                <td><strong>${b.nombre}</strong></td>
-                <td>${b.ubicacion}</td>
-                <td>${b.capacidad} m³</td>
-                <td>${b.temperatura}</td>
-                <td><span class="badge badge-success">Disponible</span></td>
-                <td><button class="btn btn-sm btn-danger" onclick="deleteBodega('${id}')">Eliminar</button></td>
-            </tr>
-        `).join('');
-    }
-
-    function deleteBodega(id) {
-        if (confirm('¿Eliminar esta bodega? Esta acción no se puede deshacer.')) {
-            db.ref(`usuarios/${currentUser.uid}/bodegas/${id}`).remove();
-        }
-    }
-
-    function updateBodegaSelect() {
-        const select = document.getElementById('mov-bodega');
-        const current = select.value;
-        select.innerHTML = '<option value="">Seleccionar bodega...</option>';
-        Object.values(userData.bodegas || {}).forEach(b => {
-            const opt = document.createElement('option');
-            opt.value = b.nombre;
-            opt.textContent = b.nombre;
-            select.appendChild(opt);
-        });
-        if (current) select.value = current;
-    }
-
-    // ===== MOVIMIENTOS =====
-    function openMovimientoModal() {
-        resetMovimientoModal();
-        document.getElementById('movimientoModal').classList.add('active');
-    }
-
-    function closeMovimientoModal() {
-        document.getElementById('movimientoModal').classList.remove('active');
-    }
-
-    function resetMovimientoModal() {
-        document.getElementById('mov-tipo').value = '';
-        document.getElementById('mov-producto').value = '';
-        document.getElementById('mov-cantidad').value = '';
-        document.getElementById('mov-bodega').value = '';
-        document.getElementById('mov-ubicacion').value = '';
-        document.getElementById('mov-vencimiento').value = '';
-        document.getElementById('mov-referencia').value = '';
-        document.getElementById('mov-proveedor-cliente').value = '';
-        document.getElementById('mov-observaciones').value = '';
-        document.getElementById('mov-status').value = 'Aprobado';
-        // Restaurar campo de lote a texto
-        const container = document.getElementById('mov-lote-container');
-        container.innerHTML = '<input type="text" class="form-input" id="mov-lote-texto" placeholder="Ingrese lote" required>';
-    }
-
-    // FIX: Función definida y funcional (era referenciada pero no existía antes)
-    function handleMovTipoChange() {
-        const tipo = document.getElementById('mov-tipo').value;
-        const sku = document.getElementById('mov-producto').value;
-        const container = document.getElementById('mov-lote-container');
-
-        if (tipo === 'Salida' && sku) {
-            // Mostrar select con lotes disponibles
-            loadAvailableLots(sku);
-        } else {
-            // Mostrar input de texto para Entrada/Ajuste
-            container.innerHTML = '<input type="text" class="form-input" id="mov-lote-texto" placeholder="Ingrese lote" required>';
-        }
-    }
-
-    function handleBodegaChange() {
-        // Para modal de movimiento, la ubicación es texto libre
-        // Si tienes ubicaciones predefinidas en Firebase, se pueden cargar aquí
-        const bodega = document.getElementById('mov-bodega').value;
-        if (bodega) {
-            // Opcionalmente cargar ubicaciones predefinidas desde Firebase
-            loadUbicaciones(bodega);
-        }
-    }
-
-    function loadUbicaciones(bodegaNombre) {
-        db.ref('ubicaciones_por_bodega').once('value', snapshot => {
-            const allUbicaciones = snapshot.val() || {};
-            const ubicaciones = allUbicaciones[bodegaNombre];
-            const input = document.getElementById('mov-ubicacion');
-
-            if (ubicaciones && (Array.isArray(ubicaciones) ? ubicaciones.length > 0 : Object.keys(ubicaciones).length > 0)) {
-                // Hay ubicaciones predefinidas: convertir a select
-                const select = document.createElement('select');
-                select.className = 'form-select';
-                select.id = 'mov-ubicacion';
-                select.required = true;
-                select.innerHTML = '<option value="">Seleccionar ubicación...</option>';
-
-                const arr = Array.isArray(ubicaciones) ? ubicaciones : Object.values(ubicaciones);
-                arr.forEach(ub => {
-                    if (ub && ub.nombre) {
-                        const opt = document.createElement('option');
-                        opt.value = ub.nombre;
-                        opt.textContent = ub.nombre;
-                        select.appendChild(opt);
-                    }
-                });
-                input.parentNode.replaceChild(select, input);
-            }
-            // Si no hay ubicaciones predefinidas, se mantiene el input de texto
-        }).catch(() => {
-            // Sin ubicaciones configuradas, el usuario escribe libremente
-        });
-    }
-
-    function getLoteValue() {
-        // FIX: Obtiene el valor del lote sea de input texto o select
-        const texto = document.getElementById('mov-lote-texto');
-        const select = document.getElementById('mov-lote-select');
-        if (texto) return texto.value;
-        if (select) return select.value;
-        return '';
-    }
-
-    function getUbicacionValue() {
-        const input = document.getElementById('mov-ubicacion');
-        return input ? input.value : '';
-    }
-
-    function saveMovimiento(e) {
-        e.preventDefault();
-        const uid = currentUser.uid;
-        const sku = document.getElementById('mov-producto').value.trim().toUpperCase();
-        const lote = getLoteValue().trim();
-
-        if (!userData.productos[sku]) {
-            alert(`El SKU "${sku}" no existe en el maestro de productos.`);
-            return;
-        }
-        if (!lote) {
-            alert('Debe ingresar o seleccionar un lote.');
-            return;
-        }
-
-        const tipo = document.getElementById('mov-tipo').value;
-        const cantidad = parseInt(document.getElementById('mov-cantidad').value);
-
-        // Validar stock disponible para Salida
-        if (tipo === 'Salida') {
-            const stockDisponible = calcStockForLot(sku, lote);
-            if (cantidad > stockDisponible) {
-                alert(`Stock insuficiente. Disponible para lote ${lote}: ${stockDisponible} unidades.`);
-                return;
-            }
-        }
-
-        const movimiento = {
-            tipo,
-            sku,
-            lote,
-            descripcion: userData.productos[sku]?.descripcion || '',
-            unidadVenta: userData.productos[sku]?.unidadVenta || '',
-            cantidad,
-            bodega: document.getElementById('mov-bodega').value,
-            ubicacion: getUbicacionValue(),
-            vence: document.getElementById('mov-vencimiento').value,
-            referencia: document.getElementById('mov-referencia').value.trim(),
-            proveedorCliente: document.getElementById('mov-proveedor-cliente').value.trim(),
-            status: document.getElementById('mov-status').value || 'Aprobado',
-            observaciones: document.getElementById('mov-observaciones').value.trim(),
-            fecha: new Date().toISOString(),
-            usuarioEmail: currentUser.email,
-        };
-
-        db.ref(`usuarios/${uid}/movimientos/${Date.now()}`).set(movimiento)
-            .then(() => closeMovimientoModal())
-            .catch(err => alert('Error al guardar: ' + err.message));
-    }
-
-    function calcStockForLot(sku, lote) {
-        let qty = 0;
-        Object.values(userData.movimientos || {}).forEach(m => {
-            if (m.sku === sku && m.lote === lote) {
-                if (m.tipo === 'Entrada') qty += parseInt(m.cantidad) || 0;
-                else if (m.tipo === 'Salida') qty -= parseInt(m.cantidad) || 0;
-            }
-        });
-        return qty;
-    }
-
-    function renderMovimientos() {
-        const tbody = document.getElementById('movimientos-table');
-        const filtro = document.getElementById('movTipoFilter')?.value || '';
-        let movArray = Object.values(userData.movimientos || {});
-        if (filtro) movArray = movArray.filter(m => m.tipo === filtro);
-        movArray.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
-
-        if (movArray.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="14" class="empty-state">No hay movimientos registrados</td></tr>';
-            return;
-        }
-        tbody.innerHTML = movArray.map(m => {
-            const tipoClass = m.tipo === 'Entrada' ? 'badge-success' : m.tipo === 'Salida' ? 'badge-danger' : 'badge-warning';
-            const statusClass = m.status === 'Aprobado' ? 'badge-success' : m.status === 'Rechazado' ? 'badge-danger' : 'badge-warning';
-            return `
-                <tr>
-                    <td>${new Date(m.fecha).toLocaleDateString('es-CL')}</td>
-                    <td><span class="badge ${tipoClass}">${m.tipo}</span></td>
-                    <td>${m.sku}</td>
-                    <td>${m.descripcion || '-'}</td>
-                    <td>${m.lote || '-'}</td>
-                    <td>${m.vence ? new Date(m.vence + 'T00:00:00').toLocaleDateString('es-CL') : '-'}</td>
-                    <td>${m.cantidad}</td>
-                    <td>${m.bodega || '-'}</td>
-                    <td>${m.ubicacion || '-'}</td>
-                    <td>${m.proveedorCliente || '-'}</td>
-                    <td>${m.referencia || '-'}</td>
-                    <td><span class="badge ${statusClass}">${m.status || 'Aprobado'}</span></td>
-                    <td>${m.usuarioEmail || '-'}</td>
-                    <td>${m.observaciones || '-'}</td>
-                </tr>
-            `;
-        }).join('');
-    }
-
-    function validateSKU() {
-        const sku = document.getElementById('mov-producto').value.trim().toUpperCase();
-        document.getElementById('mov-producto').value = sku;
-        if (sku && !userData.productos[sku]) {
-            alert(`El SKU "${sku}" no existe en el maestro de productos.`);
-            document.getElementById('mov-producto').value = '';
-            document.getElementById('mov-producto').focus();
-            return;
-        }
-        // Actualizar lotes si es Salida
-        const tipo = document.getElementById('mov-tipo').value;
-        if (tipo === 'Salida' && sku) loadAvailableLots(sku);
-    }
-
-    function loadAvailableLots(sku) {
-        const movimientos = userData.movimientos || {};
-        const lotesMap = {};
-
-        Object.values(movimientos).forEach(m => {
-            if (m.sku === sku) {
-                if (!lotesMap[m.lote]) lotesMap[m.lote] = { lote: m.lote, cantidad: 0, vence: m.vence };
-                if (m.tipo === 'Entrada') lotesMap[m.lote].cantidad += parseInt(m.cantidad) || 0;
-                if (m.tipo === 'Salida') lotesMap[m.lote].cantidad -= parseInt(m.cantidad) || 0;
-            }
-        });
-
-        const disponibles = Object.values(lotesMap).filter(l => l.cantidad > 0);
-        const container = document.getElementById('mov-lote-container');
-        container.innerHTML = '';
-
-        const select = document.createElement('select');
-        select.className = 'form-select';
-        select.id = 'mov-lote-select';
-        select.required = true;
-        select.onchange = () => {
-            const sel = disponibles.find(l => l.lote === select.value);
-            if (sel && sel.vence) document.getElementById('mov-vencimiento').value = sel.vence;
-        };
-        select.innerHTML = '<option value="">Seleccionar lote...</option>';
-
-        if (disponibles.length === 0) {
-            select.innerHTML += '<option disabled>No hay lotes con stock disponible</option>';
-        } else {
-            disponibles.forEach(l => {
-                const opt = document.createElement('option');
-                opt.value = l.lote;
-                opt.textContent = `${l.lote} (${l.cantidad} uds)`;
-                select.appendChild(opt);
-            });
-        }
-        container.appendChild(select);
-    }
-
-    // ===== STOCK =====
-    function selectBodega(bodega) {
-        selectedBodega = bodega;
-        updateBodegaButtons();
-        renderStock();
-    }
-
-    function updateBodegaButtons() {
-        document.getElementById('bodegaTotalBtn').style.background = selectedBodega === 'TOTAL' ? 'var(--primary)' : 'var(--gray-300)';
-        document.getElementById('bodegaTotalBtn').style.color = selectedBodega === 'TOTAL' ? 'white' : 'var(--gray-700)';
-        Object.entries(userData.bodegas || {}).forEach(([id, b]) => {
-            const btn = document.getElementById(`bodegaBtn_${id}`);
-            if (btn) {
-                btn.style.background = selectedBodega === b.nombre ? 'var(--primary)' : 'var(--gray-300)';
-                btn.style.color = selectedBodega === b.nombre ? 'white' : 'var(--gray-700)';
-            }
-        });
-    }
-
-    function renderBodegaButtons() {
-        const container = document.getElementById('bodegaButtonsContainer');
-        container.querySelectorAll('[id^="bodegaBtn_"]').forEach(b => b.remove());
-        Object.entries(userData.bodegas || {}).forEach(([id, b]) => {
-            const btn = document.createElement('button');
-            btn.className = 'btn btn-sm';
-            btn.id = `bodegaBtn_${id}`;
-            btn.textContent = b.nombre;
-            btn.style.width = 'auto';
-            btn.style.background = selectedBodega === b.nombre ? 'var(--primary)' : 'var(--gray-300)';
-            btn.style.color = selectedBodega === b.nombre ? 'white' : 'var(--gray-700)';
-            btn.onclick = () => selectBodega(b.nombre);
-            container.appendChild(btn);
-        });
-    }
-
-    function renderStock() {
-        const tbody = document.getElementById('stock-table');
-        // FIX: usar IDs correctos de filtros (pueden no existir aún en el DOM)
-        const filterSKU = (document.getElementById('stockFilterSKU')?.value || '').toLowerCase();
-        const filterDesc = (document.getElementById('stockFilterDescripcion')?.value || '').toLowerCase();
-        const filterLote = (document.getElementById('stockFilterLote')?.value || '').toLowerCase();
-        const filterUbic = (document.getElementById('stockFilterUbicacion')?.value || '').toLowerCase();
-
-        const movimientos = userData.movimientos || {};
-        const productos = userData.productos || {};
-        const stock = {};
-
-        // FIX: usar campo "vence" consistentemente (no "vencimiento")
-        Object.values(movimientos).forEach(m => {
-            const key = `${m.sku}|||${m.lote}|||${m.ubicacion}|||${m.bodega}`;
-            if (m.tipo === 'Entrada') {
-                if (!stock[key]) {
-                    stock[key] = {
-                        sku: m.sku, lote: m.lote, cantidad: 0,
-                        vence: m.vence,  // FIX: campo correcto
-                        ubicacion: m.ubicacion || '-',
-                        bodega: m.bodega || '-',
-                        status: m.status || 'Aprobado'
-                    };
-                }
-                stock[key].cantidad += parseInt(m.cantidad) || 0;
-                stock[key].status = m.status || 'Aprobado';
-            } else if (m.tipo === 'Salida') {
-                if (stock[key]) {
-                    stock[key].cantidad -= parseInt(m.cantidad) || 0;
-                }
-            }
-        });
-
-        const filtered = Object.values(stock).filter(s => {
-            const descripcion = (productos[s.sku]?.descripcion || '').toLowerCase();
-            const bodegaMatch = selectedBodega === 'TOTAL' || s.bodega === selectedBodega;
-            return s.cantidad > 0 &&
-                bodegaMatch &&
-                s.sku.toLowerCase().includes(filterSKU) &&
-                descripcion.includes(filterDesc) &&
-                (s.lote || '').toLowerCase().includes(filterLote) &&
-                (s.ubicacion || '').toLowerCase().includes(filterUbic);
-        });
-
-        if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No hay stock registrado</td></tr>';
-            return;
-        }
-
-        const hoy = new Date();
-        tbody.innerHTML = filtered.map(s => {
-            const venceDate = s.vence ? new Date(s.vence + 'T00:00:00') : null;
-            const diasRestantes = venceDate ? Math.ceil((venceDate - hoy) / (1000 * 60 * 60 * 24)) : null;
-            let venceClass = '';
-            if (diasRestantes !== null) {
-                if (diasRestantes < 0) venceClass = 'style="color:var(--danger);font-weight:600;"';
-                else if (diasRestantes <= 90) venceClass = 'style="color:var(--warning);font-weight:600;"';
-            }
-            const statusClass = s.status === 'Aprobado' ? 'badge-success' : s.status === 'Rechazado' ? 'badge-danger' : 'badge-warning';
-            return `
-                <tr>
-                    <td><strong>${s.sku}</strong></td>
-                    <td>${productos[s.sku]?.descripcion || '-'}</td>
-                    <td>${productos[s.sku]?.unidadVenta || '-'}</td>
-                    <td>${s.lote || '-'}</td>
-                    <td ${venceClass}>${venceDate ? venceDate.toLocaleDateString('es-CL') : '-'}</td>
-                    <td><strong>${s.cantidad}</strong></td>
-                    <td><span class="badge ${statusClass}">${s.status}</span></td>
-                    <td>${s.ubicacion || '-'}</td>
-                </tr>
-            `;
-        }).join('');
-    }
-
-    function clearStockFilters() {
-        ['stockFilterSKU','stockFilterDescripcion','stockFilterLote','stockFilterUbicacion'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.value = '';
-        });
-        renderStock();
-    }
-
-    // ===== ALERTAS =====
-    function calcAlertas() {
-        const alertas = [];
-        const hoy = new Date();
-        const movimientos = userData.movimientos || {};
-        const productos = userData.productos || {};
-        const stock = {};
-
-        Object.values(movimientos).forEach(m => {
-            const key = `${m.sku}|||${m.lote}`;
-            if (m.tipo === 'Entrada') {
-                if (!stock[key]) stock[key] = { sku: m.sku, lote: m.lote, cantidad: 0, vence: m.vence };
-                stock[key].cantidad += parseInt(m.cantidad) || 0;
-            } else if (m.tipo === 'Salida') {
-                if (stock[key]) stock[key].cantidad -= parseInt(m.cantidad) || 0;
-            }
-        });
-
-        Object.values(stock).filter(s => s.cantidad > 0).forEach(s => {
-            if (!s.vence) return;
-            const venceDate = new Date(s.vence + 'T00:00:00');
-            const dias = Math.ceil((venceDate - hoy) / (1000 * 60 * 60 * 24));
-            const desc = productos[s.sku]?.descripcion || s.sku;
-            if (dias < 0) {
-                alertas.push({ tipo: 'danger', titulo: `⚠️ VENCIDO: ${desc}`, texto: `Lote ${s.lote} vencido hace ${Math.abs(dias)} días. Stock: ${s.cantidad} unidades.` });
-            } else if (dias <= 90) {
-                alertas.push({ tipo: 'warning', titulo: `🔔 Próximo a vencer: ${desc}`, texto: `Lote ${s.lote} vence en ${dias} días (${new Date(s.vence + 'T00:00:00').toLocaleDateString('es-CL')}). Stock: ${s.cantidad} unidades.` });
-            }
-        });
-        return alertas;
-    }
-
-    function renderAlertas() {
-        const container = document.getElementById('alertasListContainer');
-        const alertas = calcAlertas();
-        if (alertas.length === 0) {
-            container.innerHTML = '<p style="color:var(--gray-500);">✅ No hay alertas activas.</p>';
-            return;
-        }
-        container.innerHTML = alertas.map(a => `
-            <div class="alert-box ${a.tipo === 'danger' ? 'danger' : ''}">
-                <div class="alert-title">${a.titulo}</div>
-                <div class="alert-text">${a.texto}</div>
+}
+
+// ══ DEVOLUCIONES ══
+function saveDevolucion(e) {
+    e.preventDefault();
+    const sku = document.getElementById('d-sku').value.trim().toUpperCase();
+    const dev = {
+        sku, lote: document.getElementById('d-lote').value.trim(),
+        cantidad: parseInt(document.getElementById('d-qty').value),
+        motivo: document.getElementById('d-motivo').value,
+        status: document.getElementById('d-status').value,
+        observaciones: document.getElementById('d-obs').value.trim(),
+        descripcion: data.productos[sku]?.descripcion || '',
+        fecha: new Date().toISOString(),
+        usuario: currentUser.email
+    };
+    db.ref(`usuarios/${currentUser.uid}/devoluciones`).push(dev)
+        .then(() => { logAudit('Devolución', 'Devoluciones', sku, dev.lote, dev.motivo); closeModal('devModal'); });
+}
+
+function renderDevoluciones() {
+    const fSKU = (document.getElementById('fDevSKU')?.value||'').toLowerCase();
+    const fLote = (document.getElementById('fDevLote')?.value||'').toLowerCase();
+    const rows = Object.entries(data.devoluciones||{})
+        .filter(([,d]) => (d.sku||'').toLowerCase().includes(fSKU) && (d.lote||'').toLowerCase().includes(fLote))
+        .sort((a, b) => new Date(b[1].fecha) - new Date(a[1].fecha));
+    const tb = document.getElementById('tDevoluciones');
+    if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="8">No hay devoluciones</td></tr>'; return; }
+    tb.innerHTML = rows.map(([id, d]) => {
+        const sC = d.status === 'Aprobado' ? 'badge-success' : d.status === 'Rechazado' ? 'badge-danger' : 'badge-warning';
+        return `<tr>
+            <td class="text-mono" style="font-size:11px">${fmtDate(d.fecha)}</td>
+            <td class="text-mono" style="color:var(--accent2)">${d.sku}</td>
+            <td>${d.descripcion||'—'}</td>
+            <td class="text-mono" style="font-size:11px">${d.lote}</td>
+            <td style="font-weight:600;color:var(--text)">${d.cantidad}</td>
+            <td>${d.motivo}</td>
+            <td><span class="badge ${sC}">${d.status}</span></td>
+            <td><button class="btn btn-sm btn-danger-sm" onclick="deleteDevolucion('${id}')">Eliminar</button></td>
+        </tr>`;
+    }).join('');
+}
+
+function deleteDevolucion(id) {
+    if (confirm('¿Eliminar esta devolución?')) db.ref(`usuarios/${currentUser.uid}/devoluciones/${id}`).remove();
+}
+
+// ══ RETIRO DE MERCADO ══
+function ejecutarRetiro() {
+    const lote = document.getElementById('retiroLote').value.trim();
+    const sku = document.getElementById('retiroSKU').value.trim().toUpperCase();
+    const c = document.getElementById('retiroResults');
+    if (!lote) { c.innerHTML = '<p class="text-muted text-sm">Ingrese un número de lote.</p>'; return; }
+
+    const movs = Object.values(data.movimientos||{}).filter(m =>
+        m.lote === lote && (!sku || m.sku === sku)
+    ).sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+
+    if (!movs.length) { c.innerHTML = `<div class="alert-banner success"><div class="alert-banner-icon">✓</div><div><div class="alert-banner-title">Sin registros encontrados</div><div class="alert-banner-text">El lote ${lote} no tiene movimientos registrados en el sistema.</div></div></div>`; return; }
+
+    const entradas = movs.filter(m => m.tipo === 'Entrada');
+    const salidas = movs.filter(m => m.tipo === 'Salida');
+    const stockActual = entradas.reduce((a, m) => a + (parseInt(m.cantidad)||0), 0) - salidas.reduce((a, m) => a + (parseInt(m.cantidad)||0), 0);
+
+    c.innerHTML = `
+        <div class="alert-banner danger" style="margin-bottom:16px">
+            <div class="alert-banner-icon">⚠</div>
+            <div>
+                <div class="alert-banner-title">Reporte de retiro — Lote: ${lote}</div>
+                <div class="alert-banner-text">Generado: ${new Date().toLocaleString('es-CL')} | Stock actual localizado: ${stockActual} ud.</div>
             </div>
-        `).join('');
+        </div>
+        <div class="card" style="margin-bottom:12px">
+            <div class="card-header"><div class="card-title">Entradas (${entradas.length})</div></div>
+            ${entradas.length ? `<div class="table-wrap"><table><thead><tr><th>Fecha</th><th>SKU</th><th>Qty</th><th>Bodega</th><th>Proveedor</th><th>Referencia</th><th>Usuario</th></tr></thead><tbody>
+                ${entradas.map(m => `<tr><td class="text-mono" style="font-size:11px">${fmtDateTime(m.fecha)}</td><td>${m.sku}</td><td style="font-weight:600">${m.cantidad}</td><td>${m.bodega||'—'}</td><td>${m.proveedor||'—'}</td><td>${m.referencia||'—'}</td><td style="font-size:11px">${m.usuario||'—'}</td></tr>`).join('')}
+            </tbody></table></div>` : '<p class="text-muted text-sm">Sin entradas</p>'}
+        </div>
+        <div class="card">
+            <div class="card-header"><div class="card-title">Salidas / Distribución (${salidas.length})</div></div>
+            ${salidas.length ? `<div class="table-wrap"><table><thead><tr><th>Fecha</th><th>SKU</th><th>Qty</th><th>Destino</th><th>Referencia</th><th>Usuario</th></tr></thead><tbody>
+                ${salidas.map(m => `<tr><td class="text-mono" style="font-size:11px">${fmtDateTime(m.fecha)}</td><td>${m.sku}</td><td style="font-weight:600;color:var(--danger)">${m.cantidad}</td><td>${m.proveedor||'—'}</td><td>${m.referencia||'—'}</td><td style="font-size:11px">${m.usuario||'—'}</td></tr>`).join('')}
+            </tbody></table></div>` : '<p class="text-muted text-sm">Sin salidas registradas — producto aún en bodega</p>'}
+        </div>`;
+
+    logAudit('Retiro mercado', 'Retiro', sku||'VARIOS', lote, `Simulación retiro — Stock localizado: ${stockActual}`);
+}
+
+// ══ TRAZABILIDAD ══
+function buscarTrazabilidad() {
+    const lote = document.getElementById('trazLote').value.trim();
+    const sku = document.getElementById('trazSKU').value.trim().toUpperCase();
+    verTrazabilidadLote(sku, lote);
+}
+
+function verTrazabilidadLote(sku, lote) {
+    if (sku) document.getElementById('trazSKU').value = sku;
+    if (lote) document.getElementById('trazLote').value = lote;
+    navigateTo('trazabilidad');
+
+    const c = document.getElementById('trazResults');
+    if (!lote) { c.innerHTML = '<p class="text-muted text-sm">Ingrese un número de lote.</p>'; return; }
+
+    const movs = Object.values(data.movimientos||{})
+        .filter(m => m.lote === lote && (!sku || m.sku === sku))
+        .sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+
+    const cuars = Object.values(data.cuarentena||{}).filter(q => q.lote === lote && (!sku || q.sku === sku));
+    const devs = Object.values(data.devoluciones||{}).filter(d => d.lote === lote && (!sku || d.sku === sku));
+
+    if (!movs.length && !cuars.length && !devs.length) {
+        c.innerHTML = `<p class="text-muted text-sm">Sin registros para el lote "${lote}".</p>`;
+        return;
     }
 
-    // ===== REPORTES =====
-    function generarReporteInventario() {
-        const container = document.getElementById('reporteContainer');
-        const movimientos = userData.movimientos || {};
-        const productos = userData.productos || {};
-        const stock = {};
+    const items = [
+        ...movs.map(m => ({ fecha: m.fecha, tipo: m.tipo, desc: `${m.tipo}: ${m.cantidad} ud. en ${m.bodega||'—'} / ${m.ubicacion||'—'}`, meta: `Ref: ${m.referencia||'—'} | Proveedor/Cliente: ${m.proveedor||'—'} | Status: ${m.status}`, usuario: m.usuario, clase: m.tipo === 'Salida' ? 'salida' : m.tipo === 'Ajuste' ? 'ajuste' : '' })),
+        ...cuars.map(q => ({ fecha: q.fechaIngreso, tipo: 'Cuarentena', desc: `Ingreso a cuarentena: ${q.cantidad} ud.`, meta: `Motivo: ${q.motivo} | Status: ${q.status}`, usuario: q.usuario, clase: 'ajuste' })),
+        ...devs.map(d => ({ fecha: d.fecha, tipo: 'Devolución', desc: `Devolución: ${d.cantidad} ud.`, meta: `Motivo: ${d.motivo} | Status: ${d.status}`, usuario: d.usuario, clase: 'salida' })),
+    ].sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
 
-        Object.values(movimientos).forEach(m => {
-            const key = `${m.sku}|||${m.lote}`;
-            if (m.tipo === 'Entrada') {
-                if (!stock[key]) stock[key] = { sku: m.sku, lote: m.lote, cantidad: 0, vence: m.vence, bodega: m.bodega, ubicacion: m.ubicacion };
-                stock[key].cantidad += parseInt(m.cantidad) || 0;
-            } else if (m.tipo === 'Salida') {
-                if (stock[key]) stock[key].cantidad -= parseInt(m.cantidad) || 0;
-            }
+    const prod = sku ? data.productos[sku] : null;
+    c.innerHTML = `
+        <div class="card" style="margin-bottom:12px">
+            <div class="flex-between"><div><div class="card-title">Lote: <span class="text-mono" style="color:var(--accent2)">${lote}</span>${sku ? ` — ${sku}` : ''}</div>${prod?`<div class="card-subtitle">${prod.descripcion} · ${prod.fabricante}${prod.registroSanitario?` · RS: <span class="rs-number">${prod.registroSanitario}</span>`:''}</div>`:''}</div><span class="badge badge-blue">${items.length} eventos</span></div>
+        </div>
+        <div class="card">
+            <ul class="lot-timeline">
+                ${items.map(it => `
+                    <li class="lot-timeline-item ${it.clase}">
+                        <div class="lot-timeline-date">${fmtDateTime(it.fecha)} — <span class="badge badge-${it.clase==='salida'?'danger':it.clase==='ajuste'?'warning':'success'}" style="font-size:10px">${it.tipo}</span></div>
+                        <div class="lot-timeline-desc">${it.desc}</div>
+                        <div class="lot-timeline-meta">${it.meta} | Usuario: ${it.usuario||'—'}</div>
+                    </li>`).join('')}
+            </ul>
+        </div>`;
+}
+
+// ══ REPORTES ══
+function rptTable(title, headers, rows, subtitle) {
+    const hdr = headers.map(h => `<th>${h}</th>`).join('');
+    const bdy = rows.length ? rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('') : `<tr class="empty-row"><td colspan="${headers.length}">Sin datos</td></tr>`;
+    document.getElementById('rptContainer').innerHTML = `<div class="card"><div class="card-header"><div><div class="card-title">${title}</div>${subtitle?`<div class="card-subtitle">${subtitle}</div>`:''}</div><span class="badge badge-blue">${new Date().toLocaleDateString('es-CL')}</span></div><div class="table-wrap"><table><thead><tr>${hdr}</tr></thead><tbody>${bdy}</tbody></table></div></div>`;
+}
+
+function rptInventario() {
+    const stock = calcStock();
+    const prods = data.productos||{};
+    const rows = Object.values(stock).filter(s => s.cantidad > 0)
+        .sort((a, b) => new Date(a.vence+'T00:00:00') - new Date(b.vence+'T00:00:00'))
+        .map(s => [s.sku, prods[s.sku]?.descripcion||'—', prods[s.sku]?.registroSanitario||'—', s.lote, s.cantidad, s.vence?fmtDate(s.vence):'—', s.bodega||'—', s.ubicacion||'—', s.status]);
+    rptTable('Inventario General (FEFO)', ['SKU','Descripción','N° Reg. ISP','Lote','Qty','Vencimiento','Bodega','Ubicación','Status'], rows, 'Ordenado por vencimiento — Norma Técnica N°147');
+}
+
+function rptVencimientos() {
+    const stock = calcStock();
+    const prods = data.productos||{};
+    const hoy = new Date();
+    const rows = Object.values(stock).filter(s => s.cantidad > 0 && s.vence)
+        .sort((a, b) => new Date(a.vence+'T00:00:00') - new Date(b.vence+'T00:00:00'))
+        .map(s => {
+            const dias = Math.ceil((new Date(s.vence+'T00:00:00') - hoy) / 86400000);
+            const est = dias < 0 ? '⚠ VENCIDO' : dias <= 30 ? '⚠ Crítico' : dias <= 90 ? '◉ Próximo' : '✓ OK';
+            return [s.sku, prods[s.sku]?.descripcion||'—', s.lote, s.cantidad, fmtDate(s.vence), `${dias}d`, est, s.bodega||'—'];
         });
+    rptTable('Reporte de Vencimientos', ['SKU','Descripción','Lote','Qty','Vencimiento','Días','Estado','Bodega'], rows, 'Alerta 90 días — NT 147 / NT 208');
+}
 
-        const rows = Object.values(stock).filter(s => s.cantidad > 0).map(s => `
-            <tr>
-                <td>${s.sku}</td>
-                <td>${productos[s.sku]?.descripcion || '-'}</td>
-                <td>${s.lote || '-'}</td>
-                <td>${s.cantidad}</td>
-                <td>${s.vence ? new Date(s.vence + 'T00:00:00').toLocaleDateString('es-CL') : '-'}</td>
-                <td>${s.bodega || '-'}</td>
-                <td>${s.ubicacion || '-'}</td>
-            </tr>
-        `).join('');
+function rptMovimientos() {
+    const rows = Object.values(data.movimientos||{}).sort((a,b) => new Date(b.fecha)-new Date(a.fecha))
+        .map(m => [fmtDate(m.fecha), m.tipo, m.sku, m.descripcion||'—', m.lote||'—', m.cantidad, m.bodega||'—', m.proveedor||'—', m.referencia||'—', m.status||'—', m.usuario||'—']);
+    rptTable('Reporte de Movimientos', ['Fecha','Tipo','SKU','Descripción','Lote','Qty','Bodega','Prov/Cliente','Referencia','Status','Usuario'], rows, 'Trazabilidad completa — NT 147');
+}
 
-        container.innerHTML = `<div class="card"><h2>Reporte de Inventario — ${new Date().toLocaleDateString('es-CL')}</h2>
-            <table class="table"><thead><tr><th>SKU</th><th>Descripción</th><th>Lote</th><th>Cantidad</th><th>Vencimiento</th><th>Bodega</th><th>Ubicación</th></tr></thead>
-            <tbody>${rows || '<tr><td colspan="7" class="empty-state">Sin datos</td></tr>'}</tbody></table></div>`;
+function rptCuarentena() {
+    const rows = Object.values(data.cuarentena||{}).sort((a,b) => new Date(b.fechaIngreso)-new Date(a.fechaIngreso))
+        .map(q => [fmtDate(q.fechaIngreso), q.sku, q.descripcion||'—', q.lote, q.cantidad, q.motivo, q.responsable||'—', q.status]);
+    rptTable('Reporte de Cuarentena', ['Fecha ingreso','SKU','Descripción','Lote','Qty','Motivo','Responsable','Status'], rows, 'Gestión QA — NT 147');
+}
+
+// ══ AUDITORÍA ══
+function renderAuditoria() {
+    db.ref(`usuarios/${currentUser.uid}/auditoria`).orderByChild('fecha').limitToLast(200).once('value', s => {
+        const rows = [];
+        s.forEach(c => rows.unshift(c.val()));
+        const tb = document.getElementById('tAuditoria');
+        if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="7">Sin registros</td></tr>'; return; }
+        tb.innerHTML = rows.map(r => `<tr>
+            <td class="text-mono" style="font-size:11px">${fmtDateTime(r.fecha)}</td>
+            <td><span class="badge badge-blue" style="font-size:10px">${r.accion}</span></td>
+            <td style="font-size:11px;color:var(--text3)">${r.modulo}</td>
+            <td class="text-mono" style="color:var(--accent2);font-size:11px">${r.sku||'—'}</td>
+            <td class="text-mono" style="font-size:11px">${r.lote||'—'}</td>
+            <td style="font-size:12px">${r.detalle||'—'}</td>
+            <td style="font-size:11px;color:var(--text3)">${r.usuario||'—'}</td>
+        </tr>`).join('');
+    });
+}
+
+// ══ MODAL HELPERS ══
+function openModal(id) {
+    const m = document.getElementById(id);
+    if (m) { m.classList.add('active'); if (id === 'movModal') { resetMovModal(); updateBodegaSelect(); } }
+}
+
+function closeModal(id) {
+    const m = document.getElementById(id); if (m) m.classList.remove('active');
+    if (id === 'productModal') {
+        ['p-sku','p-rs','p-desc','p-fab','p-tipo','p-pres','p-udv','p-principio'].forEach(i => { const el = document.getElementById(i); if(el) { el.value=''; el.disabled=false; } });
+        document.getElementById('p-min').value = '0';
     }
+}
 
-    function generarReporteVencimiento() {
-        const container = document.getElementById('reporteContainer');
-        const movimientos = Object.values(userData.movimientos || {}).filter(m => m.tipo === 'Entrada' && m.vence);
-        movimientos.sort((a, b) => new Date(a.vence) - new Date(b.vence));
-        const hoy = new Date();
+function resetMovModal() {
+    ['m-tipo','m-sku','m-qty','m-vence','m-bodega','m-ubic','m-proveedor','m-ref','m-obs'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.value = '';
+    });
+    document.getElementById('m-status').value = 'Aprobado';
+    document.getElementById('m-sku-info').style.display = 'none';
+    document.getElementById('m-lote-wrap').innerHTML = '<input type="text" class="form-input" id="m-lote-texto" placeholder="Número de lote" required>';
+}
 
-        const rows = movimientos.map(m => {
-            const vence = new Date(m.vence + 'T00:00:00');
-            const dias = Math.ceil((vence - hoy) / (1000 * 60 * 60 * 24));
-            const color = dias < 0 ? 'color:var(--danger)' : dias <= 90 ? 'color:var(--warning)' : '';
-            return `<tr>
-                <td>${m.sku}</td><td>${m.descripcion || '-'}</td><td>${m.lote || '-'}</td>
-                <td style="${color}"><strong>${vence.toLocaleDateString('es-CL')}</strong></td>
-                <td style="${color}">${dias < 0 ? `Vencido hace ${Math.abs(dias)} días` : `${dias} días`}</td>
-                <td>${m.cantidad}</td>
-            </tr>`;
-        }).join('');
+// Cerrar modal al click fondo
+document.addEventListener('click', e => { if (e.target.classList.contains('modal')) e.target.classList.remove('active'); });
 
-        container.innerHTML = `<div class="card"><h2>Reporte de Vencimientos — ${new Date().toLocaleDateString('es-CL')}</h2>
-            <table class="table"><thead><tr><th>SKU</th><th>Descripción</th><th>Lote</th><th>Vencimiento</th><th>Estado</th><th>Cantidad</th></tr></thead>
-            <tbody>${rows || '<tr><td colspan="6" class="empty-state">Sin datos</td></tr>'}</tbody></table></div>`;
-    }
-
-    function generarReporteMovimientos() {
-        const container = document.getElementById('reporteContainer');
-        const movimientos = Object.values(userData.movimientos || {}).sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
-
-        const rows = movimientos.map(m => {
-            const tipoClass = m.tipo === 'Entrada' ? 'badge-success' : m.tipo === 'Salida' ? 'badge-danger' : 'badge-warning';
-            return `<tr>
-                <td>${new Date(m.fecha).toLocaleDateString('es-CL')}</td>
-                <td><span class="badge ${tipoClass}">${m.tipo}</span></td>
-                <td>${m.sku}</td><td>${m.lote || '-'}</td><td>${m.cantidad}</td>
-                <td>${m.bodega || '-'}</td><td>${m.referencia || '-'}</td><td>${m.usuarioEmail || '-'}</td>
-            </tr>`;
-        }).join('');
-
-        container.innerHTML = `<div class="card"><h2>Reporte de Movimientos — ${new Date().toLocaleDateString('es-CL')}</h2>
-            <table class="table"><thead><tr><th>Fecha</th><th>Tipo</th><th>SKU</th><th>Lote</th><th>Cantidad</th><th>Bodega</th><th>Referencia</th><th>Usuario</th></tr></thead>
-            <tbody>${rows || '<tr><td colspan="8" class="empty-state">Sin datos</td></tr>'}</tbody></table></div>`;
-    }
-
-    // ===== AUDITORÍA =====
-    function renderAuditoria() {
-        const container = document.getElementById('auditoriaListContainer');
-        const movimientos = Object.values(userData.movimientos || {}).sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
-        if (movimientos.length === 0) {
-            container.innerHTML = '<p style="color:var(--gray-500);">No hay registros de auditoría.</p>';
-            return;
-        }
-        const rows = movimientos.map(m => `
-            <tr>
-                <td>${new Date(m.fecha).toLocaleString('es-CL')}</td>
-                <td>${m.tipo}</td>
-                <td>${m.sku}</td>
-                <td>${m.lote || '-'}</td>
-                <td>${m.cantidad}</td>
-                <td>${m.usuarioEmail || '-'}</td>
-                <td>${m.referencia || '-'}</td>
-            </tr>
-        `).join('');
-        container.innerHTML = `<div class="table-container"><table class="table">
-            <thead><tr><th>Fecha/Hora</th><th>Tipo</th><th>SKU</th><th>Lote</th><th>Cantidad</th><th>Usuario</th><th>Referencia</th></tr></thead>
-            <tbody>${rows}</tbody></table></div>`;
-    }
-
-    // ===== DEVOLUCIONES =====
-    function openDevolucionModal() {
-        // FIX: IDs únicos para devoluciones, sin conflicto con movimientos
-        document.getElementById('dev-sku').value = '';
-        document.getElementById('dev-lote').value = '';
-        document.getElementById('dev-cantidad').value = '';
-        document.getElementById('dev-motivo').value = '';
-        document.getElementById('dev-status').value = 'Pendiente';
-        document.getElementById('dev-observaciones').value = '';
-        document.getElementById('devolucionModal').classList.add('active');
-    }
-
-    function closeDevolucionModal() {
-        document.getElementById('devolucionModal').classList.remove('active');
-    }
-
-    function saveDevolucion(e) {
-        e.preventDefault();
-        const uid = currentUser.uid;
-        const sku = document.getElementById('dev-sku').value.trim().toUpperCase();
-        const lote = document.getElementById('dev-lote').value.trim();
-
-        if (!userData.productos[sku]) {
-            alert(`El SKU "${sku}" no existe en el maestro de productos.`);
-            return;
-        }
-
-        const devolucion = {
-            sku,
-            descripcion: userData.productos[sku]?.descripcion || '',
-            lote,
-            cantidad: parseInt(document.getElementById('dev-cantidad').value),
-            motivo: document.getElementById('dev-motivo').value,
-            status: document.getElementById('dev-status').value,
-            observaciones: document.getElementById('dev-observaciones').value.trim(),
-            fecha: new Date().toISOString(),
-            usuarioEmail: currentUser.email,
-        };
-
-        db.ref(`usuarios/${uid}/devoluciones`).push(devolucion)
-            .then(() => closeDevolucionModal())
-            .catch(err => alert('Error al guardar devolución: ' + err.message));
-    }
-
-    function renderDevoluciones() {
-        const tbody = document.getElementById('devoluciones-table');
-        const filterSKU = (document.getElementById('devolucionFilterSKU')?.value || '').toLowerCase();
-        const filterLote = (document.getElementById('devolucionFilterLote')?.value || '').toLowerCase();
-
-        const devArray = Object.entries(userData.devoluciones || {}).map(([id, d]) => ({ id, ...d }));
-        const filtered = devArray.filter(d =>
-            (d.sku || '').toLowerCase().includes(filterSKU) &&
-            (d.lote || '').toLowerCase().includes(filterLote)
-        );
-        filtered.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
-
-        if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No hay devoluciones registradas</td></tr>';
-            return;
-        }
-
-        tbody.innerHTML = filtered.map(d => {
-            const statusClass = d.status === 'Aprobado' ? 'badge-aprobado' : d.status === 'Rechazado' ? 'badge-rechazado' : 'badge-pendiente';
-            return `
-                <tr>
-                    <td>${new Date(d.fecha).toLocaleDateString('es-CL')}</td>
-                    <td>${d.sku}</td>
-                    <td>${d.descripcion || '-'}</td>
-                    <td>${d.lote}</td>
-                    <td>${d.cantidad}</td>
-                    <td>${d.motivo}</td>
-                    <td><span class="badge ${statusClass}">${d.status}</span></td>
-                    <td><button class="btn btn-sm btn-danger" onclick="deleteDevolucion('${d.id}')">Eliminar</button></td>
-                </tr>
-            `;
-        }).join('');
-    }
-
-    function deleteDevolucion(id) {
-        if (confirm('¿Eliminar esta devolución?')) {
-            db.ref(`usuarios/${currentUser.uid}/devoluciones/${id}`).remove();
-        }
-    }
+// ══ UTILS ══
+function fmtDate(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso + (iso.includes('T') ? '' : 'T00:00:00'));
+    return d.toLocaleDateString('es-CL', { day:'2-digit', month:'2-digit', year:'numeric' });
+}
+function fmtDateTime(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    return d.toLocaleDateString('es-CL', { day:'2-digit', month:'2-digit', year:'numeric' }) + ' ' + d.toLocaleTimeString('es-CL', { hour:'2-digit', minute:'2-digit' });
+}
 </script>
 </body>
 </html>
