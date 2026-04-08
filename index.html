@@ -8,6 +8,10 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
         :root {
             /* ── SAP Fiori · Fondo de contenido ── */
@@ -100,13 +104,7 @@
         @keyframes fadeUp { from { opacity:0; transform: translateY(20px); } to { opacity:1; transform: translateY(0); } }
 
         .login-logo { text-align: center; margin-bottom: 40px; }
-        .login-logo-mark {
-            width: 60px; height: 60px; margin: 0 auto 18px;
-            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-            border-radius: 16px; display: flex; align-items: center; justify-content: center;
-            box-shadow: 0 8px 32px rgba(37,99,235,0.4), 0 0 0 1px rgba(255,255,255,0.08) inset;
-        }
-        .login-logo-mark svg { width: 28px; height: 28px; color: white; }
+        .login-logo-img { height: 56px; width: auto; max-width: 200px; object-fit: contain; margin: 0 auto 14px; display: block; }
         .login-logo h1 { font-size: 23px; font-weight: 700; color: var(--text); letter-spacing: -0.6px; }
         .login-logo p { font-size: 12.5px; color: var(--text3); margin-top: 5px; letter-spacing: 0.1px; }
         .login-divider { display: flex; align-items: center; gap: 10px; margin: 24px 0 20px; }
@@ -184,16 +182,15 @@
             box-shadow: 2px 0 8px rgba(0,0,0,0.18);
         }
         .sidebar-logo {
-            padding: 18px 10px 16px; border-bottom: 1px solid var(--shell-border);
-            margin-bottom: 12px; display: flex; align-items: center; gap: 11px;
+            padding: 16px 10px 14px; border-bottom: 1px solid var(--shell-border);
+            margin-bottom: 12px; display: flex; align-items: center; gap: 10px;
         }
-        .sidebar-logo-mark {
-            width: 34px; height: 34px; flex-shrink: 0;
-            background: var(--accent);
-            border-radius: 6px; display: flex; align-items: center; justify-content: center;
-            color: white; box-shadow: none;
+        .sidebar-logo-img {
+            height: 36px; width: auto; max-width: 152px; object-fit: contain;
+            background: rgba(255,255,255,0.93);
+            border-radius: 6px;
+            padding: 4px 10px;
         }
-        .sidebar-logo-mark svg { width: 17px; height: 17px; }
         .sidebar-logo-text h2 { font-size: 14.5px; font-weight: 700; color: var(--shell-text); letter-spacing: -0.3px; }
         .sidebar-logo-text p { font-size: 10.5px; color: var(--shell-text2); margin-top: 1px; letter-spacing: 0.2px; }
 
@@ -477,6 +474,40 @@
         /* ── TABLA texto más legible ── */
         tbody td { padding: 11px 14px; border-bottom: 1px solid var(--border); color: var(--text2); vertical-align: middle; font-size: 13.5px; }
         thead th { font-size: 11px; }
+
+        /* ══ DASHBOARD COMERCIAL ══ */
+        .dc-filter-bar { display:flex; align-items:center; gap:10px; padding:12px 16px; flex-wrap:wrap; }
+        .dc-kpi-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:20px; }
+        .dc-kpi-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); padding:18px 20px; display:flex; align-items:flex-start; gap:14px; box-shadow:0 1px 6px rgba(0,0,0,0.07); transition:box-shadow .15s; }
+        .dc-kpi-card:hover { box-shadow:0 3px 14px rgba(0,0,0,0.11); }
+        .dc-kpi-icon { width:46px; height:46px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:21px; flex-shrink:0; }
+        .dc-kpi-body { flex:1; min-width:0; }
+        .dc-kpi-label { font-size:10.5px; color:var(--text3); font-weight:600; text-transform:uppercase; letter-spacing:.6px; margin-bottom:5px; }
+        .dc-kpi-value { font-size:30px; font-weight:700; color:var(--text); line-height:1.1; letter-spacing:-1px; }
+        .dc-kpi-var { margin-top:6px; font-size:11px; display:flex; align-items:center; gap:5px; }
+        .dc-var-up { color:var(--success); font-weight:700; }
+        .dc-var-down { color:var(--danger); font-weight:700; }
+        .dc-var-label { color:var(--text3); }
+        .dc-two-col { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px; }
+        .dc-section-title { font-size:11px; font-weight:700; color:var(--text3); text-transform:uppercase; letter-spacing:.8px; margin:0 0 14px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+        .dc-chart-wrap { padding:10px 14px 6px; }
+        @media (max-width:1100px) { .dc-kpi-grid { grid-template-columns:repeat(2,1fr); } }
+        @media (max-width:820px) { .dc-two-col { grid-template-columns:1fr; } }
+        @media (max-width:560px) { .dc-kpi-grid { grid-template-columns:1fr; } }
+
+        /* ══ SELECTOR DE LOTES CON ESTADO ══ */
+        .lote-selector-list { display:flex; flex-direction:column; gap:6px; margin-top:4px; max-height:220px; overflow-y:auto; }
+        .lote-selector-item { border:1px solid var(--border); border-radius:var(--radius); padding:9px 12px; cursor:pointer; transition:background .12s,border-color .12s; }
+        .lote-selector-item:hover:not(.lote-disabled) { background:var(--accent-dim); border-color:var(--accent); }
+        .lote-sel-active { background:var(--accent-dim) !important; border-color:var(--accent) !important; border-left-width:3px !important; }
+        .lote-ok { border-left:3px solid var(--success); }
+        .lote-cuarentena { border-left:3px solid var(--warning); background:rgba(233,115,12,0.04); }
+        .lote-rechazado { border-left:3px solid var(--danger); background:rgba(187,0,0,0.04); }
+        .lote-disabled { cursor:not-allowed; opacity:.72; pointer-events:none; }
+        .lote-sel-top { display:flex; align-items:center; gap:8px; margin-bottom:2px; flex-wrap:wrap; }
+        .lote-sel-meta { font-size:11px; color:var(--text3); line-height:1.5; }
+        .lote-warn-msg { font-size:11px; margin-top:3px; font-weight:500; }
+        .badge-gray { background:rgba(100,100,100,0.12); color:#555; }
     </style>
 </head>
 <body>
@@ -487,9 +518,7 @@
 <div class="login-screen" id="loginScreen">
     <div class="login-card">
         <div class="login-logo">
-            <div class="login-logo-mark">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-            </div>
+            <img src="Logo Celmedik.png" alt="Celmedik" class="login-logo-img">
             <h1>Celmedik WMS</h1>
             <p>Sistema de Gestión de Almacén Farmacéutico</p>
         </div>
@@ -540,13 +569,7 @@
         <!-- SIDEBAR -->
         <aside class="sidebar">
             <div class="sidebar-logo">
-                <div class="sidebar-logo-mark">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-                </div>
-                <div class="sidebar-logo-text">
-                    <h2>Celmedik</h2>
-                    <p>WMS Farmacéutico</p>
-                </div>
+                <img src="Logo Celmedik.png" alt="Celmedik" class="sidebar-logo-img">
             </div>
 
             <div class="nav-section">Principal</div>
@@ -596,6 +619,12 @@
             <a class="nav-link" data-page="trazabilidad">
                 <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" y1="9" x2="6" y2="21"/></svg></span>
                 Trazabilidad Lotes
+            </a>
+
+            <div class="nav-section">Comercial</div>
+            <a class="nav-link" data-page="dashComercial">
+                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>
+                Dashboard Comercial
             </a>
 
             <div class="nav-section">Reportes</div>
@@ -717,7 +746,7 @@
                         <div class="card-header">
                             <div>
                                 <div class="card-title">Stock Actual</div>
-                                <div class="card-subtitle">Ordenado por FEFO — Vencimiento más próximo primero</div>
+                                <div class="card-subtitle" id="stockSortSubtitle">Ordenado por FEFO — Vencimiento más próximo primero</div>
                             </div>
                         </div>
                         <div class="filter-bar" id="bodegaBtns">
@@ -728,11 +757,16 @@
                             <input type="text" class="form-input" id="fStockSKU" placeholder="SKU..." onkeyup="renderStock()">
                             <input type="text" class="form-input" id="fStockLote" placeholder="Lote..." onkeyup="renderStock()">
                             <input type="text" class="form-input" id="fStockUbic" placeholder="Ubicación..." onkeyup="renderStock()">
+                            <select class="form-select" id="fStockSort" onchange="renderStock()" style="width:auto;min-width:170px">
+                                <option value="fefo">Ordenar: FEFO</option>
+                                <option value="sku">Ordenar: SKU A-Z</option>
+                                <option value="desc">Ordenar: Descripción A-Z</option>
+                            </select>
                             <button class="btn btn-ghost btn-sm" onclick="clearStockFilters()">Limpiar</button>
                         </div>
                         <div class="table-wrap">
                             <table><thead><tr>
-                                <th>FEFO</th><th>SKU</th><th>Descripción</th><th>N° Reg. ISP</th><th>Lote</th><th>Vencimiento</th><th>Días</th><th>Qty</th><th>Ud.</th><th>Status</th><th>Bodega</th><th>Ubicación</th><th>Acciones</th>
+                                <th>FEFO</th><th>SKU</th><th>Descripción</th><th>N° Reg. ISP</th><th>Lote</th><th>Vencimiento</th><th>Qty</th><th>Unidad de Venta</th><th>Presentación</th><th>Status</th><th>Bodega</th><th>Ubicación</th><th>Acciones</th>
                             </tr></thead><tbody id="tStock"><tr class="empty-row"><td colspan="13">No hay stock registrado</td></tr></tbody></table>
                         </div>
                     </div>
@@ -768,11 +802,14 @@
                             </select>
                             <input type="text" class="form-input" id="fMovSKU" placeholder="SKU..." onkeyup="renderMovimientos()">
                             <input type="text" class="form-input" id="fMovLote" placeholder="Lote..." onkeyup="renderMovimientos()">
+                            <input type="date" class="form-input" id="fMovFechaDesde" onchange="renderMovimientos()" style="width:auto" title="Desde">
+                            <input type="date" class="form-input" id="fMovFechaHasta" onchange="renderMovimientos()" style="width:auto" title="Hasta">
+                            <button class="btn btn-ghost btn-sm" onclick="clearFiltrosMovimientos()">Limpiar</button>
                         </div>
                         <div class="table-wrap">
                             <table><thead><tr>
-                                <th>Fecha</th><th>Tipo</th><th>SKU</th><th>Descripción</th><th>Lote</th><th>Vence</th><th>Qty</th><th>Bodega</th><th>Ubicación</th><th>Proveedor/Cliente</th><th>Referencia</th><th>Status</th><th>Usuario</th><th>Obs.</th>
-                            </tr></thead><tbody id="tMovimientos"><tr class="empty-row"><td colspan="14">No hay movimientos registrados</td></tr></tbody></table>
+                                <th>Fecha</th><th>Tipo</th><th>SKU</th><th>Descripción</th><th>Lote</th><th>Vence</th><th>Qty</th><th>Bodega</th><th>Ubicación</th><th>Proveedor/Cliente</th><th>Referencia</th><th>Status</th><th>Usuario</th><th>Obs.</th><th>PDF</th>
+                            </tr></thead><tbody id="tMovimientos"><tr class="empty-row"><td colspan="15">No hay movimientos registrados</td></tr></tbody></table>
                         </div>
                     </div>
                 </div>
@@ -873,7 +910,7 @@
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
                                 Vencimientos
                             </button>
-                            <button class="btn btn-primary" onclick="rptMovimientos()" style="margin-top:0; justify-content:center">
+                            <button class="btn btn-primary" onclick="showRptMovFiltros()" style="margin-top:0; justify-content:center">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
                                 Movimientos
                             </button>
@@ -882,6 +919,29 @@
                                 Cuarentena activa
                             </button>
                         </div>
+                        <div id="rptMovFiltros" style="display:none;margin-bottom:16px;padding:14px;background:var(--bg2);border-radius:var(--radius);border:1px solid var(--border)">
+                            <div style="font-size:11.5px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:10px">Filtros — Reporte Movimientos</div>
+                            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+                                <div class="form-group" style="margin:0;flex:1;min-width:160px">
+                                    <label class="form-label">SKU</label>
+                                    <input type="text" class="form-input" id="rptFMovSKU" placeholder="Ej: KO-001" oninput="rptMovimientos()">
+                                </div>
+                                <div class="form-group" style="margin:0;flex:1;min-width:160px">
+                                    <label class="form-label">Lote</label>
+                                    <input type="text" class="form-input" id="rptFMovLote" placeholder="Ej: 20241001" oninput="rptMovimientos()">
+                                </div>
+                                <div class="form-group" style="margin:0;flex:1;min-width:140px">
+                                    <label class="form-label">Tipo</label>
+                                    <select class="form-select" id="rptFMovTipo" onchange="rptMovimientos()">
+                                        <option value="">Todos</option>
+                                        <option value="Entrada">Entrada</option>
+                                        <option value="Salida">Salida</option>
+                                    </select>
+                                </div>
+                                <button class="btn btn-ghost btn-sm" onclick="clearRptMovFiltros()" style="width:auto;margin:0">Limpiar</button>
+                            </div>
+                        </div>
+
                         <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
                             <button class="btn btn-ghost btn-sm" onclick="printReport()" style="width:auto">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
@@ -902,6 +962,113 @@
                             <table><thead><tr>
                                 <th>Fecha / Hora</th><th>Acción</th><th>Módulo</th><th>SKU</th><th>Lote</th><th>Detalle</th><th>Usuario</th>
                             </tr></thead><tbody id="tAuditoria"><tr class="empty-row"><td colspan="7">No hay registros</td></tr></tbody></table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── DASHBOARD COMERCIAL ── -->
+                <div id="dashComercial" class="page">
+                    <!-- Filtros globales -->
+                    <div class="card" style="margin-bottom:16px">
+                        <div class="dc-filter-bar">
+                            <select class="form-select" id="dcPeriodo" style="width:auto" onchange="dcOnPeriodoChange()">
+                                <option value="hoy">Hoy</option>
+                                <option value="semana">Esta semana</option>
+                                <option value="mes" selected>Este mes</option>
+                                <option value="año">Este año</option>
+                                <option value="custom">Rango personalizado</option>
+                            </select>
+                            <div id="dcRangoCustom" style="display:none;gap:8px;align-items:center">
+                                <input type="date" class="form-input" id="dcDesde" style="width:auto" onchange="renderDashComercial()">
+                                <span style="color:var(--text3);font-size:13px">—</span>
+                                <input type="date" class="form-input" id="dcHasta" style="width:auto" onchange="renderDashComercial()">
+                            </div>
+                            <span id="dcPeriodoLabel" style="font-size:11.5px;color:var(--text3)"></span>
+                            <button class="btn btn-primary btn-sm" onclick="renderDashComercial()">↺ Actualizar</button>
+                            <button class="btn btn-ghost btn-sm" onclick="exportDCPDF()" style="margin-left:auto">↓ Exportar PDF</button>
+                        </div>
+                    </div>
+
+                    <div id="dcContent">
+                        <!-- Sección 1: KPIs -->
+                        <div class="dc-kpi-grid">
+                            <div class="dc-kpi-card" id="dcKpi1"><div class="dc-kpi-icon" style="background:#e8f1fd;color:#0070F2">↗</div><div class="dc-kpi-body"><div class="dc-kpi-label">Despachos realizados</div><div class="dc-kpi-value">—</div></div></div>
+                            <div class="dc-kpi-card" id="dcKpi2"><div class="dc-kpi-icon" style="background:#e6f4ec;color:#107E3E">▦</div><div class="dc-kpi-body"><div class="dc-kpi-label">Unidades despachadas</div><div class="dc-kpi-value">—</div></div></div>
+                            <div class="dc-kpi-card" id="dcKpi3"><div class="dc-kpi-icon" style="background:#fdf0e7;color:#E9730C">◈</div><div class="dc-kpi-body"><div class="dc-kpi-label">Productos distintos</div><div class="dc-kpi-value">—</div></div></div>
+                            <div class="dc-kpi-card" id="dcKpi4"><div class="dc-kpi-icon" style="background:#f0eafa;color:#6B2FBE">✦</div><div class="dc-kpi-body"><div class="dc-kpi-label">Clientes atendidos</div><div class="dc-kpi-value">—</div></div></div>
+                        </div>
+
+                        <!-- Sección 2 + 3: Productos y Clientes -->
+                        <div class="dc-two-col">
+                            <!-- Productos más despachados -->
+                            <div class="card">
+                                <div class="card-header">
+                                    <div><div class="card-title">Productos más despachados</div></div>
+                                    <div style="display:flex;gap:8px;align-items:center">
+                                        <select class="form-select" id="dcTopProds" style="width:auto;font-size:12px" onchange="dcRefreshProds()">
+                                            <option value="10">Top 10</option>
+                                            <option value="20">Top 20</option>
+                                            <option value="30">Top 30</option>
+                                        </select>
+                                        <button class="btn btn-ghost btn-sm" onclick="exportDCTableCSV('productos')" title="Exportar CSV">↓ CSV</button>
+                                    </div>
+                                </div>
+                                <div class="dc-chart-wrap" style="height:220px"><canvas id="dcChartProds"></canvas></div>
+                                <div class="table-wrap" style="max-height:280px;overflow-y:auto">
+                                    <table><thead><tr>
+                                        <th style="width:36px">#</th><th>SKU</th><th>Nombre</th><th>Principio activo</th><th style="text-align:right">Unidades</th><th style="text-align:center">Movs.</th><th>Último despacho</th>
+                                    </tr></thead><tbody id="dcTbProductos"><tr class="empty-row"><td colspan="7">Sin datos</td></tr></tbody></table>
+                                </div>
+                            </div>
+
+                            <!-- Clientes / Destinatarios -->
+                            <div class="card">
+                                <div class="card-header">
+                                    <div><div class="card-title">Clientes / Destinatarios</div></div>
+                                    <div style="display:flex;gap:8px;align-items:center">
+                                        <select class="form-select" id="dcTopClients" style="width:auto;font-size:12px" onchange="dcRefreshClients()">
+                                            <option value="10">Top 10</option>
+                                            <option value="20">Top 20</option>
+                                            <option value="30">Top 30</option>
+                                        </select>
+                                        <button class="btn btn-ghost btn-sm" onclick="exportDCTableCSV('clientes')" title="Exportar CSV">↓ CSV</button>
+                                    </div>
+                                </div>
+                                <div class="dc-chart-wrap" style="height:220px"><canvas id="dcChartClients"></canvas></div>
+                                <div class="table-wrap" style="max-height:280px;overflow-y:auto">
+                                    <table><thead><tr>
+                                        <th style="width:36px">#</th><th>Cliente</th><th style="text-align:right">Unidades</th><th style="text-align:center">Despachos</th><th style="text-align:center">Prods.</th><th>Último despacho</th>
+                                    </tr></thead><tbody id="dcTbClientes"><tr class="empty-row"><td colspan="6">Sin datos</td></tr></tbody></table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Sección 4: Evolución temporal -->
+                        <div class="card" style="margin-bottom:20px">
+                            <div class="card-header">
+                                <div><div class="card-title">Evolución temporal de despachos</div><div class="card-subtitle" id="dcEvolSubtitle">Unidades despachadas en el período</div></div>
+                                <select class="form-select" id="dcAgrupacion" style="width:auto;font-size:12px" onchange="dcRefreshEvol()">
+                                    <option value="dia">Por día</option>
+                                    <option value="mes">Por mes</option>
+                                </select>
+                            </div>
+                            <div class="dc-chart-wrap" style="height:260px"><canvas id="dcChartEvol"></canvas></div>
+                        </div>
+
+                        <!-- Sección 5: Alertas comerciales -->
+                        <div class="card">
+                            <div class="card-header">
+                                <div><div class="card-title">Alertas comerciales</div><div class="card-subtitle">Stock sin rotación, bajo mínimo y próximos a vencer</div></div>
+                                <div style="display:flex;gap:8px;align-items:center">
+                                    <span style="font-size:12px;color:var(--text2)">Sin movimiento ≥</span>
+                                    <select class="form-select" id="dcAlertDias" style="width:auto;font-size:12px" onchange="renderDCAlertas()">
+                                        <option value="30">30 días</option>
+                                        <option value="60">60 días</option>
+                                        <option value="90">90 días</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div id="dcAlertasContainer" style="padding:4px 0 8px"></div>
                         </div>
                     </div>
                 </div>
@@ -1044,93 +1211,133 @@
     </div>
 </div>
 
-<!-- MOVIMIENTO -->
+<!-- MOVIMIENTO - DOCUMENTO MULTI-PRODUCTO -->
 <div id="movModal" class="modal">
-    <div class="modal-box">
+    <div class="modal-box" style="max-width:860px;width:95vw;max-height:92vh;overflow-y:auto">
         <div class="modal-header">
-            <div><div class="modal-title">Nuevo Movimiento</div><div class="modal-subtitle">Trazabilidad NT 147</div></div>
+            <div><div class="modal-title">Nuevo Documento de Movimiento</div><div class="modal-subtitle">Trazabilidad NT 147 — Múltiples productos por documento</div></div>
             <button class="modal-close" onclick="closeModal('movModal')">✕</button>
         </div>
-        <form onsubmit="saveMovimiento(event)">
-            <div id="movModal-err" class="form-error-banner"></div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label class="form-label">Tipo <span style="color:var(--danger)">*</span></label>
-                    <select class="form-select" id="m-tipo" onchange="onMovTipoChange()" required>
-                        <option value="">Seleccionar...</option>
-                        <option value="Entrada">Entrada</option>
-                        <option value="Salida">Salida</option>
-                        <option value="Ajuste">Ajuste</option>
-                    </select>
+        <div id="movModal-err" class="form-error-banner"></div>
+
+        <!-- ── CABECERA DEL DOCUMENTO ── -->
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Tipo <span style="color:var(--danger)">*</span></label>
+                <select class="form-select" id="md-tipo" required onchange="_refreshMiStatusField(this.value)">
+                    <option value="">Seleccionar...</option>
+                    <option value="Entrada">Entrada</option>
+                    <option value="Salida">Salida</option>
+                    <option value="Ajuste">Ajuste</option>
+                    <option value="Devolución">Devolución</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">N° Documento / Factura</label>
+                <input type="text" class="form-input" id="md-numdoc" placeholder="Ej: FAC-2024-001">
+            </div>
+        </div>
+        <!-- (campo de estado movido al formulario por ítem — mi-status-group) -->
+        <div id="md-status-row" style="display:none"><select id="md-status-prod" style="display:none"></select><div id="md-status-info" style="display:none"><div id="md-status-info-text"></div></div></div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Proveedor / Destinatario</label>
+                <input type="text" class="form-input" id="md-proveedor" placeholder="Nombre proveedor o destinatario">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Fecha del documento</label>
+                <input type="date" class="form-input" id="md-fecha">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Bodega <span style="color:var(--danger)">*</span></label>
+                <select class="form-select" id="md-bodega" required onchange="onDocBodegaChange()">
+                    <option value="">Seleccionar...</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Ubicación</label>
+                <div id="md-ubic-wrap">
+                    <input type="text" class="form-input" id="md-ubic" placeholder="Ej: Estante A-3">
                 </div>
+            </div>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Observaciones generales</label>
+            <textarea class="form-textarea" id="md-obs" placeholder="Notas adicionales..." rows="2"></textarea>
+        </div>
+
+        <!-- ── AGREGAR PRODUCTO ── -->
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin:16px 0">
+            <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">Agregar producto al documento</div>
+            <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">SKU <span style="color:var(--danger)">*</span></label>
                     <div class="sku-ac-wrap">
-                        <input type="text" class="form-input" id="m-sku" oninput="skuAutocomplete(this,'m-sku-dd')" onblur="setTimeout(()=>hideDropdown('m-sku-dd'),200)" placeholder="Escriba SKU o nombre del producto..." autocomplete="off" required>
-                        <div id="m-sku-dd" class="sku-dropdown" style="display:none"></div>
+                        <input type="text" class="form-input" id="mi-sku" oninput="skuAutocomplete(this,'mi-sku-dd')" onblur="setTimeout(()=>hideDropdown('mi-sku-dd'),200)" placeholder="SKU o nombre del producto..." autocomplete="off">
+                        <div id="mi-sku-dd" class="sku-dropdown" style="display:none"></div>
                     </div>
                 </div>
-            </div>
-            <div id="m-sku-info" style="margin-bottom:12px;display:none">
-                <div class="alert-banner success" style="padding:10px 12px">
-                    <div class="alert-banner-text" id="m-sku-info-text"></div>
+                <div class="form-group">
+                    <label class="form-label">Descripción</label>
+                    <input type="text" class="form-input" id="mi-desc" readonly placeholder="—" style="background:var(--bg3);color:var(--text2)">
                 </div>
             </div>
             <div class="form-row">
-                <div class="form-group">
+                <div class="form-group" id="mi-lote-group" style="flex:2">
                     <label class="form-label">Lote <span style="color:var(--danger)">*</span></label>
-                    <div id="m-lote-wrap"><input type="text" class="form-input" id="m-lote-texto" placeholder="Número de lote" required></div>
+                    <div id="mi-lote-wrap"><input type="text" class="form-input" id="mi-lote" placeholder="Número de lote"></div>
                 </div>
+                <div class="form-group" id="mi-vence-group">
+                    <label class="form-label">Fecha vencimiento</label>
+                    <input type="date" class="form-input" id="mi-vence">
+                </div>
+            </div>
+            <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">Cantidad <span style="color:var(--danger)">*</span></label>
-                    <input type="number" class="form-input" id="m-qty" min="1" required>
+                    <input type="number" class="form-input" id="mi-qty" min="1" placeholder="0">
                 </div>
             </div>
-            <div class="form-row">
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:8px">
                 <div class="form-group">
-                    <label class="form-label">Fecha de vencimiento <span style="color:var(--danger)">*</span></label>
-                    <input type="date" class="form-input" id="m-vence" required>
+                    <label class="form-label">Precio unit. (opc.)</label>
+                    <input type="number" class="form-input" id="mi-precio" min="0" placeholder="0">
                 </div>
-                <div class="form-group">
-                    <label class="form-label">Status / Calidad</label>
-                    <select class="form-select" id="m-status">
-                        <option value="Aprobado">Aprobado</option>
-                        <option value="Cuarentena">Cuarentena</option>
-                        <option value="Rechazado">Rechazado</option>
-                    </select>
+                <div class="form-group" id="mi-ubic-group" style="display:none">
+                    <label class="form-label" id="mi-ubic-label">Ubicación</label>
+                    <input type="text" class="form-input" id="mi-ubic" placeholder="Ej: Estante A-1">
                 </div>
-            </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label class="form-label">Bodega <span style="color:var(--danger)">*</span></label>
-                    <select class="form-select" id="m-bodega" required>
+                <div class="form-group" id="mi-status-group" style="display:none">
+                    <label class="form-label" id="mi-status-label">Estatus <span style="color:var(--danger)">*</span></label>
+                    <select class="form-select" id="mi-status">
                         <option value="">Seleccionar...</option>
                     </select>
                 </div>
-                <div class="form-group">
-                    <label class="form-label">Ubicación</label>
-                    <input type="text" class="form-input" id="m-ubic" placeholder="Ej: Estante A-3">
-                </div>
             </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label class="form-label">Proveedor / Cliente</label>
-                    <input type="text" class="form-input" id="m-proveedor" placeholder="Nombre">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Referencia (Factura / OC)</label>
-                    <input type="text" class="form-input" id="m-ref" placeholder="Ej: FAC-2024-001">
-                </div>
+            <div id="mi-sku-info" style="margin-bottom:8px;display:none">
+                <div class="alert-banner success" style="padding:8px 12px"><div class="alert-banner-text" id="mi-sku-info-text"></div></div>
             </div>
-            <div class="form-group">
-                <label class="form-label">Observaciones</label>
-                <textarea class="form-textarea" id="m-obs" placeholder="Notas adicionales..."></textarea>
+            <div id="mi-err" class="form-error-banner"></div>
+            <button type="button" class="btn btn-primary btn-sm" onclick="addItemToDoc()">+ Agregar producto</button>
+        </div>
+
+        <!-- ── TABLA RESUMEN ── -->
+        <div id="doc-items-wrap" style="display:none;margin-bottom:16px">
+            <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Productos en el documento</div>
+            <div class="table-wrap">
+                <table><thead><tr>
+                    <th>SKU</th><th>Descripción</th><th>Lote</th><th>Vencimiento</th><th>Qty</th><th>Precio unit.</th><th>Estatus</th><th>Ubicación</th><th></th>
+                </tr></thead><tbody id="tDocItems"></tbody></table>
             </div>
-            <div class="btn-row">
-                <button type="button" class="btn btn-ghost" onclick="closeModal('movModal')">Cancelar</button>
-                <button type="submit" class="btn btn-primary">Registrar movimiento</button>
-            </div>
-        </form>
+            <div id="doc-items-total" style="text-align:right;margin-top:8px;font-weight:600;color:var(--text2);font-size:13px"></div>
+        </div>
+
+        <div class="btn-row">
+            <button type="button" class="btn btn-ghost" onclick="closeModal('movModal')">Cancelar</button>
+            <button type="button" class="btn btn-primary" onclick="saveDocumento()" id="btn-save-doc" disabled>Finalizar y Guardar</button>
+        </div>
     </div>
 </div>
 
@@ -1203,6 +1410,126 @@
         <div class="btn-row">
             <button type="button" class="btn btn-ghost" onclick="closeModal('confirmModal')">Cancelar</button>
             <button type="button" class="btn btn-primary" id="confirmBtn">Confirmar</button>
+        </div>
+    </div>
+</div>
+
+<!-- DESTRUCCIÓN ISP -->
+<div id="destruccionModal" class="modal">
+    <div class="modal-box" style="max-width:640px;width:95vw">
+        <div class="modal-header">
+            <div><div class="modal-title" style="color:var(--danger)">⚠ Salida por Destrucción</div><div class="modal-subtitle">Producto Rechazado / Vencido — Acta ISP NT 147</div></div>
+            <button class="modal-close" onclick="closeModal('destruccionModal')">✕</button>
+        </div>
+        <div id="dest-err" class="form-error-banner"></div>
+        <div class="alert-banner danger" style="padding:10px 12px;margin-bottom:14px">
+            <div class="alert-banner-icon">⚠</div>
+            <div><div class="alert-banner-title" id="dest-header-title">Lote en estado no apto para despacho normal</div><div class="alert-banner-text" id="dest-header-desc">Este lote solo puede salir mediante proceso de destrucción certificada.</div></div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">SKU</label>
+                <input type="text" class="form-input" id="dest-sku" readonly style="background:var(--bg3)">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Lote</label>
+                <input type="text" class="form-input" id="dest-lote" readonly style="background:var(--bg3)">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Estado actual</label>
+                <input type="text" class="form-input" id="dest-estado" readonly style="background:var(--bg3);font-weight:600;color:var(--danger)">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Stock disponible</label>
+                <input type="text" class="form-input" id="dest-stock" readonly style="background:var(--bg3)">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Cantidad a destruir <span style="color:var(--danger)">*</span></label>
+                <input type="number" class="form-input" id="dest-qty" min="1" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Motivo de rechazo <span style="color:var(--danger)">*</span></label>
+                <select class="form-select" id="dest-motivo" required>
+                    <option value="">Seleccionar motivo...</option>
+                    <option value="Vencido">Vencido</option>
+                    <option value="Contaminación">Contaminación</option>
+                    <option value="Daño físico">Daño físico</option>
+                    <option value="Alerta ISP">Alerta ISP</option>
+                    <option value="Temperatura inadecuada">Temperatura inadecuada</option>
+                    <option value="Retiro de mercado">Retiro de mercado</option>
+                    <option value="Falsificado">Falsificado</option>
+                    <option value="Otro">Otro</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Empresa destructora <span style="color:var(--danger)">*</span></label>
+                <input type="text" class="form-input" id="dest-empresa" placeholder="Nombre de la empresa certificada" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">N° Acta de destrucción <span style="color:var(--danger)">*</span></label>
+                <input type="text" class="form-input" id="dest-acta" placeholder="Ej: ACTA-2026-001" required>
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Fecha programada destrucción <span style="color:var(--danger)">*</span></label>
+                <input type="date" class="form-input" id="dest-fecha" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Responsable QA autoriza <span style="color:var(--danger)">*</span></label>
+                <input type="text" class="form-input" id="dest-resp" placeholder="Nombre y cargo" required>
+            </div>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Observaciones <span style="color:var(--danger)">*</span></label>
+            <textarea class="form-textarea" id="dest-obs" placeholder="Describa el motivo detallado, condiciones del producto, etc." required></textarea>
+        </div>
+        <div class="btn-row">
+            <button type="button" class="btn btn-ghost" onclick="closeModal('destruccionModal')">Cancelar</button>
+            <button type="button" class="btn btn-danger" onclick="saveDestruccion()" style="background:var(--danger);color:white;border-color:var(--danger)">Registrar destrucción y generar Acta PDF</button>
+        </div>
+    </div>
+</div>
+
+<!-- RECHAZO DE CUARENTENA -->
+<div id="rechazarCuarModal" class="modal">
+    <div class="modal-box" style="max-width:480px">
+        <div class="modal-header">
+            <div><div class="modal-title">Rechazar lote de cuarentena</div><div class="modal-subtitle">El lote quedará en estado RECHAZADO</div></div>
+            <button class="modal-close" onclick="closeModal('rechazarCuarModal')">✕</button>
+        </div>
+        <input type="hidden" id="rcq-id">
+        <div class="form-group">
+            <label class="form-label">Motivo del rechazo <span style="color:var(--danger)">*</span></label>
+            <select class="form-select" id="rcq-motivo" required>
+                <option value="">Seleccionar...</option>
+                <option value="Contaminación">Contaminación</option>
+                <option value="Vencido">Vencido</option>
+                <option value="Daño físico">Daño físico</option>
+                <option value="Alerta ISP">Alerta ISP</option>
+                <option value="Temperatura inadecuada">Temperatura inadecuada</option>
+                <option value="Falsificado">Falsificado</option>
+                <option value="Retiro de mercado">Retiro de mercado</option>
+                <option value="Otro">Otro</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Responsable QA <span style="color:var(--danger)">*</span></label>
+            <input type="text" class="form-input" id="rcq-resp" placeholder="Nombre del responsable que rechaza" required>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Observaciones</label>
+            <textarea class="form-textarea" id="rcq-obs" placeholder="Detalle adicional..."></textarea>
+        </div>
+        <div class="btn-row">
+            <button type="button" class="btn btn-ghost" onclick="closeModal('rechazarCuarModal')">Cancelar</button>
+            <button type="button" class="btn" style="background:var(--danger);color:white;border-color:var(--danger)" onclick="confirmarRechazoCuarentena()">Confirmar rechazo</button>
         </div>
     </div>
 </div>
@@ -1287,6 +1614,7 @@ const db = firebase.database();
 let currentUser = null, userPerfil = null;
 let data = { productos:{}, bodegas:{}, movimientos:{}, cuarentena:{}, devoluciones:{}, auditoria:{} };
 let selectedBodega = 'TOTAL';
+let movDocItems = [];
 
 // ══ AUTH ══
 document.addEventListener('DOMContentLoaded', () => {
@@ -1365,16 +1693,17 @@ function navigateTo(page) {
     if (pg) pg.classList.add('active');
     const lnk = document.querySelector(`.nav-link[data-page="${page}"]`);
     if (lnk) lnk.classList.add('active');
-    const titles = { dashboard:'Dashboard', productos:'Productos Maestro', stock:'Stock Actual', bodegas:'Bodegas', movimientos:'Movimientos', cuarentena:'Cuarentena', devoluciones:'Devoluciones', retiro:'Retiro de Mercado', trazabilidad:'Trazabilidad de Lotes', alertas:'Alertas', reportes:'Reportes ISP', auditoria:'Auditoría' };
+    const titles = { dashboard:'Dashboard', productos:'Productos Maestro', stock:'Stock Actual', bodegas:'Bodegas', movimientos:'Movimientos', cuarentena:'Cuarentena', devoluciones:'Devoluciones', retiro:'Retiro de Mercado', trazabilidad:'Trazabilidad de Lotes', alertas:'Alertas', reportes:'Reportes ISP', auditoria:'Auditoría', dashComercial:'Dashboard Comercial' };
     document.getElementById('pageTitle').textContent = titles[page] || page;
     if (page === 'alertas') renderAlertas();
     if (page === 'auditoria') renderAuditoria();
+    if (page === 'dashComercial') renderDashComercial();
 }
 
 // ══ DATA LISTENERS ══
 function attachListeners() {
     const uid = currentUser.uid;
-    db.ref(`usuarios/${uid}/productos`).on('value', s => { data.productos = s.val()||{}; renderProductos(); updateStats(); });
+    db.ref(`usuarios/${uid}/productos`).on('value', s => { data.productos = s.val()||{}; renderProductos(); updateStats(); renderStock(); });
     db.ref(`usuarios/${uid}/bodegas`).on('value', s => { data.bodegas = s.val()||{}; renderBodegas(); renderBodegaBtns(); updateBodegaSelect(); updateStats(); });
     db.ref(`usuarios/${uid}/movimientos`).on('value', s => { data.movimientos = s.val()||{}; renderMovimientos(); renderStock(); updateStats(); });
     db.ref(`usuarios/${uid}/cuarentena`).on('value', s => { data.cuarentena = s.val()||{}; renderCuarentena(); updateStats(); });
@@ -1420,20 +1749,45 @@ function updateStats() {
 // ══ STOCK CALC (FEFO) ══
 function calcStock() {
     const stock = {};
-    Object.values(data.movimientos||{}).forEach(m => {
+    const movsList = Object.values(data.movimientos||{}).sort((a,b) => new Date(a.fecha)-new Date(b.fecha));
+    movsList.forEach(m => {
         const key = `${m.sku}|${m.lote}|${m.bodega||''}|${m.ubicacion||''}`;
         if (m.tipo === 'Entrada') {
-            if (!stock[key]) stock[key] = { sku:m.sku, lote:m.lote, cantidad:0, vence:m.vence, bodega:m.bodega||'', ubicacion:m.ubicacion||'', status:m.status||'Aprobado' };
+            if (!stock[key]) stock[key] = { sku:m.sku, lote:m.lote, cantidad:0, vence:m.vence, bodega:m.bodega||'', ubicacion:m.ubicacion||'', status:'Aprobado' };
             stock[key].cantidad += parseInt(m.cantidad)||0;
             stock[key].status = m.status || 'Aprobado';
-        } else if (m.tipo === 'Salida') {
+        } else if (m.tipo === 'Salida' || m.tipo === 'Destrucción') {
             if (stock[key]) stock[key].cantidad -= parseInt(m.cantidad)||0;
         } else if (m.tipo === 'Ajuste') {
-            if (!stock[key]) stock[key] = { sku:m.sku, lote:m.lote, cantidad:0, vence:m.vence, bodega:m.bodega||'', ubicacion:m.ubicacion||'', status:m.status||'Aprobado' };
+            if (!stock[key]) stock[key] = { sku:m.sku, lote:m.lote, cantidad:0, vence:m.vence, bodega:m.bodega||'', ubicacion:m.ubicacion||'', status:'Aprobado' };
             stock[key].cantidad += parseInt(m.cantidad)||0;
+            stock[key].status = m.status || 'Aprobado';
+        } else if (m.tipo === 'CambioEstado') {
+            if (stock[key]) stock[key].status = m.status || stock[key].status;
         }
     });
     return stock;
+}
+
+function getLoteStatus(s) {
+    if (s.vence) {
+        const hoy = new Date(); hoy.setHours(0,0,0,0);
+        if (new Date(s.vence + 'T00:00:00') < hoy) return 'Vencido';
+    }
+    return s.status || 'Aprobado';
+}
+
+function statusBadgeHTML(st) {
+    const map = {
+        'Aprobado':          { cls:'badge-success', icon:'✓' },
+        'Cuarentena':        { cls:'badge-warning',  icon:'🔒' },
+        'Rechazado':         { cls:'badge-danger',   icon:'⚠' },
+        'Vencido':           { cls:'badge-gray',     icon:'⏱' },
+        'Retiro de mercado': { cls:'badge-danger',   icon:'⚠' },
+        'Falsificado':       { cls:'badge-danger',   icon:'⛔' }
+    };
+    const d = map[st] || { cls:'badge-gray', icon:'' };
+    return `<span class="badge ${d.cls}">${d.icon} ${st}</span>`;
 }
 
 // ══ ALERTAS CALC ══
@@ -1608,161 +1962,555 @@ function selBodega(nombre) {
 }
 
 function updateBodegaSelect() {
-    const sel = document.getElementById('m-bodega');
-    const cur = sel.value;
-    sel.innerHTML = '<option value="">Seleccionar...</option>';
-    Object.values(data.bodegas||{}).forEach(b => {
-        const o = document.createElement('option'); o.value = b.nombre; o.textContent = b.nombre; sel.appendChild(o);
+    ['md-bodega'].forEach(selId => {
+        const sel = document.getElementById(selId);
+        if (!sel) return;
+        const cur = sel.value;
+        sel.innerHTML = '<option value="">Seleccionar...</option>';
+        Object.values(data.bodegas||{}).forEach(b => {
+            const o = document.createElement('option'); o.value = b.nombre; o.textContent = b.nombre; sel.appendChild(o);
+        });
+        if (cur) sel.value = cur;
     });
-    if (cur) sel.value = cur;
 }
 
 // ══ MOVIMIENTOS ══
-function onMovTipoChange() {
-    const tipo = document.getElementById('m-tipo').value;
-    const sku = document.getElementById('m-sku').value.trim().toUpperCase();
-    if (tipo === 'Salida' && sku) loadLotesDisponibles(sku);
-    else resetLoteInput();
+function onDocBodegaChange() {
+    const nombre = document.getElementById('md-bodega').value;
+    const bodega = Object.values(data.bodegas || {}).find(b => b.nombre === nombre);
+    const wrap = document.getElementById('md-ubic-wrap');
+    if (bodega && Array.isArray(bodega.ubicaciones) && bodega.ubicaciones.length) {
+        const sel = document.createElement('select');
+        sel.className = 'form-select'; sel.id = 'md-ubic';
+        sel.innerHTML = '<option value="">Seleccionar ubicación...</option>';
+        bodega.ubicaciones.forEach(u => {
+            const opt = document.createElement('option'); opt.value = u; opt.textContent = u; sel.appendChild(opt);
+        });
+        wrap.innerHTML = ''; wrap.appendChild(sel);
+    } else {
+        wrap.innerHTML = '<input type="text" class="form-input" id="md-ubic" placeholder="Ej: Estante A-3">';
+    }
 }
 
-function onSKUChange() {
-    const sku = document.getElementById('m-sku').value.trim().toUpperCase();
-    document.getElementById('m-sku').value = sku;
+function onMdTipoChange() {
+    const tipo = document.getElementById('md-tipo').value;
+
+    _refreshMiStatusField(tipo);
+
+    // Ocultar fecha vencimiento en Salida (se toma del lote existente)
+    const venceGroup = document.getElementById('mi-vence-group');
+    if (venceGroup) venceGroup.style.display = tipo === 'Salida' ? 'none' : '';
+
+    resetItemForm();
+    movDocItems = [];
+    renderDocItems();
+}
+
+// Actualiza opciones y visibilidad del campo Estatus por ítem
+function _refreshMiStatusField(tipo) {
+    const miStatusGroup = document.getElementById('mi-status-group');
+    const miStatus      = document.getElementById('mi-status');
+    const miUbicGroup   = document.getElementById('mi-ubic-group');
+    const miUbicLabel   = document.getElementById('mi-ubic-label');
+    if (!miStatusGroup || !miStatus) return;
+
+    if (tipo === 'Entrada') {
+        miStatus.innerHTML =
+            '<option value="Aprobado">✓ Aprobado</option>' +
+            '<option value="Cuarentena">🔒 Cuarentena</option>' +
+            '<option value="Falsificado">⛔ Falsificado</option>';
+        miStatus.value = 'Aprobado';
+        if (miUbicGroup)  miUbicGroup.style.display  = 'block';
+        if (miStatusGroup) miStatusGroup.style.display = 'block';
+        if (miUbicLabel)  miUbicLabel.innerHTML = 'Ubicación <span style="color:var(--danger)">*</span>';
+    } else if (tipo === 'Ajuste') {
+        miStatus.innerHTML =
+            '<option value="Cuarentena">🔒 Cuarentena</option>' +
+            '<option value="Rechazado">⚠ Rechazado</option>' +
+            '<option value="Falsificado">⛔ Falsificado</option>' +
+            '<option value="Vencido">⏱ Vencido</option>';
+        miStatus.value = 'Cuarentena';
+        if (miUbicGroup)  miUbicGroup.style.display  = 'block';
+        if (miStatusGroup) miStatusGroup.style.display = 'block';
+        if (miUbicLabel)  miUbicLabel.innerHTML = 'Ubicación <span style="color:var(--text3);font-weight:400">(opc.)</span>';
+    } else if (tipo === 'Devolución') {
+        miStatus.innerHTML =
+            '<option value="Cuarentena">🔒 Cuarentena</option>' +
+            '<option value="Aprobado">✓ Aprobado</option>' +
+            '<option value="Rechazado">⚠ Rechazado</option>';
+        miStatus.value = 'Cuarentena';
+        if (miUbicGroup)  miUbicGroup.style.display  = 'block';
+        if (miStatusGroup) miStatusGroup.style.display = 'block';
+        if (miUbicLabel)  miUbicLabel.innerHTML = 'Ubicación <span style="color:var(--text3);font-weight:400">(opc.)</span>';
+    } else {
+        // Salida u otro: ocultar ambos campos
+        if (miStatusGroup) miStatusGroup.style.display = 'none';
+        if (miUbicGroup)  miUbicGroup.style.display  = 'none';
+    }
+}
+
+// Alias para compatibilidad con el selector de tipo
+function actualizarOpcionesStatus() { _refreshMiStatusField(document.getElementById('md-tipo')?.value || ''); }
+
+function onMiSKUChange() {
+    const sku = document.getElementById('mi-sku').value.trim().toUpperCase();
+    document.getElementById('mi-sku').value = sku;
     const prod = data.productos[sku];
-    const info = document.getElementById('m-sku-info');
+    const info = document.getElementById('mi-sku-info');
+    const descEl = document.getElementById('mi-desc');
     if (prod) {
-        document.getElementById('m-sku-info-text').innerHTML = `<strong style="color:var(--text)">${prod.descripcion}</strong> — ${prod.tipo} · ${prod.fabricante}${prod.registroSanitario ? ` · RS: <span class="rs-number">${prod.registroSanitario}</span>` : ''}`;
+        if (descEl) descEl.value = prod.descripcion || '';
+        document.getElementById('mi-sku-info-text').innerHTML = `<strong style="color:var(--text)">${prod.descripcion}</strong> — ${prod.tipo} · ${prod.fabricante}${prod.registroSanitario ? ` · RS: <span class="rs-number">${prod.registroSanitario}</span>` : ''}`;
         info.style.display = 'block';
+        const tipo = document.getElementById('md-tipo').value;
+        if (tipo === 'Salida') loadMiLotesDisponibles(sku);
     } else if (sku) {
-        document.getElementById('m-sku-info-text').innerHTML = `<span style="color:var(--danger)">⚠ SKU no encontrado en maestro de productos</span>`;
+        if (descEl) descEl.value = '';
+        document.getElementById('mi-sku-info-text').innerHTML = `<span style="color:var(--danger)">⚠ SKU no encontrado en maestro de productos</span>`;
         info.style.display = 'block';
-    } else { info.style.display = 'none'; }
-    const tipo = document.getElementById('m-tipo').value;
-    if (tipo === 'Salida' && sku && prod) loadLotesDisponibles(sku);
+    } else {
+        if (descEl) descEl.value = '';
+        info.style.display = 'none';
+    }
 }
 
-function resetLoteInput() {
-    document.getElementById('m-lote-wrap').innerHTML = '<input type="text" class="form-input" id="m-lote-texto" placeholder="Número de lote" required>';
-}
-
-function getLoteValue() {
-    return (document.getElementById('m-lote-texto') || document.getElementById('m-lote-select'))?.value || '';
-}
-
-function loadLotesDisponibles(sku) {
+function loadMiLotesDisponibles(sku) {
     const stock = calcStock();
-    const lotes = Object.values(stock).filter(s => s.sku === sku && s.cantidad > 0)
-        .sort((a, b) => new Date(a.vence) - new Date(b.vence)); // FEFO
+    const lotes = Object.values(stock)
+        .filter(s => s.sku === sku && s.cantidad > 0)
+        .sort((a, b) => new Date(a.vence||'9999') - new Date(b.vence||'9999'));
 
-    const wrap = document.getElementById('m-lote-wrap');
-    const sel = document.createElement('select');
-    sel.className = 'form-select'; sel.id = 'm-lote-select'; sel.required = true;
-    sel.innerHTML = '<option value="">Seleccionar lote (FEFO)...</option>';
-    if (!lotes.length) sel.innerHTML += '<option disabled>Sin stock disponible</option>';
-    lotes.forEach(l => {
-        const dias = Math.ceil((new Date(l.vence + 'T00:00:00') - new Date()) / 86400000);
-        const opt = document.createElement('option');
-        opt.value = l.lote;
-        opt.textContent = `${l.lote} — Vence: ${fmtDate(l.vence)} (${dias}d) — Stock: ${l.cantidad}`;
-        sel.appendChild(opt);
-    });
-    sel.onchange = () => {
-        const sel2 = lotes.find(l => l.lote === sel.value);
-        if (sel2) document.getElementById('m-vence').value = sel2.vence;
-    };
-    wrap.innerHTML = ''; wrap.appendChild(sel);
-    // Auto-select el primero (FEFO)
-    if (lotes.length) { sel.value = lotes[0].lote; document.getElementById('m-vence').value = lotes[0].vence; }
-}
+    const wrap = document.getElementById('mi-lote-wrap');
 
-function saveMovimiento(e) {
-    e.preventDefault();
-    const sku = document.getElementById('m-sku').value.trim().toUpperCase();
-    const lote = getLoteValue().trim();
-    const tipo = document.getElementById('m-tipo').value;
-    const qty = parseInt(document.getElementById('m-qty').value);
-    const vence = document.getElementById('m-vence').value;
-
-    // Validaciones
-    if (!data.productos[sku]) { showFormError('movModal-err', `SKU "${sku}" no existe en el maestro de productos. Regístrelo primero.`); return; }
-    if (!lote) { showFormError('movModal-err', 'Debe ingresar o seleccionar un número de lote.'); return; }
-    if (!tipo) { showFormError('movModal-err', 'Seleccione el tipo de movimiento.'); return; }
-    if (!qty || qty < 1) { showFormError('movModal-err', 'La cantidad debe ser mayor a cero.'); return; }
-
-    // Validación fecha vencimiento
-    if (vence) {
-        const venceDate = new Date(vence + 'T00:00:00');
-        const hoy = new Date(); hoy.setHours(0,0,0,0);
-        if (tipo === 'Entrada' && venceDate < hoy) {
-            showFormError('movModal-err', 'La fecha de vencimiento no puede ser una fecha pasada para una entrada. Verifique el dato.');
-            return;
-        }
-    } else if (tipo === 'Entrada') {
-        showFormError('movModal-err', 'La fecha de vencimiento es obligatoria para registrar una entrada.');
+    if (!lotes.length) {
+        wrap.innerHTML = '<div class="alert-banner danger" style="padding:8px 12px"><div class="alert-banner-text">Sin stock disponible para este SKU</div></div><input type="hidden" id="mi-lote" value=""><input type="hidden" id="mi-lote-status" value="">';
         return;
     }
 
-    const prod = data.productos[sku];
-    const mov = {
-        tipo, sku, lote,
-        descripcion: prod?.descripcion || '',
-        cantidad: qty,
-        vence,
-        status: document.getElementById('m-status').value,
-        bodega: document.getElementById('m-bodega').value,
-        ubicacion: document.getElementById('m-ubic').value.trim(),
-        proveedor: document.getElementById('m-proveedor').value.trim(),
-        referencia: document.getElementById('m-ref').value.trim(),
-        observaciones: document.getElementById('m-obs').value.trim(),
-        fecha: new Date().toISOString(),
-        usuario: currentUser.email
-    };
+    let html = '<input type="hidden" id="mi-lote" value=""><input type="hidden" id="mi-lote-status" value=""><div class="lote-selector-list">';
+    lotes.forEach(l => {
+        const st = getLoteStatus(l);
+        const dias = l.vence ? Math.ceil((new Date(l.vence+'T00:00:00') - new Date()) / 86400000) : null;
+        const isCuarentena  = st === 'Cuarentena';
+        const isDestruccion = st === 'Rechazado' || st === 'Vencido' || st === 'Retiro de mercado' || st === 'Falsificado';
+        const cls = st === 'Aprobado' ? 'lote-ok' : isCuarentena ? 'lote-cuarentena' : 'lote-rechazado';
+        const disabledCls = isCuarentena ? 'lote-disabled' : '';
+        let onclick = '';
+        if (!isCuarentena) {
+            onclick = isDestruccion
+                ? `onmousedown="selectLoteDestruccion('${sku}','${l.lote}','${l.vence||''}','${st}',${l.cantidad})"`
+                : `onmousedown="selectLoteNormal('${l.lote}','${l.vence||''}','${st}',${l.cantidad})"`;
+        }
+        const diasLabel = dias !== null ? (dias < 0 ? '<span style="color:var(--danger);font-weight:600">VENCIDO</span>' : `${dias}d`) : '—';
+        html += `<div class="lote-selector-item ${cls} ${disabledCls}" ${onclick} id="lotecard-${l.lote.replace(/[^a-zA-Z0-9]/g,'_')}">
+            <div class="lote-sel-top">
+                <span class="text-mono" style="font-weight:600;font-size:13px">${l.lote}</span>
+                ${statusBadgeHTML(st)}
+            </div>
+            <div class="lote-sel-meta">
+                Vence: ${l.vence ? fmtDate(l.vence) : '—'} (${diasLabel}) · Stock disponible: <strong>${l.cantidad}</strong>
+                ${isCuarentena ? '<div class="lote-warn-msg" style="color:var(--warning)">🔒 En cuarentena — No puede despacharse. Liberar o rechazar en módulo Cuarentena.</div>' : ''}
+                ${isDestruccion ? '<div class="lote-warn-msg" style="color:var(--danger)">⚠ Solo permite salida por destrucción — Click para registrar Acta de Destrucción ISP</div>' : ''}
+            </div>
+        </div>`;
+    });
+    html += '</div>';
+    wrap.innerHTML = html;
+}
+
+function selectLoteNormal(lote, vence, status, stock) {
+    document.getElementById('mi-lote').value = lote;
+    document.getElementById('mi-lote-status').value = status;
+    if (vence) document.getElementById('mi-vence').value = vence;
+    // Highlight selected
+    document.querySelectorAll('.lote-selector-item').forEach(el => el.classList.remove('lote-sel-active'));
+    const card = document.getElementById('lotecard-' + lote.replace(/[^a-zA-Z0-9]/g,'_'));
+    if (card) card.classList.add('lote-sel-active');
+}
+
+function selectLoteDestruccion(sku, lote, vence, status, stockQty) {
+    // Open destrucción modal
+    document.getElementById('dest-sku').value = sku;
+    document.getElementById('dest-sku').dataset.cuarId = ''; // not from cuarentena
+    document.getElementById('dest-lote').value = lote;
+    document.getElementById('dest-estado').value = status;
+    document.getElementById('dest-stock').value = stockQty + ' unidades';
+    document.getElementById('dest-qty').value = stockQty;
+    document.getElementById('dest-qty').max = stockQty;
+    document.getElementById('dest-header-title').textContent = `Lote ${lote} — Estado: ${status}`;
+    document.getElementById('dest-header-desc').textContent = 'Este lote no puede despacharse normalmente. Complete el acta de destrucción para registrar su salida.';
+    ['dest-motivo','dest-empresa','dest-acta','dest-resp','dest-obs'].forEach(id => { const el=document.getElementById(id); if(el&&el.tagName==='SELECT') el.value=''; else if(el) el.value=''; });
+    const fechaEl = document.getElementById('dest-fecha');
+    if (fechaEl) fechaEl.value = new Date().toISOString().split('T')[0];
+    if (status === 'Vencido') {
+        document.getElementById('dest-motivo').value = 'Vencido';
+    }
+    document.getElementById('dest-err').style.display = 'none';
+    openModal('destruccionModal');
+}
+
+function addItemToDoc() {
+    const sku    = document.getElementById('mi-sku').value.trim().toUpperCase();
+    const loteEl = document.getElementById('mi-lote');
+    const lote   = loteEl ? loteEl.value.trim() : '';
+    const vence  = document.getElementById('mi-vence')?.value || '';
+    const qty    = parseInt(document.getElementById('mi-qty').value) || 0;
+    const precio = parseFloat(document.getElementById('mi-precio').value) || 0;
+    const tipo   = document.getElementById('md-tipo').value;
+    const miUbic = (document.getElementById('mi-ubic')?.value || '').trim();
+
+    if (!tipo)  { showFormError('movModal-err', 'Seleccione el tipo de movimiento primero.'); return; }
+    if (!sku)   { showFormError('mi-err', 'Ingrese el SKU del producto.'); return; }
+    if (!data.productos[sku]) { showFormError('mi-err', `SKU "${sku}" no existe en el maestro de productos.`); return; }
+    if (!lote)  { showFormError('mi-err', tipo === 'Salida' ? 'Seleccione un lote de la lista.' : 'Ingrese el número de lote.'); return; }
+    if (!qty || qty < 1) { showFormError('mi-err', 'La cantidad debe ser mayor a cero.'); return; }
+
+    if (tipo === 'Entrada') {
+        if (!vence) { showFormError('mi-err', 'La fecha de vencimiento es obligatoria para entradas.'); return; }
+        const vD = new Date(vence + 'T00:00:00'); const hoy = new Date(); hoy.setHours(0,0,0,0);
+        if (vD < hoy) { showFormError('mi-err', 'La fecha de vencimiento no puede ser pasada para una entrada.'); return; }
+        if (!miUbic) { showFormError('mi-err', 'La ubicación es obligatoria para entradas.'); return; }
+    }
+
+    // Estatus: obligatorio para Entrada y Ajuste
+    let itemStatus = 'Aprobado';
+    if (tipo === 'Entrada' || tipo === 'Ajuste') {
+        itemStatus = document.getElementById('mi-status')?.value || '';
+        if (!itemStatus) { showFormError('mi-err', 'Seleccione el estatus del producto.'); return; }
+    }
+
+    // Ubicación del ítem (para Salida la tomamos del stock para mantener consistencia de clave)
+    let itemUbic = miUbic;
 
     if (tipo === 'Salida') {
         const stock = calcStock();
-        const disponible = Object.values(stock).filter(s => s.sku === sku && s.lote === lote).reduce((a, s) => a + s.cantidad, 0);
-        if (qty > disponible) {
-            showFormError('movModal-err', `Stock insuficiente. Disponible para lote ${lote}: ${disponible} ud. Está intentando sacar ${qty} ud.`);
+        const loteStock = Object.values(stock).find(s => s.sku === sku && s.lote === lote);
+        if (!loteStock) { showFormError('mi-err', 'Lote no encontrado en stock.'); return; }
+        const st = getLoteStatus(loteStock);
+        itemUbic = loteStock.ubicacion || '';  // clave consistente con entrada
+
+        if (st === 'Cuarentena') {
+            showFormError('mi-err', '🔒 Producto en CUARENTENA — No se puede despachar. Debe ser liberado o rechazado por el responsable QA antes de continuar.');
             return;
         }
-        // Confirmación para salidas
+        if (st === 'Rechazado' || st === 'Vencido' || st === 'Retiro de mercado' || st === 'Falsificado') {
+            showFormError('mi-err', `⚠ Lote en estado "${st}" — Solo permite salida por destrucción. Seleccione el lote en la lista para abrir el Acta de Destrucción.`);
+            return;
+        }
+        const enDoc = movDocItems.filter(i => i.sku === sku && i.lote === lote).reduce((a, i) => a + i.qty, 0);
+        const disponible = Object.values(stock)
+            .filter(s => s.sku === sku && s.lote === lote && getLoteStatus(s) === 'Aprobado')
+            .reduce((a, s) => a + s.cantidad, 0);
+        if (qty + enDoc > disponible) {
+            showFormError('mi-err', `Stock insuficiente. Disponible aprobado para lote ${lote}: ${disponible} ud. Ya en documento: ${enDoc}. Máximo: ${disponible - enDoc} ud.`);
+            return;
+        }
+    }
+
+    const prod = data.productos[sku];
+    const itemData = { sku, descripcion: prod?.descripcion || '', lote, vence, qty, precio, status: itemStatus, ubicacion: itemUbic };
+
+    // Alerta especial para Falsificado
+    if (itemStatus === 'Falsificado') {
         showConfirm(
-            'Confirmar Salida',
-            'Revise los datos antes de confirmar',
-            `<strong style="font-size:14px">${prod?.descripcion||sku}</strong><br>
-             <span style="color:var(--text3)">SKU:</span> <strong>${sku}</strong> &nbsp;·&nbsp; <span style="color:var(--text3)">Lote:</span> <strong>${lote}</strong><br>
-             <span style="color:var(--text3)">Cantidad:</span> <strong style="color:var(--danger)">${qty} ud.</strong><br>
-             <span style="color:var(--text3)">Bodega:</span> ${mov.bodega||'—'} &nbsp;·&nbsp; <span style="color:var(--text3)">Destino:</span> ${mov.proveedor||'—'}<br>
-             <span style="color:var(--text3)">Referencia:</span> ${mov.referencia||'—'}`,
-            'Confirmar Salida',
+            '⚠ Advertencia: Producto Falsificado',
+            'Esta acción quedará registrada en auditoría',
+            '⚠️ Está registrando un producto como <strong>FALSIFICADO</strong>. Esta acción quedará registrada en auditoría e informada al responsable QA. ¿Confirma el registro?',
+            'Confirmar — Registrar Falsificado',
             'btn-danger',
-            () => persistMovimiento(mov)
+            () => { movDocItems.push(itemData); renderDocItems(); resetItemForm(); logAudit('Alerta Falsificado', 'Movimientos', sku, lote, 'Ítem registrado como FALSIFICADO'); }
         );
     } else {
-        persistMovimiento(mov);
+        movDocItems.push(itemData);
+        renderDocItems();
+        resetItemForm();
     }
 }
 
-function persistMovimiento(mov) {
-    db.ref(`usuarios/${currentUser.uid}/movimientos/${Date.now()}`).set(mov)
-        .then(() => { logAudit(mov.tipo, 'Movimientos', mov.sku, mov.lote, `Qty: ${mov.cantidad} | Ref: ${mov.referencia}`); closeModal('movModal'); })
-        .catch(err => showFormError('movModal-err', 'Error al guardar: ' + err.message));
+function removeItemFromDoc(idx) {
+    movDocItems.splice(idx, 1);
+    renderDocItems();
+}
+
+function renderDocItems() {
+    const wrap = document.getElementById('doc-items-wrap');
+    const tb = document.getElementById('tDocItems');
+    const totalEl = document.getElementById('doc-items-total');
+    const saveBtn = document.getElementById('btn-save-doc');
+    if (!movDocItems.length) { wrap.style.display = 'none'; if (saveBtn) saveBtn.disabled = true; return; }
+    wrap.style.display = 'block';
+    if (saveBtn) saveBtn.disabled = false;
+    const totalQty = movDocItems.reduce((a, i) => a + i.qty, 0);
+    const totalPrecio = movDocItems.reduce((a, i) => a + (i.precio * i.qty), 0);
+    tb.innerHTML = movDocItems.map((item, idx) => `
+        <tr>
+            <td class="text-mono" style="color:var(--accent2)">${item.sku}</td>
+            <td>${item.descripcion||'—'}</td>
+            <td class="text-mono" style="font-size:11px">${item.lote}</td>
+            <td>${item.vence ? fmtDate(item.vence) : '—'}</td>
+            <td style="font-weight:600;color:var(--text)">${item.qty}</td>
+            <td>${item.precio > 0 ? '$' + item.precio.toLocaleString('es-CL') : '—'}</td>
+            <td>${statusBadgeHTML(item.status || 'Aprobado')}</td>
+            <td style="font-size:11px;color:var(--text2)">${item.ubicacion||'—'}</td>
+            <td><button class="btn btn-sm btn-danger-sm" onclick="removeItemFromDoc(${idx})">✕</button></td>
+        </tr>`).join('');
+    let tot = `Total: <strong>${totalQty}</strong> unidades`;
+    if (totalPrecio > 0) tot += ` · Total neto: <strong>$${totalPrecio.toLocaleString('es-CL')}</strong>`;
+    totalEl.innerHTML = tot;
+}
+
+function resetItemForm() {
+    ['mi-sku','mi-desc','mi-vence','mi-qty','mi-precio','mi-ubic'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    document.getElementById('mi-lote-wrap').innerHTML = '<input type="text" class="form-input" id="mi-lote" placeholder="Número de lote">';
+    const info = document.getElementById('mi-sku-info'); if (info) info.style.display = 'none';
+    const err = document.getElementById('mi-err'); if (err) err.style.display = 'none';
+    // Restore Estatus field visibility and default value for current tipo
+    const tipo = document.getElementById('md-tipo')?.value || '';
+    _refreshMiStatusField(tipo);
+}
+
+function saveDocumento() {
+    const tipo = document.getElementById('md-tipo').value;
+    const numDoc = document.getElementById('md-numdoc').value.trim();
+    const proveedor = document.getElementById('md-proveedor').value.trim();
+    const fechaDoc = document.getElementById('md-fecha').value;
+    const bodega = document.getElementById('md-bodega').value;
+    const ubicEl = document.getElementById('md-ubic'); const ubic = ubicEl ? ubicEl.value.trim() : '';
+    const obs = document.getElementById('md-obs').value.trim();
+
+    if (!tipo) { showFormError('movModal-err', 'Seleccione el tipo de movimiento.'); return; }
+    if (!bodega) { showFormError('movModal-err', 'Seleccione la bodega.'); return; }
+    if (!movDocItems.length) { showFormError('movModal-err', 'Debe agregar al menos un producto al documento.'); return; }
+
+    const documentoId = numDoc || `DOC-${Date.now()}`;
+    const fechaISO = new Date().toISOString();
+    const uid = currentUser.uid;
+    const usuario = currentUser.email;
+    const totalUnidades = movDocItems.reduce((a, i) => a + i.qty, 0);
+
+    const confirmBody = `
+        <strong>${tipo}: ${movDocItems.length} producto(s)</strong><br>
+        <span style="color:var(--text3)">Documento:</span> <strong>${documentoId}</strong><br>
+        <span style="color:var(--text3)">Bodega:</span> ${bodega}<br>
+        <span style="color:var(--text3)">Proveedor/Destino:</span> ${proveedor||'—'}<br>
+        <span style="color:var(--text3)">Total unidades:</span> <strong>${totalUnidades}</strong>`;
+
+    showConfirm(
+        `Confirmar ${tipo}`,
+        'Revise los datos antes de guardar',
+        confirmBody,
+        `Guardar ${tipo}`,
+        tipo === 'Salida' ? 'btn-danger' : 'btn-primary',
+        () => {
+            const updates = {};
+            const ts0 = Date.now();
+            movDocItems.forEach((item, i) => {
+                const mov = {
+                    tipo, sku: item.sku, lote: item.lote,
+                    descripcion: item.descripcion,
+                    cantidad: item.qty,
+                    vence: item.vence,
+                    precio: item.precio || 0,
+                    status: item.status || 'Aprobado',
+                    bodega, ubicacion: item.ubicacion || ubic,
+                    proveedor, referencia: numDoc,
+                    observaciones: obs,
+                    fecha: fechaISO,
+                    usuario,
+                    documentoId,
+                    fechaDocumento: fechaDoc || ''
+                };
+                updates[`usuarios/${uid}/movimientos/${ts0 + i}`] = mov;
+            });
+            db.ref().update(updates)
+                .then(() => {
+                    logAudit(tipo, 'Movimientos', `${movDocItems.length} SKUs`, documentoId, `Total: ${totalUnidades} ud.`);
+                    const docData = {
+                        documentoId, tipo, numDoc, fecha: fechaISO, fechaDoc,
+                        proveedor, bodega, ubic, obs,
+                        items: [...movDocItems], usuario
+                    };
+                    closeModal('movModal');
+                    generatePDF(docData);
+                })
+                .catch(err => showFormError('movModal-err', 'Error al guardar: ' + err.message));
+        }
+    );
+}
+
+function generatePDF(docData) {
+    if (typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF) {
+        alert('No se pudo cargar la librería PDF. Verifique su conexión a internet.');
+        return;
+    }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
+    const pageW = doc.internal.pageSize.getWidth();
+    const margin = 18;
+
+    // Encabezado
+    doc.setFillColor(29, 45, 62);
+    doc.rect(0, 0, pageW, 30, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(16); doc.setFont('helvetica', 'bold');
+    doc.text('Celmedik WMS', margin, 13);
+    doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+    doc.text('Sistema de Gestión de Almacén Farmacéutico · NT 147 BPA ISP Chile', margin, 20);
+    doc.setFontSize(11); doc.setFont('helvetica', 'bold');
+    doc.text(`DOCUMENTO DE ${docData.tipo.toUpperCase()}`, pageW - margin, 13, { align: 'right' });
+    doc.setFontSize(9); doc.setFont('helvetica', 'normal');
+    doc.text(docData.documentoId, pageW - margin, 20, { align: 'right' });
+
+    // Info del documento
+    doc.setTextColor(29, 45, 62);
+    let y = 40;
+    const col2 = pageW / 2;
+    const addInfo = (label, value, x, yPos, lw) => {
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.text(label, x, yPos);
+        doc.setFont('helvetica', 'normal'); doc.text(String(value||'—'), x + (lw||28), yPos);
+    };
+    addInfo('N° Documento:', docData.documentoId, margin, y, 35);
+    addInfo('Tipo:', docData.tipo, col2, y, 15);
+    y += 6;
+    addInfo('Fecha registro:', new Date(docData.fecha).toLocaleString('es-CL'), margin, y, 35);
+    addInfo('Fecha documento:', docData.fechaDoc ? fmtDate(docData.fechaDoc) : '—', col2, y, 38);
+    y += 6;
+    addInfo('Proveedor/Destinatario:', docData.proveedor || '—', margin, y, 52);
+    y += 6;
+    addInfo('Bodega:', docData.bodega || '—', margin, y, 20);
+    addInfo('Ubicación:', docData.ubic || '—', col2, y, 22);
+    y += 6;
+    addInfo('Usuario:', docData.usuario || '—', margin, y, 20);
+    if (docData.obs) {
+        y += 6;
+        addInfo('Observaciones:', docData.obs, margin, y, 35);
+    }
+
+    // Tabla de productos
+    y += 12;
+    doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(29, 45, 62);
+    doc.text('DETALLE DE PRODUCTOS', margin, y);
+    y += 2;
+
+    doc.autoTable({
+        startY: y,
+        head: [['SKU', 'Descripción', 'Lote', 'Vencimiento', 'Cant.', 'Precio Unit.', 'Estatus', 'Ubicación']],
+        body: docData.items.map(item => [
+            item.sku,
+            item.descripcion || '—',
+            item.lote,
+            item.vence ? fmtDate(item.vence) : '—',
+            String(item.qty),
+            item.precio > 0 ? '$' + item.precio.toLocaleString('es-CL') : '—',
+            item.status || 'Aprobado',
+            item.ubicacion || '—'
+        ]),
+        theme: 'striped',
+        headStyles: { fillColor: [8, 84, 160], textColor: 255, fontSize: 7, fontStyle: 'bold' },
+        bodyStyles: { fontSize: 7, textColor: [29, 45, 62] },
+        alternateRowStyles: { fillColor: [245, 245, 245] },
+        columnStyles: {
+            0: { cellWidth: 18, fontStyle: 'bold' },
+            1: { cellWidth: 42 },
+            2: { cellWidth: 22 },
+            3: { cellWidth: 22 },
+            4: { cellWidth: 14, halign: 'center' },
+            5: { cellWidth: 22, halign: 'right' },
+            6: { cellWidth: 20, halign: 'center' },
+            7: { cellWidth: 18, halign: 'center' }
+        },
+        margin: { left: margin, right: margin }
+    });
+
+    y = doc.lastAutoTable.finalY + 8;
+    const totalQty = docData.items.reduce((a, i) => a + i.qty, 0);
+    const totalPrecio = docData.items.reduce((a, i) => a + (i.precio * i.qty), 0);
+    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(29, 45, 62);
+    doc.text(`Total unidades: ${totalQty}`, pageW - margin, y, { align: 'right' });
+    if (totalPrecio > 0) { y += 5; doc.text(`Total neto: $${totalPrecio.toLocaleString('es-CL')}`, pageW - margin, y, { align: 'right' }); }
+
+    // Sección de firmas
+    y += 20;
+    const pageH = doc.internal.pageSize.getHeight();
+    if (y > pageH - 55) { doc.addPage(); y = 20; }
+    doc.setDrawColor(180, 180, 180);
+    const sigW = (pageW - margin * 2 - 20) / 2;
+    doc.line(margin, y, margin + sigW, y);
+    doc.line(pageW - margin - sigW, y, pageW - margin, y);
+    doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 100, 100);
+    doc.text('Entregado por / Despachador', margin, y + 5);
+    doc.text('Recibido por / Receptor', pageW - margin - sigW, y + 5);
+    y += 12;
+    doc.text('Nombre: _______________________________', margin, y);
+    doc.text('Nombre: _______________________________', pageW - margin - sigW, y);
+    y += 6;
+    doc.text('RUT: _____________  Fecha: ____________', margin, y);
+    doc.text('RUT: _____________  Fecha: ____________', pageW - margin - sigW, y);
+
+    // Pie de página
+    doc.setDrawColor(200, 200, 200);
+    doc.line(margin, pageH - 16, pageW - margin, pageH - 16);
+    doc.setFontSize(7); doc.setTextColor(140, 140, 140);
+    doc.text('Documento generado por Celmedik WMS · Normativa ISP Chile · Norma Técnica N°147 BPA', pageW / 2, pageH - 10, { align: 'center' });
+    doc.text(`${new Date().toLocaleString('es-CL')} · ${docData.usuario}`, pageW / 2, pageH - 5, { align: 'center' });
+
+    doc.save(`${docData.tipo}_${docData.documentoId}_${new Date().toISOString().split('T')[0]}.pdf`);
+}
+
+function regenerarPDF(documentoId) {
+    const movs = Object.values(data.movimientos || {}).filter(m => m.documentoId === documentoId);
+    if (!movs.length) { alert('No se encontraron movimientos para este documento.'); return; }
+    const ref = movs[0];
+    generatePDF({
+        documentoId,
+        tipo: ref.tipo,
+        numDoc: ref.referencia,
+        fecha: ref.fecha,
+        fechaDoc: ref.fechaDocumento || '',
+        proveedor: ref.proveedor || '',
+        bodega: ref.bodega || '',
+        ubic: ref.ubicacion || '',
+        obs: ref.observaciones || '',
+        items: movs.map(m => ({ sku: m.sku, descripcion: m.descripcion||'', lote: m.lote, vence: m.vence||'', qty: m.cantidad, precio: m.precio||0, status: m.status||'', ubicacion: m.ubicacion||'' })),
+        usuario: ref.usuario || ''
+    });
+}
+
+function clearFiltrosMovimientos() {
+    ['fMovSKU','fMovLote','fMovFechaDesde','fMovFechaHasta'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    document.getElementById('fMovTipo').value = '';
+    renderMovimientos();
 }
 
 function renderMovimientos() {
     const fTipo = document.getElementById('fMovTipo')?.value||'';
     const fSKU = (document.getElementById('fMovSKU')?.value||'').toLowerCase();
     const fLote = (document.getElementById('fMovLote')?.value||'').toLowerCase();
+    const fDesde = document.getElementById('fMovFechaDesde')?.value||'';
+    const fHasta = document.getElementById('fMovFechaHasta')?.value||'';
     let rows = Object.values(data.movimientos||{});
     if (fTipo) rows = rows.filter(m => m.tipo === fTipo);
     if (fSKU) rows = rows.filter(m => (m.sku||'').toLowerCase().includes(fSKU));
     if (fLote) rows = rows.filter(m => (m.lote||'').toLowerCase().includes(fLote));
+    if (fDesde) rows = rows.filter(m => m.fecha && m.fecha.slice(0,10) >= fDesde);
+    if (fHasta) rows = rows.filter(m => m.fecha && m.fecha.slice(0,10) <= fHasta);
     rows.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
     const tb = document.getElementById('tMovimientos');
-    if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="14">No hay movimientos</td></tr>'; return; }
+    if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="15">No hay movimientos</td></tr>'; return; }
+    // Track which documentoIds already have a PDF button rendered to avoid duplicates
+    const pdfRendered = new Set();
     tb.innerHTML = rows.map(m => {
-        const tC = m.tipo === 'Entrada' ? 'badge-success' : m.tipo === 'Salida' ? 'badge-danger' : 'badge-warning';
+        const tC = m.tipo === 'Entrada' ? 'badge-success' : m.tipo === 'Salida' ? 'badge-danger' : m.tipo === 'Destrucción' ? 'badge-danger' : m.tipo === 'CambioEstado' ? 'badge-gray' : 'badge-warning';
         const sC = m.status === 'Aprobado' ? 'badge-success' : m.status === 'Rechazado' ? 'badge-danger' : 'badge-warning';
+        let pdfCell = '—';
+        if (m.documentoId) {
+            if (!pdfRendered.has(m.documentoId)) {
+                pdfRendered.add(m.documentoId);
+                pdfCell = `<button class="btn btn-sm btn-icon" style="font-size:10px;white-space:nowrap" onclick="regenerarPDF('${m.documentoId.replace(/'/g,"\\'")}')">PDF</button>`;
+            } else {
+                pdfCell = `<span style="color:var(--text3);font-size:10px">${m.documentoId}</span>`;
+            }
+        }
         return `<tr>
             <td class="text-mono" style="font-size:11px">${fmtDateTime(m.fecha)}</td>
             <td><span class="badge ${tC}">${m.tipo}</span></td>
@@ -1778,15 +2526,17 @@ function renderMovimientos() {
             <td><span class="badge ${sC}">${m.status||'—'}</span></td>
             <td style="font-size:11px;color:var(--text3)">${m.usuario||'—'}</td>
             <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.observaciones||'—'}</td>
+            <td>${pdfCell}</td>
         </tr>`;
     }).join('');
 }
 
-// ══ STOCK (FEFO ORDER) ══
+// ══ STOCK ══
 function renderStock() {
     const fSKU = (document.getElementById('fStockSKU')?.value||'').toLowerCase();
     const fLote = (document.getElementById('fStockLote')?.value||'').toLowerCase();
     const fUbic = (document.getElementById('fStockUbic')?.value||'').toLowerCase();
+    const sortBy = document.getElementById('fStockSort')?.value || 'fefo';
     const stock = calcStock();
     const prods = data.productos||{};
     const hoy = new Date();
@@ -1799,8 +2549,25 @@ function renderStock() {
             (s.ubicacion||'').toLowerCase().includes(fUbic);
     });
 
-    // Ordenar FEFO
-    rows.sort((a, b) => new Date(a.vence + 'T00:00:00') - new Date(b.vence + 'T00:00:00'));
+    const subtitleEl = document.getElementById('stockSortSubtitle');
+    if (sortBy === 'fefo') {
+        rows.sort((a, b) => {
+            if (!a.vence) return 1;
+            if (!b.vence) return -1;
+            return new Date(a.vence + 'T00:00:00') - new Date(b.vence + 'T00:00:00');
+        });
+        if (subtitleEl) subtitleEl.textContent = 'Ordenado por FEFO — Vencimiento más próximo primero';
+    } else if (sortBy === 'sku') {
+        rows.sort((a, b) => a.sku.localeCompare(b.sku));
+        if (subtitleEl) subtitleEl.textContent = 'Ordenado por SKU — A a Z';
+    } else if (sortBy === 'desc') {
+        rows.sort((a, b) => {
+            const dA = (prods[a.sku]?.descripcion || a.sku).toLowerCase();
+            const dB = (prods[b.sku]?.descripcion || b.sku).toLowerCase();
+            return dA.localeCompare(dB);
+        });
+        if (subtitleEl) subtitleEl.textContent = 'Ordenado por Descripción — A a Z';
+    }
 
     const tb = document.getElementById('tStock');
     if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="13">No hay stock registrado</td></tr>'; return; }
@@ -1809,9 +2576,8 @@ function renderStock() {
         const vD = s.vence ? new Date(s.vence + 'T00:00:00') : null;
         const dias = vD ? Math.ceil((vD - hoy) / 86400000) : null;
         const dotCls = dias === null ? '' : dias < 0 ? 'exp' : dias <= 30 ? 'exp' : dias <= 90 ? 'warn' : 'ok';
-        const isFirst = i === 0;
+        const isFirst = sortBy === 'fefo' && i === 0;
         const statusCls = s.status === 'Aprobado' ? 'badge-success' : s.status === 'Rechazado' ? 'badge-danger' : 'badge-warning';
-        const diasStr = dias === null ? '—' : dias < 0 ? `<span style="color:var(--danger);font-weight:600">Vencido</span>` : `<span style="color:${dias<=30?'var(--danger)':dias<=90?'var(--warning)':'var(--text2)'}">${dias}d</span>`;
         const rs = prods[s.sku]?.registroSanitario;
         return `<tr>
             <td><div class="fefo-indicator"><div class="fefo-dot ${isFirst ? 'first' : dotCls}"></div>${isFirst ? '<span style="color:var(--accent2);font-size:10px;font-weight:600">FEFO</span>' : ''}</div></td>
@@ -1820,9 +2586,9 @@ function renderStock() {
             <td>${rs ? `<span class="rs-number">${rs}</span>` : '<span class="text-muted">—</span>'}</td>
             <td class="text-mono" style="font-size:11px">${s.lote}</td>
             <td>${vD ? fmtDate(s.vence) : '—'}</td>
-            <td>${diasStr}</td>
             <td style="font-weight:600;color:var(--text)">${s.cantidad}</td>
             <td>${prods[s.sku]?.unidadVenta||'—'}</td>
+            <td style="font-size:12px;color:var(--text2)">${prods[s.sku]?.presentacion||'—'}</td>
             <td><span class="badge ${statusCls}">${s.status}</span></td>
             <td>${s.bodega||'—'}</td>
             <td>${s.ubicacion||'—'}</td>
@@ -1833,6 +2599,7 @@ function renderStock() {
 
 function clearStockFilters() {
     ['fStockSKU','fStockLote','fStockUbic'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
+    const sort = document.getElementById('fStockSort'); if(sort) sort.value = 'fefo';
     renderStock();
 }
 
@@ -1872,23 +2639,288 @@ function renderCuarentena() {
             <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.observaciones||'—'}</td>
             <td><span class="badge ${q.status==='Liberado'?'badge-success':q.status==='Destruido'?'badge-danger':'badge-warning'}">${q.status}</span></td>
             <td style="display:flex;gap:4px;flex-wrap:wrap">
-                ${q.status==='Pendiente'?`<button class="btn btn-sm btn-success-sm" onclick="liberarCuarentena('${id}')">Liberar</button><button class="btn btn-sm btn-danger-sm" onclick="destruirCuarentena('${id}')">Destruir</button>`:''}
+                ${q.status==='Pendiente'?`<button class="btn btn-sm btn-success-sm" onclick="liberarCuarentena('${id}')">✓ Liberar</button><button class="btn btn-sm btn-danger-sm" onclick="abrirRechazoCuarentena('${id}')">✕ Rechazar</button><button class="btn btn-sm btn-danger-sm" onclick="abrirDestruccionCuarentena('${id}')" style="background:rgba(107,47,190,0.1);color:var(--purple);border-color:rgba(107,47,190,0.3)">⚠ Destruir</button>`:''}
             </td>
         </tr>`).join('');
 }
 
 function liberarCuarentena(id) {
-    if (confirm('¿Liberar este lote de cuarentena?')) {
-        db.ref(`usuarios/${currentUser.uid}/cuarentena/${id}`).update({ status: 'Liberado', fechaLiberacion: new Date().toISOString(), usuarioLibera: currentUser.email })
-            .then(() => logAudit('Liberar', 'Cuarentena', data.cuarentena[id]?.sku, data.cuarentena[id]?.lote, 'Liberado QA'));
-    }
+    const q = data.cuarentena[id]; if (!q) return;
+    showConfirm(
+        'Liberar lote de cuarentena',
+        `SKU: ${q.sku} · Lote: ${q.lote}`,
+        `<strong>¿Confirmar liberación?</strong><br>El lote quedará en estado <span style="color:var(--success);font-weight:600">APROBADO</span> y podrá despacharse normalmente.<br><span style="color:var(--text3);font-size:12px">Se registrará un evento de cambio de estado en trazabilidad.</span>`,
+        'Confirmar liberación', 'btn-success-sm',
+        () => {
+            const uid = currentUser.uid;
+            const ahora = new Date().toISOString();
+            const stock = calcStock();
+            const stockItem = Object.values(stock).find(s => s.sku === q.sku && s.lote === q.lote);
+            const updates = {};
+            updates[`usuarios/${uid}/cuarentena/${id}/status`] = 'Liberado';
+            updates[`usuarios/${uid}/cuarentena/${id}/fechaLiberacion`] = ahora;
+            updates[`usuarios/${uid}/cuarentena/${id}/usuarioLibera`] = currentUser.email;
+            // CambioEstado movement for trazabilidad
+            updates[`usuarios/${uid}/movimientos/${Date.now()}`] = {
+                tipo: 'CambioEstado', sku: q.sku, lote: q.lote,
+                descripcion: q.descripcion || data.productos[q.sku]?.descripcion || '',
+                cantidad: q.cantidad, vence: stockItem?.vence || '',
+                status: 'Aprobado', statusAnterior: 'Cuarentena',
+                bodega: stockItem?.bodega || '', ubicacion: stockItem?.ubicacion || '',
+                proveedor: '', referencia: '',
+                observaciones: `Liberado de cuarentena por QA. Motivo original: ${q.motivo}`,
+                fecha: ahora, usuario: currentUser.email
+            };
+            db.ref().update(updates).then(() => {
+                logAudit('Liberar', 'Cuarentena', q.sku, q.lote, 'Liberado → Aprobado por QA');
+            });
+        }
+    );
 }
 
-function destruirCuarentena(id) {
-    if (confirm('¿Marcar como destruido?')) {
-        db.ref(`usuarios/${currentUser.uid}/cuarentena/${id}`).update({ status: 'Destruido', fechaDestroy: new Date().toISOString(), usuarioDestroy: currentUser.email })
-            .then(() => logAudit('Destruir', 'Cuarentena', data.cuarentena[id]?.sku, data.cuarentena[id]?.lote, 'Destruido'));
+function abrirRechazoCuarentena(id) {
+    const q = data.cuarentena[id]; if (!q) return;
+    document.getElementById('rcq-id').value = id;
+    document.getElementById('rcq-motivo').value = '';
+    document.getElementById('rcq-resp').value = '';
+    document.getElementById('rcq-obs').value = '';
+    openModal('rechazarCuarModal');
+}
+
+function confirmarRechazoCuarentena() {
+    const id = document.getElementById('rcq-id').value;
+    const motivo = document.getElementById('rcq-motivo').value;
+    const resp = document.getElementById('rcq-resp').value.trim();
+    const obs = document.getElementById('rcq-obs').value.trim();
+    if (!motivo) { alert('Seleccione el motivo de rechazo.'); return; }
+    if (!resp) { alert('Ingrese el nombre del responsable QA.'); return; }
+    const q = data.cuarentena[id]; if (!q) return;
+    const uid = currentUser.uid;
+    const ahora = new Date().toISOString();
+    const stock = calcStock();
+    const stockItem = Object.values(stock).find(s => s.sku === q.sku && s.lote === q.lote);
+    const updates = {};
+    updates[`usuarios/${uid}/cuarentena/${id}/status`] = 'Rechazado';
+    updates[`usuarios/${uid}/cuarentena/${id}/motivoRechazo`] = motivo;
+    updates[`usuarios/${uid}/cuarentena/${id}/responsableRechazo`] = resp;
+    updates[`usuarios/${uid}/cuarentena/${id}/observacionesRechazo`] = obs;
+    updates[`usuarios/${uid}/cuarentena/${id}/fechaRechazo`] = ahora;
+    updates[`usuarios/${uid}/cuarentena/${id}/usuarioRechazo`] = currentUser.email;
+    // CambioEstado movement
+    updates[`usuarios/${uid}/movimientos/${Date.now()}`] = {
+        tipo: 'CambioEstado', sku: q.sku, lote: q.lote,
+        descripcion: q.descripcion || data.productos[q.sku]?.descripcion || '',
+        cantidad: q.cantidad, vence: stockItem?.vence || '',
+        status: 'Rechazado', statusAnterior: 'Cuarentena',
+        bodega: stockItem?.bodega || '', ubicacion: stockItem?.ubicacion || '',
+        proveedor: resp, referencia: '',
+        observaciones: `Rechazado por QA. Motivo: ${motivo}. ${obs}`,
+        fecha: ahora, usuario: currentUser.email
+    };
+    db.ref().update(updates).then(() => {
+        logAudit('Rechazar', 'Cuarentena', q.sku, q.lote, `Rechazado → ${motivo} · Resp: ${resp}`);
+        closeModal('rechazarCuarModal');
+    });
+}
+
+function abrirDestruccionCuarentena(id) {
+    const q = data.cuarentena[id]; if (!q) return;
+    const stock = calcStock();
+    const stockItem = Object.values(stock).find(s => s.sku === q.sku && s.lote === q.lote);
+    document.getElementById('dest-sku').value = q.sku;
+    document.getElementById('dest-lote').value = q.lote;
+    document.getElementById('dest-estado').value = stockItem ? getLoteStatus(stockItem) : 'Cuarentena';
+    document.getElementById('dest-stock').value = (stockItem?.cantidad || q.cantidad) + ' unidades';
+    document.getElementById('dest-qty').value = stockItem?.cantidad || q.cantidad;
+    document.getElementById('dest-qty').max = stockItem?.cantidad || q.cantidad;
+    document.getElementById('dest-header-title').textContent = `Lote ${q.lote} — Desde cuarentena`;
+    document.getElementById('dest-header-desc').textContent = 'Se registrará la destrucción y se actualizará el stock. Complete todos los campos del acta.';
+    ['dest-motivo','dest-empresa','dest-acta','dest-resp','dest-obs'].forEach(id => { const el=document.getElementById(id); if(el&&el.tagName==='SELECT') el.value=''; else if(el) el.value=''; });
+    document.getElementById('dest-fecha').value = new Date().toISOString().split('T')[0];
+    document.getElementById('dest-err').style.display = 'none';
+    // Store cuarentena id for later update
+    document.getElementById('dest-sku').dataset.cuarId = id;
+    openModal('destruccionModal');
+}
+
+// ══ DESTRUCCIÓN ISP ══
+function saveDestruccion() {
+    const sku      = document.getElementById('dest-sku').value.trim();
+    const lote     = document.getElementById('dest-lote').value.trim();
+    const estado   = document.getElementById('dest-estado').value.trim();
+    const qty      = parseInt(document.getElementById('dest-qty').value) || 0;
+    const motivo   = document.getElementById('dest-motivo').value;
+    const empresa  = document.getElementById('dest-empresa').value.trim();
+    const acta     = document.getElementById('dest-acta').value.trim();
+    const fechaDest = document.getElementById('dest-fecha').value;
+    const resp     = document.getElementById('dest-resp').value.trim();
+    const obs      = document.getElementById('dest-obs').value.trim();
+    const cuarId   = document.getElementById('dest-sku').dataset.cuarId || '';
+
+    if (!qty || qty < 1) { showFormError('dest-err', 'La cantidad a destruir debe ser mayor a cero.'); return; }
+    if (!motivo) { showFormError('dest-err', 'Seleccione el motivo de rechazo.'); return; }
+    if (!empresa) { showFormError('dest-err', 'Ingrese la empresa destructora.'); return; }
+    if (!acta) { showFormError('dest-err', 'Ingrese el número de acta de destrucción.'); return; }
+    if (!fechaDest) { showFormError('dest-err', 'Seleccione la fecha programada de destrucción.'); return; }
+    if (!resp) { showFormError('dest-err', 'Ingrese el responsable QA que autoriza.'); return; }
+    if (!obs) { showFormError('dest-err', 'Las observaciones son obligatorias.'); return; }
+
+    const maxQty = parseInt(document.getElementById('dest-qty').max) || Infinity;
+    if (qty > maxQty) { showFormError('dest-err', `Cantidad excede el stock disponible (${maxQty} unidades).`); return; }
+
+    const uid = currentUser.uid;
+    const ahora = new Date().toISOString();
+    const stock = calcStock();
+    const stockItem = Object.values(stock).find(s => s.sku === sku && s.lote === lote);
+    const documentoId = `DEST-${acta}-${Date.now()}`;
+
+    const mov = {
+        tipo: 'Destrucción', sku, lote,
+        descripcion: data.productos[sku]?.descripcion || '',
+        cantidad: qty, vence: stockItem?.vence || '',
+        status: estado,
+        bodega: stockItem?.bodega || '',
+        ubicacion: stockItem?.ubicacion || '',
+        proveedor: empresa,
+        referencia: acta,
+        observaciones: `DESTRUCCIÓN ISP · Motivo: ${motivo} · Empresa: ${empresa} · Acta: ${acta} · Fecha dest.: ${fechaDest} · Resp. QA: ${resp} · ${obs}`,
+        fecha: ahora,
+        usuario: currentUser.email,
+        documentoId,
+        actaDestruccion: { motivo, empresa, acta, fechaDest, resp, obs }
+    };
+
+    const updates = {};
+    updates[`usuarios/${uid}/movimientos/${Date.now()}`] = mov;
+
+    // If came from cuarentena, mark it as Destruido
+    if (cuarId && data.cuarentena[cuarId]) {
+        updates[`usuarios/${uid}/cuarentena/${cuarId}/status`] = 'Destruido';
+        updates[`usuarios/${uid}/cuarentena/${cuarId}/fechaDestroy`] = ahora;
+        updates[`usuarios/${uid}/cuarentena/${cuarId}/usuarioDestroy`] = currentUser.email;
+        updates[`usuarios/${uid}/cuarentena/${cuarId}/actaDestruccion`] = acta;
     }
+
+    // CambioEstado: mark remaining stock as Rechazado if partial destruction
+    const remaining = (stockItem?.cantidad || 0) - qty;
+    if (remaining > 0) {
+        updates[`usuarios/${uid}/movimientos/${Date.now() + 1}`] = {
+            tipo: 'CambioEstado', sku, lote,
+            descripcion: data.productos[sku]?.descripcion || '',
+            cantidad: remaining, vence: stockItem?.vence || '',
+            status: 'Rechazado', statusAnterior: estado,
+            bodega: stockItem?.bodega || '', ubicacion: stockItem?.ubicacion || '',
+            proveedor: '', referencia: acta,
+            observaciones: `Stock residual post-destrucción parcial. Acta: ${acta}`,
+            fecha: ahora, usuario: currentUser.email
+        };
+    }
+
+    db.ref().update(updates).then(() => {
+        logAudit('Destrucción', 'Movimientos', sku, lote, `Acta: ${acta} · ${qty} ud · Motivo: ${motivo} · Empresa: ${empresa}`);
+        const actaData = { documentoId, sku, lote, descripcion: data.productos[sku]?.descripcion||'', qty, estado, motivo, empresa, acta, fechaDest, resp, obs, fecha: ahora, usuario: currentUser.email };
+        closeModal('destruccionModal');
+        closeModal('movModal');
+        generateActaPDF(actaData);
+    }).catch(err => showFormError('dest-err', 'Error al guardar: ' + err.message));
+}
+
+function generateActaPDF(d) {
+    if (typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF) {
+        alert('No se pudo cargar la librería PDF.'); return;
+    }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const margin = 18;
+
+    // Encabezado rojo
+    doc.setFillColor(187, 0, 0);
+    doc.rect(0, 0, pageW, 32, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(15); doc.setFont('helvetica', 'bold');
+    doc.text('ACTA DE DESTRUCCIÓN', margin, 13);
+    doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+    doc.text('Celmedik WMS · Norma Técnica N°147 ISP Chile · Trazabilidad BPA', margin, 20);
+    doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+    doc.text(d.documentoId, pageW - margin, 13, { align: 'right' });
+    doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+    doc.text(new Date(d.fecha).toLocaleString('es-CL'), pageW - margin, 20, { align: 'right' });
+
+    doc.setTextColor(187, 0, 0);
+    doc.setFontSize(9); doc.setFont('helvetica', 'bold');
+    doc.text('⚠ DOCUMENTO OFICIAL DE DESTRUCCIÓN — ARCHIVO OBLIGATORIO ISP', pageW / 2, 30, { align: 'center' });
+
+    doc.setTextColor(29, 45, 62);
+    let y = 42;
+    const addField = (label, value, x, yPos, lw) => {
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(89, 89, 89);
+        doc.text(label.toUpperCase(), x, yPos);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(29, 45, 62);
+        doc.text(String(value || '—'), x, yPos + 5);
+    };
+
+    const col2 = pageW / 2 + 4;
+
+    // Producto
+    doc.setFillColor(245, 245, 245); doc.rect(margin, y - 4, pageW - margin * 2, 8, 'F');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(29, 45, 62);
+    doc.text('IDENTIFICACIÓN DEL PRODUCTO', margin + 2, y + 1);
+    y += 10;
+
+    addField('SKU', d.sku, margin, y); addField('Lote', d.lote, col2, y);
+    y += 12;
+    addField('Descripción', d.descripcion, margin, y);
+    y += 12;
+    addField('Estado al destruir', d.estado, margin, y); addField('Cantidad destruida', d.qty + ' unidades', col2, y);
+    y += 14;
+
+    // Destrucción
+    doc.setFillColor(245, 245, 245); doc.rect(margin, y - 4, pageW - margin * 2, 8, 'F');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(29, 45, 62);
+    doc.text('DATOS DE LA DESTRUCCIÓN', margin + 2, y + 1);
+    y += 10;
+
+    addField('Motivo de rechazo', d.motivo, margin, y); addField('N° Acta', d.acta, col2, y);
+    y += 12;
+    addField('Empresa destructora', d.empresa, margin, y); addField('Fecha programada', d.fechaDest ? new Date(d.fechaDest + 'T00:00:00').toLocaleDateString('es-CL') : '—', col2, y);
+    y += 12;
+    addField('Responsable QA autoriza', d.resp, margin, y);
+    y += 12;
+    const obsLines = doc.splitTextToSize('Observaciones: ' + (d.obs || '—'), pageW - margin * 2 - 10);
+    doc.setFont('helvetica', 'italic'); doc.setFontSize(9); doc.setTextColor(80, 80, 80);
+    doc.text(obsLines, margin, y);
+    y += obsLines.length * 5 + 6;
+
+    // Firmas
+    y += 8;
+    if (y > pageH - 60) { doc.addPage(); y = 20; }
+    doc.setFillColor(245, 245, 245); doc.rect(margin, y - 4, pageW - margin * 2, 8, 'F');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(29, 45, 62);
+    doc.text('FIRMAS Y CERTIFICACIÓN', margin + 2, y + 1);
+    y += 14;
+
+    const sigW = (pageW - margin * 2 - 16) / 3;
+    doc.setDrawColor(180, 180, 180);
+    [margin, margin + sigW + 8, margin + (sigW + 8) * 2].forEach((x, i) => {
+        doc.line(x, y, x + sigW, y);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(100, 100, 100);
+        const labels = ['Responsable QA / Autoriza', 'Operador bodega', 'Empresa destructora'];
+        doc.text(labels[i], x, y + 4);
+        doc.text('Nombre: _____________________', x, y + 10);
+        doc.text('RUT: ____________ Firma: _____', x, y + 16);
+    });
+
+    // Pie
+    y = pageH - 18;
+    doc.setDrawColor(200, 200, 200);
+    doc.line(margin, y, pageW - margin, y);
+    doc.setFontSize(7); doc.setTextColor(140, 140, 140);
+    doc.text('Documento oficial de destrucción — Celmedik WMS · ISP Chile · NT 147 BPA · Archivo obligatorio 5 años', pageW / 2, y + 5, { align: 'center' });
+    doc.text(`${new Date(d.fecha).toLocaleString('es-CL')} · Generado por: ${d.usuario}`, pageW / 2, y + 10, { align: 'center' });
+
+    doc.save(`Acta_Destruccion_${d.acta}_${d.lote}_${new Date().toISOString().split('T')[0]}.pdf`);
 }
 
 // ══ DEVOLUCIONES ══
@@ -2005,8 +3037,24 @@ function verTrazabilidadLote(sku, lote) {
     }
 
     const items = [
-        ...movs.map(m => ({ fecha: m.fecha, tipo: m.tipo, desc: `${m.tipo}: ${m.cantidad} ud. en ${m.bodega||'—'} / ${m.ubicacion||'—'}`, meta: `Ref: ${m.referencia||'—'} | Proveedor/Cliente: ${m.proveedor||'—'} | Status: ${m.status}`, usuario: m.usuario, clase: m.tipo === 'Salida' ? 'salida' : m.tipo === 'Ajuste' ? 'ajuste' : '' })),
-        ...cuars.map(q => ({ fecha: q.fechaIngreso, tipo: 'Cuarentena', desc: `Ingreso a cuarentena: ${q.cantidad} ud.`, meta: `Motivo: ${q.motivo} | Status: ${q.status}`, usuario: q.usuario, clase: 'ajuste' })),
+        ...movs.map(m => {
+            let desc, meta, clase;
+            if (m.tipo === 'CambioEstado') {
+                desc = `Cambio de estado: ${m.statusAnterior || '?'} → <strong style="color:${m.status==='Aprobado'?'var(--success)':m.status==='Rechazado'?'var(--danger)':'var(--warning)'}">${m.status}</strong>`;
+                meta = `Motivo: ${m.observaciones||'—'} | Resp: ${m.proveedor||'—'}`;
+                clase = 'ajuste';
+            } else if (m.tipo === 'Destrucción') {
+                desc = `Destrucción ISP: ${m.cantidad} ud. — Acta: ${m.referencia||'—'}`;
+                meta = `Empresa: ${m.proveedor||'—'} | ${m.observaciones||''}`;
+                clase = 'salida';
+            } else {
+                desc = `${m.tipo}: ${m.cantidad} ud. en ${m.bodega||'—'} / ${m.ubicacion||'—'}`;
+                meta = `Ref: ${m.referencia||'—'} | Proveedor/Cliente: ${m.proveedor||'—'} | Status: ${m.status}`;
+                clase = m.tipo === 'Salida' ? 'salida' : m.tipo === 'Ajuste' ? 'ajuste' : '';
+            }
+            return { fecha: m.fecha, tipo: m.tipo, desc, meta, usuario: m.usuario, clase };
+        }),
+        ...cuars.map(q => ({ fecha: q.fechaIngreso, tipo: 'Cuarentena', desc: `Ingreso a cuarentena: ${q.cantidad} ud.`, meta: `Motivo: ${q.motivo} | Status: ${q.status}${q.motivoRechazo?' | Rechazo: '+q.motivoRechazo:''}`, usuario: q.usuario, clase: 'ajuste' })),
         ...devs.map(d => ({ fecha: d.fecha, tipo: 'Devolución', desc: `Devolución: ${d.cantidad} ud.`, meta: `Motivo: ${d.motivo} | Status: ${d.status}`, usuario: d.usuario, clase: 'salida' })),
     ].sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
 
@@ -2019,7 +3067,7 @@ function verTrazabilidadLote(sku, lote) {
             <ul class="lot-timeline">
                 ${items.map(it => `
                     <li class="lot-timeline-item ${it.clase}">
-                        <div class="lot-timeline-date">${fmtDateTime(it.fecha)} — <span class="badge badge-${it.clase==='salida'?'danger':it.clase==='ajuste'?'warning':'success'}" style="font-size:10px">${it.tipo}</span></div>
+                        <div class="lot-timeline-date">${fmtDateTime(it.fecha)} — <span class="badge badge-${it.tipo==='Destrucción'?'danger':it.tipo==='CambioEstado'?'purple':it.clase==='salida'?'danger':it.clase==='ajuste'?'warning':'success'}" style="font-size:10px">${it.tipo}</span></div>
                         <div class="lot-timeline-desc">${it.desc}</div>
                         <div class="lot-timeline-meta">${it.meta} | Usuario: ${it.usuario||'—'}</div>
                     </li>`).join('')}
@@ -2057,10 +3105,38 @@ function rptVencimientos() {
     rptTable('Reporte de Vencimientos', ['SKU','Descripción','Lote','Qty','Vencimiento','Días','Estado','Bodega'], rows, 'Alerta 90 días — NT 147 / NT 208');
 }
 
+function showRptMovFiltros() {
+    document.getElementById('rptMovFiltros').style.display = 'block';
+    rptMovimientos();
+}
+
+function clearRptMovFiltros() {
+    ['rptFMovSKU','rptFMovLote'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
+    document.getElementById('rptFMovTipo').value = '';
+    rptMovimientos();
+}
+
 function rptMovimientos() {
-    const rows = Object.values(data.movimientos||{}).sort((a,b) => new Date(b.fecha)-new Date(a.fecha))
-        .map(m => [fmtDate(m.fecha), m.tipo, m.sku, m.descripcion||'—', m.lote||'—', m.cantidad, m.bodega||'—', m.proveedor||'—', m.referencia||'—', m.status||'—', m.usuario||'—']);
-    rptTable('Reporte de Movimientos', ['Fecha','Tipo','SKU','Descripción','Lote','Qty','Bodega','Prov/Cliente','Referencia','Status','Usuario'], rows, 'Trazabilidad completa — NT 147');
+    const fSKU  = (document.getElementById('rptFMovSKU')?.value||'').trim().toLowerCase();
+    const fLote = (document.getElementById('rptFMovLote')?.value||'').trim().toLowerCase();
+    const fTipo = (document.getElementById('rptFMovTipo')?.value||'');
+
+    let movs = Object.values(data.movimientos||{});
+    if (fSKU)  movs = movs.filter(m => (m.sku||'').toLowerCase().includes(fSKU));
+    if (fLote) movs = movs.filter(m => (m.lote||'').toLowerCase().includes(fLote));
+    if (fTipo) movs = movs.filter(m => m.tipo === fTipo);
+
+    movs.sort((a,b) => new Date(b.fecha) - new Date(a.fecha));
+
+    const subtitle = [
+        'Trazabilidad completa — NT 147',
+        fSKU  ? `SKU: ${fSKU.toUpperCase()}` : '',
+        fLote ? `Lote: ${fLote.toUpperCase()}` : '',
+        fTipo ? `Tipo: ${fTipo}` : ''
+    ].filter(Boolean).join(' · ');
+
+    const rows = movs.map(m => [fmtDate(m.fecha), m.tipo, m.sku, m.descripcion||'—', m.lote||'—', m.cantidad, m.bodega||'—', m.proveedor||'—', m.referencia||'—', m.status||'—', m.usuario||'—']);
+    rptTable('Reporte de Movimientos', ['Fecha','Tipo','SKU','Descripción','Lote','Qty','Bodega','Prov/Cliente','Referencia','Status','Usuario'], rows, subtitle);
 }
 
 function rptCuarentena() {
@@ -2129,11 +3205,9 @@ function selectSKUInto(sku, inputId, dropdownId, infoId) {
         const info = document.getElementById(infoId);
         if (info && prod) info.innerHTML = `<span style="color:var(--accent2);font-weight:600">${prod.descripcion}</span> · ${prod.fabricante||''}${prod.registroSanitario?' · RS: '+prod.registroSanitario:''}`;
     }
-    // If it's the movimientos modal SKU field, trigger full info + lote logic
-    if (inputId === 'm-sku') {
-        onSKUChange();
-        const tipo = document.getElementById('m-tipo').value;
-        if (tipo === 'Salida') loadLotesDisponibles(sku);
+    // Multi-product document modal SKU field
+    if (inputId === 'mi-sku') {
+        onMiSKUChange();
     }
 }
 
@@ -2200,16 +3274,473 @@ function closeModal(id) {
 }
 
 function resetMovModal() {
-    ['m-tipo','m-sku','m-qty','m-vence','m-bodega','m-ubic','m-proveedor','m-ref','m-obs'].forEach(id => {
-        const el = document.getElementById(id); if (el) el.value = '';
-    });
-    document.getElementById('m-status').value = 'Aprobado';
-    document.getElementById('m-sku-info').style.display = 'none';
-    document.getElementById('m-lote-wrap').innerHTML = '<input type="text" class="form-input" id="m-lote-texto" placeholder="Número de lote" required>';
+    movDocItems = [];
+    ['md-tipo','md-numdoc','md-proveedor','md-obs'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    const fechaEl = document.getElementById('md-fecha');
+    if (fechaEl) fechaEl.value = new Date().toISOString().split('T')[0];
+    const bodegaEl = document.getElementById('md-bodega'); if (bodegaEl) bodegaEl.value = '';
+    const ubicWrap = document.getElementById('md-ubic-wrap');
+    if (ubicWrap) ubicWrap.innerHTML = '<input type="text" class="form-input" id="md-ubic" placeholder="Ej: Estante A-3">';
+    const errEl = document.getElementById('movModal-err'); if (errEl) errEl.style.display = 'none';
+    resetItemForm();
+    _refreshMiStatusField(document.getElementById('md-tipo').value || 'Entrada');
+    renderDocItems();
 }
 
 // Cerrar modal al click fondo
 document.addEventListener('click', e => { if (e.target.classList.contains('modal')) e.target.classList.remove('active'); });
+
+// ══ DASHBOARD COMERCIAL ══
+let _dcCharts = {};
+
+function _dcDestroy(id) { if (_dcCharts[id]) { _dcCharts[id].destroy(); delete _dcCharts[id]; } }
+
+function getDCRango() {
+    const periodo = document.getElementById('dcPeriodo')?.value || 'mes';
+    const hoy = new Date(); hoy.setHours(23, 59, 59, 999);
+    const start = new Date(); start.setHours(0, 0, 0, 0);
+    let desdeDate, hastaDate = new Date(hoy), desdeAnt, hastaAnt;
+
+    if (periodo === 'hoy') {
+        desdeDate = new Date(start);
+        desdeAnt = new Date(start); desdeAnt.setDate(desdeAnt.getDate() - 1);
+        hastaAnt = new Date(desdeAnt); hastaAnt.setHours(23, 59, 59, 999);
+    } else if (periodo === 'semana') {
+        desdeDate = new Date(start);
+        const dow = start.getDay() === 0 ? 6 : start.getDay() - 1;
+        desdeDate.setDate(desdeDate.getDate() - dow);
+        const nDias = Math.round((hastaDate - desdeDate) / 86400000);
+        desdeAnt = new Date(desdeDate); desdeAnt.setDate(desdeAnt.getDate() - nDias - 1);
+        hastaAnt = new Date(desdeDate); hastaAnt.setDate(hastaAnt.getDate() - 1); hastaAnt.setHours(23, 59, 59, 999);
+    } else if (periodo === 'mes') {
+        desdeDate = new Date(start.getFullYear(), start.getMonth(), 1);
+        desdeAnt = new Date(start.getFullYear(), start.getMonth() - 1, 1);
+        hastaAnt = new Date(start.getFullYear(), start.getMonth(), 0); hastaAnt.setHours(23, 59, 59, 999);
+    } else if (periodo === 'año') {
+        desdeDate = new Date(start.getFullYear(), 0, 1);
+        desdeAnt = new Date(start.getFullYear() - 1, 0, 1);
+        hastaAnt = new Date(start.getFullYear() - 1, 11, 31); hastaAnt.setHours(23, 59, 59, 999);
+    } else {
+        const dv = document.getElementById('dcDesde')?.value;
+        const hv = document.getElementById('dcHasta')?.value;
+        desdeDate = dv ? new Date(dv + 'T00:00:00') : new Date(start.getFullYear(), 0, 1);
+        hastaDate = hv ? new Date(hv + 'T23:59:59') : new Date(hoy);
+        const diff = hastaDate - desdeDate;
+        hastaAnt = new Date(desdeDate.getTime() - 1); hastaAnt.setHours(23, 59, 59, 999);
+        desdeAnt = new Date(hastaAnt.getTime() - diff);
+    }
+    return { desdeDate, hastaDate, desdeAnt, hastaAnt };
+}
+
+function getDCSalidas(desde, hasta) {
+    return Object.values(data.movimientos || {}).filter(m => {
+        if (m.tipo !== 'Salida') return false;
+        const f = new Date(m.fecha);
+        return f >= desde && f <= hasta;
+    });
+}
+
+function dcVarHTML(val, ant) {
+    if (!ant) return '';
+    const pct = Math.round(((val - ant) / ant) * 100);
+    const up = pct >= 0;
+    return `<div class="dc-kpi-var"><span class="dc-var-${up ? 'up' : 'down'}">${up ? '▲' : '▼'} ${Math.abs(pct)}%</span><span class="dc-var-label"> vs per. ant.</span></div>`;
+}
+
+function renderDCKPIs(salidas, salidasAnt) {
+    const totalMovs   = salidas.length;
+    const totalUnid   = salidas.reduce((a, m) => a + (parseInt(m.cantidad) || 0), 0);
+    const totalProds  = new Set(salidas.map(m => m.sku)).size;
+    const totalCl     = new Set(salidas.filter(m => m.proveedor?.trim()).map(m => m.proveedor.trim().toUpperCase())).size;
+    const antMovs     = salidasAnt.length;
+    const antUnid     = salidasAnt.reduce((a, m) => a + (parseInt(m.cantidad) || 0), 0);
+    const antProds    = new Set(salidasAnt.map(m => m.sku)).size;
+    const antCl       = new Set(salidasAnt.filter(m => m.proveedor?.trim()).map(m => m.proveedor.trim().toUpperCase())).size;
+
+    const setKPI = (id, val, ant, icon, label, bg, color) => {
+        const el = document.getElementById(id); if (!el) return;
+        el.innerHTML = `<div class="dc-kpi-icon" style="background:${bg};color:${color}">${icon}</div>
+            <div class="dc-kpi-body">
+                <div class="dc-kpi-label">${label}</div>
+                <div class="dc-kpi-value">${val.toLocaleString('es-CL')}</div>
+                ${dcVarHTML(val, ant)}
+            </div>`;
+    };
+    setKPI('dcKpi1', totalMovs,  antMovs,  '↗', 'Despachos realizados',    '#e8f1fd', '#0070F2');
+    setKPI('dcKpi2', totalUnid,  antUnid,  '▦', 'Unidades despachadas',    '#e6f4ec', '#107E3E');
+    setKPI('dcKpi3', totalProds, antProds, '◈', 'Productos distintos',     '#fdf0e7', '#E9730C');
+    setKPI('dcKpi4', totalCl,    antCl,    '✦', 'Clientes atendidos',      '#f0eafa', '#6B2FBE');
+}
+
+function _dcAggProds(salidas) {
+    const map = {};
+    salidas.forEach(m => {
+        if (!map[m.sku]) map[m.sku] = { sku: m.sku, unidades: 0, movs: 0, ultimo: '' };
+        map[m.sku].unidades += parseInt(m.cantidad) || 0;
+        map[m.sku].movs++;
+        if (!map[m.sku].ultimo || m.fecha > map[m.sku].ultimo) map[m.sku].ultimo = m.fecha;
+    });
+    return Object.values(map);
+}
+
+function renderDCProductos(salidas) {
+    const top  = parseInt(document.getElementById('dcTopProds')?.value || 10);
+    const prods = data.productos || {};
+    const rows = _dcAggProds(salidas).sort((a, b) => b.unidades - a.unidades).slice(0, top);
+
+    const tb = document.getElementById('dcTbProductos');
+    if (tb) {
+        tb.innerHTML = !rows.length
+            ? '<tr class="empty-row"><td colspan="7">Sin salidas en el período</td></tr>'
+            : rows.map((r, i) => `<tr>
+                <td style="font-weight:700;color:var(--accent2);text-align:center">${i + 1}</td>
+                <td class="text-mono" style="color:var(--accent2)">${r.sku}</td>
+                <td>${prods[r.sku]?.descripcion || '—'}</td>
+                <td style="font-size:11px;color:var(--text3)">${prods[r.sku]?.principioActivo || '—'}</td>
+                <td style="font-weight:700;text-align:right">${r.unidades.toLocaleString('es-CL')}</td>
+                <td style="text-align:center">${r.movs}</td>
+                <td style="font-size:11px">${fmtDate(r.ultimo)}</td>
+              </tr>`).join('');
+    }
+
+    _dcDestroy('chartProds');
+    const ctx = document.getElementById('dcChartProds')?.getContext('2d');
+    if (!ctx || !rows.length) return;
+    const palette = rows.map((_, i) => `hsla(${210 + i * 9},75%,52%,0.85)`);
+    _dcCharts['chartProds'] = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: rows.map(r => r.sku),
+            datasets: [{ label: 'Unidades', data: rows.map(r => r.unidades), backgroundColor: palette, borderRadius: 4, borderSkipped: false }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: {
+                    title: ctx => { const r = rows[ctx[0].dataIndex]; return `${r.sku} — ${prods[r.sku]?.descripcion || ''}`; },
+                    label: ctx => ` ${ctx.raw.toLocaleString('es-CL')} unidades`,
+                    afterLabel: ctx => ` ${rows[ctx.dataIndex].movs} movimiento(s)`
+                }}
+            },
+            scales: {
+                x: { grid: { display: false }, ticks: { font: { size: 10 } } },
+                y: { grid: { color: 'rgba(0,0,0,0.04)' }, ticks: { font: { size: 10 } }, beginAtZero: true }
+            }
+        }
+    });
+}
+
+function _dcAggClients(salidas) {
+    const map = {};
+    salidas.forEach(m => {
+        const cl = (m.proveedor || '').trim().toUpperCase() || '(Sin cliente)';
+        if (!map[cl]) map[cl] = { cliente: cl, unidades: 0, despachos: 0, prods: new Set(), ultimo: '' };
+        map[cl].unidades += parseInt(m.cantidad) || 0;
+        map[cl].despachos++;
+        map[cl].prods.add(m.sku);
+        if (!map[cl].ultimo || m.fecha > map[cl].ultimo) map[cl].ultimo = m.fecha;
+    });
+    return Object.values(map);
+}
+
+function renderDCClientes(salidas) {
+    const top  = parseInt(document.getElementById('dcTopClients')?.value || 10);
+    const rows = _dcAggClients(salidas).sort((a, b) => b.unidades - a.unidades).slice(0, top);
+
+    const tb = document.getElementById('dcTbClientes');
+    if (tb) {
+        tb.innerHTML = !rows.length
+            ? '<tr class="empty-row"><td colspan="6">Sin salidas en el período</td></tr>'
+            : rows.map((r, i) => `<tr>
+                <td style="font-weight:700;color:var(--accent2);text-align:center">${i + 1}</td>
+                <td style="font-weight:500">${r.cliente}</td>
+                <td style="font-weight:700;text-align:right">${r.unidades.toLocaleString('es-CL')}</td>
+                <td style="text-align:center">${r.despachos}</td>
+                <td style="text-align:center">${r.prods.size}</td>
+                <td style="font-size:11px">${fmtDate(r.ultimo)}</td>
+              </tr>`).join('');
+    }
+
+    _dcDestroy('chartClients');
+    const ctx = document.getElementById('dcChartClients')?.getContext('2d');
+    if (!ctx || !rows.length) return;
+    const palette = rows.map((_, i) => `hsla(${148 + i * 8},62%,45%,0.85)`);
+    _dcCharts['chartClients'] = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: rows.map(r => r.cliente.length > 18 ? r.cliente.slice(0, 18) + '…' : r.cliente),
+            datasets: [{ label: 'Unidades', data: rows.map(r => r.unidades), backgroundColor: palette, borderRadius: 4, borderSkipped: false }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: {
+                    title: ctx => rows[ctx[0].dataIndex].cliente,
+                    label: ctx => ` ${ctx.raw.toLocaleString('es-CL')} unidades`,
+                    afterLabel: ctx => ` ${rows[ctx.dataIndex].despachos} despacho(s)`
+                }}
+            },
+            scales: {
+                x: { grid: { color: 'rgba(0,0,0,0.04)' }, ticks: { font: { size: 10 } }, beginAtZero: true },
+                y: { grid: { display: false }, ticks: { font: { size: 10 } } }
+            }
+        }
+    });
+}
+
+function renderDCEvolucion(salidas, desdeDate, hastaDate) {
+    const agrup = document.getElementById('dcAgrupacion')?.value || 'dia';
+    const map = {};
+
+    if (agrup === 'dia') {
+        const d = new Date(desdeDate); d.setHours(0, 0, 0, 0);
+        const fin = new Date(hastaDate); fin.setHours(0, 0, 0, 0);
+        while (d <= fin) { map[d.toISOString().slice(0, 10)] = 0; d.setDate(d.getDate() + 1); }
+        salidas.forEach(m => { const k = m.fecha.slice(0, 10); if (k in map) map[k] += parseInt(m.cantidad) || 0; });
+    } else {
+        const d = new Date(desdeDate.getFullYear(), desdeDate.getMonth(), 1);
+        const fin = new Date(hastaDate.getFullYear(), hastaDate.getMonth() + 1, 0);
+        while (d <= fin) {
+            map[`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`] = 0;
+            d.setMonth(d.getMonth() + 1);
+        }
+        salidas.forEach(m => { const k = m.fecha.slice(0, 7); if (k in map) map[k] += parseInt(m.cantidad) || 0; });
+    }
+
+    const labels = Object.keys(map).sort();
+    const values = labels.map(k => map[k]);
+    const meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    const fmt = l => agrup === 'dia'
+        ? `${l.slice(8)}/${l.slice(5, 7)}`
+        : `${meses[parseInt(l.slice(5, 7)) - 1]} ${l.slice(0, 4)}`;
+
+    const subtitleEl = document.getElementById('dcEvolSubtitle');
+    if (subtitleEl) subtitleEl.textContent = `Total: ${values.reduce((a,v)=>a+v,0).toLocaleString('es-CL')} unidades — ${agrup === 'dia' ? 'vista diaria' : 'vista mensual'}`;
+
+    _dcDestroy('chartEvol');
+    const ctx = document.getElementById('dcChartEvol')?.getContext('2d');
+    if (!ctx) return;
+    const useBar = labels.length > 60;
+    _dcCharts['chartEvol'] = new Chart(ctx, {
+        type: useBar ? 'bar' : 'line',
+        data: {
+            labels: labels.map(fmt),
+            datasets: [{
+                label: 'Unidades despachadas',
+                data: values,
+                borderColor: '#0070F2',
+                backgroundColor: useBar ? 'rgba(0,112,242,0.75)' : 'rgba(0,112,242,0.08)',
+                fill: !useBar,
+                tension: 0.35,
+                pointRadius: labels.length > 45 ? 0 : 3,
+                pointHoverRadius: 5,
+                borderWidth: 2,
+                borderRadius: useBar ? 3 : 0
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: ctx => ` ${ctx.raw.toLocaleString('es-CL')} unidades` } }
+            },
+            scales: {
+                x: { grid: { display: false }, ticks: { font: { size: 10 }, maxRotation: 45, maxTicksLimit: 30 } },
+                y: { grid: { color: 'rgba(0,0,0,0.04)' }, ticks: { font: { size: 10 } }, beginAtZero: true }
+            }
+        }
+    });
+}
+
+function renderDCAlertas() {
+    const dias = parseInt(document.getElementById('dcAlertDias')?.value || 30);
+    const hoy  = new Date(); hoy.setHours(0, 0, 0, 0);
+    const stock = calcStock();
+    const prods = data.productos || {};
+    const movs  = Object.values(data.movimientos || {});
+
+    // 1. Sin rotación
+    const sinRotacion = Object.keys(prods).map(sku => {
+        const ultSalida = movs.filter(m => m.tipo === 'Salida' && m.sku === sku)
+            .reduce((max, m) => m.fecha > max ? m.fecha : max, '');
+        const diasSin = ultSalida ? Math.ceil((hoy - new Date(ultSalida)) / 86400000) : null;
+        return { sku, diasSin, ultimo: ultSalida };
+    }).filter(r => r.diasSin === null || r.diasSin >= dias)
+      .sort((a, b) => (b.diasSin ?? 99999) - (a.diasSin ?? 99999));
+
+    // 2. Stock bajo mínimo
+    const bajoMin = Object.values(prods).filter(p => {
+        if (!p.stockMin || p.stockMin <= 0) return false;
+        return Object.values(stock).filter(s => s.sku === p.sku && s.cantidad > 0).reduce((a, s) => a + s.cantidad, 0) < p.stockMin;
+    });
+
+    // 3. Próximos a vencer (≤ 90d)
+    const proxVencer = Object.values(stock)
+        .filter(s => s.vence && s.cantidad > 0)
+        .map(s => ({ ...s, dias: Math.ceil((new Date(s.vence + 'T00:00:00') - hoy) / 86400000) }))
+        .filter(s => s.dias <= 90)
+        .sort((a, b) => a.dias - b.dias);
+
+    const c = document.getElementById('dcAlertasContainer'); if (!c) return;
+    let html = '';
+
+    if (sinRotacion.length) {
+        html += `<div class="card" style="margin:0 0 12px;border:1px solid var(--border)">
+            <div class="card-header"><div class="card-title" style="font-size:12px;color:var(--warning)">⚠ Sin rotación ≥ ${dias} días — ${sinRotacion.length} producto(s)</div></div>
+            <div class="table-wrap"><table><thead><tr><th>SKU</th><th>Descripción</th><th>Días sin salida</th><th>Último despacho</th></tr></thead><tbody>
+            ${sinRotacion.slice(0, 25).map(r => `<tr>
+                <td class="text-mono" style="color:var(--accent2)">${r.sku}</td>
+                <td>${prods[r.sku]?.descripcion || '—'}</td>
+                <td><span class="badge badge-warning">${r.diasSin === null ? 'Sin despachos' : r.diasSin + 'd'}</span></td>
+                <td style="font-size:11px">${r.ultimo ? fmtDate(r.ultimo) : '—'}</td>
+            </tr>`).join('')}
+            </tbody></table></div></div>`;
+    }
+
+    if (bajoMin.length) {
+        html += `<div class="card" style="margin:0 0 12px;border:1px solid var(--border)">
+            <div class="card-header"><div class="card-title" style="font-size:12px;color:var(--danger)">▼ Stock bajo mínimo — ${bajoMin.length} producto(s)</div></div>
+            <div class="table-wrap"><table><thead><tr><th>SKU</th><th>Descripción</th><th style="text-align:center">Stock actual</th><th style="text-align:center">Mínimo</th></tr></thead><tbody>
+            ${bajoMin.map(p => {
+                const total = Object.values(stock).filter(s => s.sku === p.sku && s.cantidad > 0).reduce((a, s) => a + s.cantidad, 0);
+                return `<tr>
+                    <td class="text-mono" style="color:var(--accent2)">${p.sku}</td>
+                    <td>${p.descripcion}</td>
+                    <td style="text-align:center"><span class="badge badge-danger">${total}</span></td>
+                    <td style="text-align:center;color:var(--text2)">${p.stockMin}</td>
+                </tr>`;
+            }).join('')}
+            </tbody></table></div></div>`;
+    }
+
+    if (proxVencer.length) {
+        html += `<div class="card" style="margin:0 0 4px;border:1px solid var(--border)">
+            <div class="card-header"><div class="card-title" style="font-size:12px;color:var(--danger)">⏱ Próximos a vencer (≤ 90 días) — ${proxVencer.length} lote(s)</div></div>
+            <div class="table-wrap"><table><thead><tr><th>SKU</th><th>Descripción</th><th>Lote</th><th>Vencimiento</th><th style="text-align:center">Días</th><th style="text-align:center">Stock</th></tr></thead><tbody>
+            ${proxVencer.map(s => {
+                const cls = s.dias < 0 ? 'badge-danger' : s.dias <= 30 ? 'badge-danger' : 'badge-warning';
+                return `<tr>
+                    <td class="text-mono" style="color:var(--accent2)">${s.sku}</td>
+                    <td>${prods[s.sku]?.descripcion || '—'}</td>
+                    <td class="text-mono" style="font-size:11px">${s.lote}</td>
+                    <td>${fmtDate(s.vence)}</td>
+                    <td style="text-align:center"><span class="badge ${cls}">${s.dias < 0 ? 'VENCIDO' : s.dias + 'd'}</span></td>
+                    <td style="text-align:center;font-weight:600">${s.cantidad}</td>
+                </tr>`;
+            }).join('')}
+            </tbody></table></div></div>`;
+    }
+
+    if (!html) html = '<div class="alert-banner success" style="margin:8px 0"><div class="alert-banner-icon">✓</div><div><div class="alert-banner-title">Sin alertas comerciales activas</div><div class="alert-banner-text">Todos los productos tienen movimiento reciente y parámetros dentro de rango.</div></div></div>';
+    c.innerHTML = html;
+}
+
+function renderDashComercial() {
+    const { desdeDate, hastaDate, desdeAnt, hastaAnt } = getDCRango();
+    const salidas    = getDCSalidas(desdeDate, hastaDate);
+    const salidasAnt = getDCSalidas(desdeAnt, hastaAnt);
+
+    renderDCKPIs(salidas, salidasAnt);
+    renderDCProductos(salidas);
+    renderDCClientes(salidas);
+    renderDCEvolucion(salidas, desdeDate, hastaDate);
+    renderDCAlertas();
+
+    const lbl = document.getElementById('dcPeriodoLabel');
+    if (lbl) lbl.textContent = `${desdeDate.toLocaleDateString('es-CL')} — ${hastaDate.toLocaleDateString('es-CL')}`;
+}
+
+function dcOnPeriodoChange() {
+    const custom = document.getElementById('dcPeriodo').value === 'custom';
+    document.getElementById('dcRangoCustom').style.display = custom ? 'flex' : 'none';
+    renderDashComercial();
+}
+function dcRefreshProds()   { const { desdeDate, hastaDate } = getDCRango(); renderDCProductos(getDCSalidas(desdeDate, hastaDate)); }
+function dcRefreshClients() { const { desdeDate, hastaDate } = getDCRango(); renderDCClientes(getDCSalidas(desdeDate, hastaDate)); }
+function dcRefreshEvol()    { const { desdeDate, hastaDate } = getDCRango(); renderDCEvolucion(getDCSalidas(desdeDate, hastaDate), desdeDate, hastaDate); }
+
+function exportDCTableCSV(type) {
+    const { desdeDate, hastaDate } = getDCRango();
+    const salidas = getDCSalidas(desdeDate, hastaDate);
+    const prods   = data.productos || {};
+    let headers, rows;
+
+    if (type === 'productos') {
+        const top  = parseInt(document.getElementById('dcTopProds')?.value || 10);
+        const data_rows = _dcAggProds(salidas).sort((a, b) => b.unidades - a.unidades).slice(0, top);
+        headers = ['Ranking','SKU','Nombre','Principio Activo','Total Unidades','Movimientos','Último Despacho'];
+        rows = data_rows.map((r, i) => [i+1, r.sku, prods[r.sku]?.descripcion||'', prods[r.sku]?.principioActivo||'', r.unidades, r.movs, r.ultimo ? fmtDate(r.ultimo) : '']);
+    } else {
+        const top  = parseInt(document.getElementById('dcTopClients')?.value || 10);
+        const data_rows = _dcAggClients(salidas).sort((a, b) => b.unidades - a.unidades).slice(0, top);
+        headers = ['Ranking','Cliente','Total Unidades','Despachos','Productos Distintos','Último Despacho'];
+        rows = data_rows.map((r, i) => [i+1, r.cliente, r.unidades, r.despachos, r.prods.size, r.ultimo ? fmtDate(r.ultimo) : '']);
+    }
+
+    const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' }));
+    a.download = `celmedik_${type}_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+}
+
+async function exportDCPDF() {
+    if (typeof html2canvas === 'undefined' || typeof window.jspdf === 'undefined') {
+        alert('Librerías PDF no disponibles. Verifique su conexión a internet.'); return;
+    }
+    const { jsPDF } = window.jspdf;
+    const { desdeDate, hastaDate } = getDCRango();
+    const el = document.getElementById('dcContent');
+    if (!el) return;
+
+    const btn = document.querySelector('[onclick="exportDCPDF()"]');
+    if (btn) { btn.textContent = '⏳ Generando…'; btn.disabled = true; }
+
+    try {
+        const canvas = await html2canvas(el, { scale: 1.4, useCORS: true, backgroundColor: '#F5F5F5', logging: false });
+        const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+        const pageW = doc.internal.pageSize.getWidth();
+        const pageH = doc.internal.pageSize.getHeight();
+        const margin = 14;
+
+        doc.setFillColor(29, 45, 62);
+        doc.rect(0, 0, pageW, 24, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(13); doc.setFont('helvetica', 'bold');
+        doc.text('Celmedik WMS — Dashboard Comercial', margin, 11);
+        doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+        doc.text(`Período: ${desdeDate.toLocaleDateString('es-CL')} — ${hastaDate.toLocaleDateString('es-CL')}  ·  Generado: ${new Date().toLocaleString('es-CL')}  ·  Usuario: ${currentUser?.email||'—'}`, margin, 19);
+
+        const imgW  = pageW - margin * 2;
+        const ratio = imgW / canvas.width;
+        const fullH = canvas.height * ratio;
+        let srcY = 0, pageNum = 1, yOffset = 28;
+
+        while (srcY < canvas.height) {
+            const availH  = pageH - yOffset - 12;
+            const slicePx = Math.min(availH / ratio, canvas.height - srcY);
+            const tmp = document.createElement('canvas');
+            tmp.width = canvas.width; tmp.height = slicePx;
+            tmp.getContext('2d').drawImage(canvas, 0, srcY, canvas.width, slicePx, 0, 0, canvas.width, slicePx);
+            doc.addImage(tmp.toDataURL('image/png'), 'PNG', margin, yOffset, imgW, slicePx * ratio);
+            srcY += slicePx;
+            if (srcY < canvas.height) { doc.addPage(); yOffset = 12; pageNum++; }
+        }
+
+        const total = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= total; i++) {
+            doc.setPage(i);
+            doc.setFontSize(7); doc.setTextColor(150, 150, 150);
+            doc.text(`Celmedik WMS · Dashboard Comercial · Normativa ISP Chile  —  Página ${i} de ${total}`, pageW / 2, pageH - 5, { align: 'center' });
+        }
+        doc.save(`dashboard_comercial_${new Date().toISOString().slice(0,10)}.pdf`);
+    } finally {
+        if (btn) { btn.textContent = '↓ Exportar PDF'; btn.disabled = false; }
+    }
+}
 
 // ══ UTILS ══
 function fmtDate(iso) {
