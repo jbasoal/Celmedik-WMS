@@ -794,8 +794,10 @@
                 <div id="movimientos" class="page">
                     <div class="card">
                         <div class="card-header">
-                            <div><div class="card-title">Movimientos</div><div class="card-subtitle">Trazabilidad completa según NT 147</div></div>
-                            <button class="btn btn-primary btn-sm" onclick="openModal('movModal')">+ Nuevo movimiento</button>
+                            <div style="display:flex;align-items:center;gap:16px">
+                                <div><div class="card-title">Movimientos</div><div class="card-subtitle">Trazabilidad completa según NT 147</div></div>
+                                <button class="btn btn-primary btn-sm" onclick="openModal('movModal')">+ Nuevo movimiento</button>
+                            </div>
                         </div>
                         <div class="filter-bar">
                             <select class="form-select" id="fMovTipo" onchange="renderMovimientos()" style="width:auto">
