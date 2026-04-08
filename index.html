@@ -758,9 +758,17 @@
                             <button class="btn btn-sm btn-icon active-bodega" id="btnTOTAL" onclick="selBodega('TOTAL')" style="background:var(--accent);color:white;border-color:var(--accent)">Todas</button>
                         </div>
                         <div class="filter-bar">
-                            <input type="text" class="form-input" id="fStockSKU" placeholder="SKU..." onkeyup="renderStock()">
-                            <input type="text" class="form-input" id="fStockLote" placeholder="Lote..." onkeyup="renderStock()">
-                            <input type="text" class="form-input" id="fStockUbic" placeholder="Ubicación..." onkeyup="renderStock()">
+                            <input type="text" class="form-input" id="fStockSKU" placeholder="SKU..." onkeyup="renderStock()" style="max-width:130px">
+                            <input type="text" class="form-input" id="fStockLote" placeholder="Lote..." onkeyup="renderStock()" style="max-width:130px">
+                            <input type="text" class="form-input" id="fStockUbic" placeholder="Ubicación..." onkeyup="renderStock()" style="max-width:130px">
+                            <select class="form-select" id="fStockStatus" onchange="renderStock()" style="width:auto;min-width:150px">
+                                <option value="Aprobado">✓ Aprobado</option>
+                                <option value="">Todos los estados</option>
+                                <option value="Cuarentena">🔒 Cuarentena</option>
+                                <option value="Rechazado">⚠ Rechazado</option>
+                                <option value="Vencido">⏱ Vencido</option>
+                                <option value="Falsificado">⛔ Falsificado</option>
+                            </select>
                             <select class="form-select" id="fStockSort" onchange="renderStock()" style="width:auto;min-width:170px">
                                 <option value="fefo">Ordenar: FEFO</option>
                                 <option value="sku">Ordenar: SKU A-Z</option>
@@ -768,10 +776,18 @@
                             </select>
                             <button class="btn btn-ghost btn-sm" onclick="clearStockFilters()">Limpiar</button>
                         </div>
+                        <div class="filter-bar" style="gap:6px">
+                            <span class="filter-section-label">Vista:</span>
+                            <button class="btn btn-sm" id="btnViewLote" onclick="setStockView('lote')" style="background:var(--accent);color:white;border-color:var(--accent)">Por Lote (FEFO)</button>
+                            <button class="btn btn-sm btn-ghost" id="btnViewSKU" onclick="setStockView('sku')">Total por SKU</button>
+                        </div>
                         <div class="table-wrap">
-                            <table><thead><tr>
-                                <th>FEFO</th><th>SKU</th><th>Descripción</th><th>N° Reg. ISP</th><th>Lote</th><th>Vencimiento</th><th>Qty</th><th>Unidad de Venta</th><th>Presentación</th><th>Status</th><th>Bodega</th><th>Ubicación</th><th>Acciones</th>
-                            </tr></thead><tbody id="tStock"><tr class="empty-row"><td colspan="13">No hay stock registrado</td></tr></tbody></table>
+                            <table>
+                                <thead><tr id="tStockHead">
+                                    <th>FEFO</th><th>SKU</th><th>Descripción</th><th>N° Reg. ISP</th><th>Lote</th><th>Vencimiento</th><th>Qty</th><th>Unidad de Venta</th><th>Presentación</th><th>Status</th><th>Bodega</th><th>Ubicación</th><th>Acciones</th>
+                                </tr></thead>
+                                <tbody id="tStock"><tr class="empty-row"><td colspan="13">No hay stock registrado</td></tr></tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
@@ -2626,64 +2642,101 @@ function renderMovimientos() {
 }
 
 // ══ STOCK ══
+let stockViewMode = 'lote';
+
+function setStockView(mode) {
+    stockViewMode = mode;
+    const btnLote = document.getElementById('btnViewLote');
+    const btnSKU  = document.getElementById('btnViewSKU');
+    if (btnLote) { btnLote.style.background = mode === 'lote' ? 'var(--accent)' : ''; btnLote.style.color = mode === 'lote' ? 'white' : ''; btnLote.style.borderColor = mode === 'lote' ? 'var(--accent)' : ''; btnLote.className = mode === 'lote' ? 'btn btn-sm' : 'btn btn-sm btn-ghost'; }
+    if (btnSKU)  { btnSKU.style.background  = mode === 'sku'  ? 'var(--accent)' : ''; btnSKU.style.color  = mode === 'sku'  ? 'white' : ''; btnSKU.style.borderColor  = mode === 'sku'  ? 'var(--accent)' : ''; btnSKU.className  = mode === 'sku'  ? 'btn btn-sm' : 'btn btn-sm btn-ghost'; }
+    renderStock();
+}
+
 function renderStock() {
-    const fSKU = (document.getElementById('fStockSKU')?.value||'').toLowerCase();
-    const fLote = (document.getElementById('fStockLote')?.value||'').toLowerCase();
-    const fUbic = (document.getElementById('fStockUbic')?.value||'').toLowerCase();
-    const sortBy = document.getElementById('fStockSort')?.value || 'fefo';
-    const stock = calcStock();
-    const prods = data.productos||{};
-    const hoy = new Date();
+    const fSKU    = (document.getElementById('fStockSKU')?.value||'').toLowerCase();
+    const fLote   = (document.getElementById('fStockLote')?.value||'').toLowerCase();
+    const fUbic   = (document.getElementById('fStockUbic')?.value||'').toLowerCase();
+    const fStatus = document.getElementById('fStockStatus')?.value ?? 'Aprobado';
+    const sortBy  = document.getElementById('fStockSort')?.value || 'fefo';
+    const stock   = calcStock();
+    const prods   = data.productos||{};
+    const hoy     = new Date();
+    const tb      = document.getElementById('tStock');
+    const thead   = document.getElementById('tStockHead');
+    const subtitleEl = document.getElementById('stockSortSubtitle');
 
     let rows = Object.values(stock).filter(s => {
         const bMatch = selectedBodega === 'TOTAL' || s.bodega === selectedBodega;
-        return s.cantidad > 0 && bMatch &&
+        const st = getLoteStatus(s);
+        const statusMatch = fStatus === '' || st === fStatus;
+        return s.cantidad > 0 && bMatch && statusMatch &&
             s.sku.toLowerCase().includes(fSKU) &&
             (s.lote||'').toLowerCase().includes(fLote) &&
             (s.ubicacion||'').toLowerCase().includes(fUbic);
     });
 
-    const subtitleEl = document.getElementById('stockSortSubtitle');
+    // ── VISTA TOTAL POR SKU ──
+    if (stockViewMode === 'sku') {
+        if (thead) thead.innerHTML = '<th>SKU</th><th>Descripción</th><th>N° Reg. ISP</th><th>Stock Total</th><th>Unidad de Venta</th><th>Presentación</th><th>Lotes activos</th>';
+        if (subtitleEl) subtitleEl.textContent = 'Stock total consolidado por SKU';
+        const skuRows = Object.values(rows.reduce((acc, s) => {
+            if (!acc[s.sku]) acc[s.sku] = { sku: s.sku, total: 0, lotes: 0 };
+            acc[s.sku].total += parseInt(s.cantidad)||0;
+            acc[s.sku].lotes += 1;
+            return acc;
+        }, {})).sort((a, b) => a.sku.localeCompare(b.sku));
+        if (!skuRows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="7">No hay stock registrado</td></tr>'; return; }
+        tb.innerHTML = skuRows.map(s => {
+            const p = prods[s.sku];
+            return `<tr>
+                <td class="text-mono" style="color:var(--accent2);font-weight:600">${s.sku}</td>
+                <td>${p?.descripcion||'—'}</td>
+                <td>${p?.registroSanitario ? `<span class="rs-number">${p.registroSanitario}</span>` : '<span class="text-muted">—</span>'}</td>
+                <td style="font-weight:700;font-size:15px;color:var(--text)">${s.total}</td>
+                <td>${p?.unidadVenta||'—'}</td>
+                <td style="font-size:12px;color:var(--text2)">${p?.presentacion||'—'}</td>
+                <td style="color:var(--text2)">${s.lotes} lote${s.lotes!==1?'s':''}</td>
+            </tr>`;
+        }).join('');
+        return;
+    }
+
+    // ── VISTA POR LOTE ──
+    if (thead) thead.innerHTML = '<th>FEFO</th><th>SKU</th><th>Descripción</th><th>N° Reg. ISP</th><th>Lote</th><th>Vencimiento</th><th>Qty</th><th>Unidad de Venta</th><th>Presentación</th><th>Status</th><th>Bodega</th><th>Ubicación</th><th>Acciones</th>';
+
     if (sortBy === 'fefo') {
-        rows.sort((a, b) => {
-            if (!a.vence) return 1;
-            if (!b.vence) return -1;
-            return new Date(a.vence + 'T00:00:00') - new Date(b.vence + 'T00:00:00');
-        });
+        rows.sort((a, b) => { if (!a.vence) return 1; if (!b.vence) return -1; return new Date(a.vence+'T00:00:00') - new Date(b.vence+'T00:00:00'); });
         if (subtitleEl) subtitleEl.textContent = 'Ordenado por FEFO — Vencimiento más próximo primero';
     } else if (sortBy === 'sku') {
         rows.sort((a, b) => a.sku.localeCompare(b.sku));
         if (subtitleEl) subtitleEl.textContent = 'Ordenado por SKU — A a Z';
-    } else if (sortBy === 'desc') {
-        rows.sort((a, b) => {
-            const dA = (prods[a.sku]?.descripcion || a.sku).toLowerCase();
-            const dB = (prods[b.sku]?.descripcion || b.sku).toLowerCase();
-            return dA.localeCompare(dB);
-        });
+    } else {
+        rows.sort((a, b) => ((prods[a.sku]?.descripcion||a.sku).toLowerCase()).localeCompare((prods[b.sku]?.descripcion||b.sku).toLowerCase()));
         if (subtitleEl) subtitleEl.textContent = 'Ordenado por Descripción — A a Z';
     }
 
-    const tb = document.getElementById('tStock');
-    if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="13">No hay stock registrado</td></tr>'; return; }
+    if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="13">No hay stock para el filtro seleccionado</td></tr>'; return; }
 
     tb.innerHTML = rows.map((s, i) => {
-        const vD = s.vence ? new Date(s.vence + 'T00:00:00') : null;
+        const vD = s.vence ? new Date(s.vence+'T00:00:00') : null;
         const dias = vD ? Math.ceil((vD - hoy) / 86400000) : null;
         const dotCls = dias === null ? '' : dias < 0 ? 'exp' : dias <= 30 ? 'exp' : dias <= 90 ? 'warn' : 'ok';
         const isFirst = sortBy === 'fefo' && i === 0;
-        const statusCls = s.status === 'Aprobado' ? 'badge-success' : s.status === 'Rechazado' ? 'badge-danger' : 'badge-warning';
+        const st = getLoteStatus(s);
+        const statusCls = st === 'Aprobado' ? 'badge-success' : st === 'Rechazado' || st === 'Falsificado' || st === 'Vencido' ? 'badge-danger' : 'badge-warning';
         const rs = prods[s.sku]?.registroSanitario;
         return `<tr>
-            <td><div class="fefo-indicator"><div class="fefo-dot ${isFirst ? 'first' : dotCls}"></div>${isFirst ? '<span style="color:var(--accent2);font-size:10px;font-weight:600">FEFO</span>' : ''}</div></td>
+            <td><div class="fefo-indicator"><div class="fefo-dot ${isFirst?'first':dotCls}"></div>${isFirst?'<span style="color:var(--accent2);font-size:10px;font-weight:600">FEFO</span>':''}</div></td>
             <td class="text-mono" style="color:var(--accent2)">${s.sku}</td>
             <td style="color:var(--text)">${prods[s.sku]?.descripcion||'—'}</td>
-            <td>${rs ? `<span class="rs-number">${rs}</span>` : '<span class="text-muted">—</span>'}</td>
+            <td>${rs?`<span class="rs-number">${rs}</span>`:'<span class="text-muted">—</span>'}</td>
             <td class="text-mono" style="font-size:11px">${s.lote}</td>
-            <td>${vD ? fmtDate(s.vence) : '—'}</td>
+            <td>${vD?fmtDate(s.vence):'—'}</td>
             <td style="font-weight:600;color:var(--text)">${s.cantidad}</td>
             <td>${prods[s.sku]?.unidadVenta||'—'}</td>
             <td style="font-size:12px;color:var(--text2)">${prods[s.sku]?.presentacion||'—'}</td>
-            <td><span class="badge ${statusCls}">${s.status}</span></td>
+            <td><span class="badge ${statusCls}">${st}</span></td>
             <td>${s.bodega||'—'}</td>
             <td>${s.ubicacion||'—'}</td>
             <td><button class="btn btn-sm btn-icon" style="font-size:10px" onclick="verTrazabilidadLote('${s.sku}','${s.lote}')">Trazar</button></td>
@@ -2694,6 +2747,7 @@ function renderStock() {
 function clearStockFilters() {
     ['fStockSKU','fStockLote','fStockUbic'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
     const sort = document.getElementById('fStockSort'); if(sort) sort.value = 'fefo';
+    const status = document.getElementById('fStockStatus'); if(status) status.value = 'Aprobado';
     renderStock();
 }
 
