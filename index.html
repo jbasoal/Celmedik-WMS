@@ -1870,10 +1870,18 @@ function calcStock() {
             stock[key].status = m.status || 'Aprobado';
         } else if (m.tipo === 'AjusteInventario') {
             if (!stock[key]) stock[key] = { sku:m.sku, lote:m.lote, cantidad:0, vence:m.vence, bodega:m.bodega||'', ubicacion:m.ubicacion||'', status:'Aprobado' };
-            stock[key].cantidad += parseInt(m.cantidad)||0; // cantidad ya viene firmada (+/-)
+            stock[key].cantidad += parseInt(m.cantidad)||0;
         } else if (m.tipo === 'CambioEstado') {
             if (stock[key]) stock[key].status = m.status || stock[key].status;
         }
+    });
+    // C1: Integrar devoluciones Aprobadas al stock
+    Object.values(data.devoluciones||{}).forEach(d => {
+        if (d.status !== 'Aprobado') return;
+        const matchKey = Object.keys(stock).find(k => { const [s,l] = k.split('|'); return s === d.sku && l === d.lote; });
+        const key = matchKey || `${d.sku}|${d.lote}||`;
+        if (!stock[key]) stock[key] = { sku:d.sku, lote:d.lote, cantidad:0, vence:'', bodega:'', ubicacion:'', status:'Aprobado' };
+        stock[key].cantidad += parseInt(d.cantidad)||0;
     });
     return stock;
 }
@@ -3177,6 +3185,13 @@ function saveAjuste() {
     if (!bodega)                 { showFormError('ajusteModal-err','Seleccione la bodega.'); return; }
     if (!qty || qty < 1)         { showFormError('ajusteModal-err','La cantidad debe ser mayor a cero.'); return; }
     if (!obs)                    { showFormError('ajusteModal-err','Ingrese el motivo del ajuste.'); return; }
+    if (ajusteTipo === 'Negativo') {
+        const stockActual = calcStock();
+        const stockDisponible = Object.values(stockActual)
+            .filter(s => s.sku === sku && s.lote === lote)
+            .reduce((a, s) => a + (parseInt(s.cantidad)||0), 0);
+        if (qty > stockDisponible) { showFormError('ajusteModal-err', `Stock insuficiente. Disponible para lote ${lote}: ${stockDisponible} unidades.`); return; }
+    }
 
     const cantidadFinal = ajusteTipo === 'Positivo' ? qty : -qty;
     const mov = {
@@ -3319,6 +3334,11 @@ function verTrazabilidadLote(sku, lote) {
                 desc = `Destrucción ISP: ${m.cantidad} ud. — Acta: ${m.referencia||'—'}`;
                 meta = `Empresa: ${m.proveedor||'—'} | ${m.observaciones||''}`;
                 clase = 'salida';
+            } else if (m.tipo === 'AjusteInventario') {
+                const esPos = m.ajusteTipo === 'Positivo';
+                desc = `Ajuste de Inventario: <strong style="color:${esPos?'var(--success)':'var(--danger)'}">${esPos?'+':'−'}${Math.abs(parseInt(m.cantidad)||0)} ud.</strong> (${m.ajusteTipo||'—'})`;
+                meta = `Motivo: ${m.observaciones||'—'} | Bodega: ${m.bodega||'—'} / ${m.ubicacion||'—'}`;
+                clase = 'ajuste';
             } else {
                 desc = `${m.tipo}: ${m.cantidad} ud. en ${m.bodega||'—'} / ${m.ubicacion||'—'}`;
                 meta = `Ref: ${m.referencia||'—'} | Proveedor/Cliente: ${m.proveedor||'—'} | Status: ${m.status}`;
@@ -3623,11 +3643,11 @@ function renderDCKPIs(salidas, salidasAnt) {
     const totalMovs   = salidas.length;
     const totalUnid   = salidas.reduce((a, m) => a + (parseInt(m.cantidad) || 0), 0);
     const totalProds  = new Set(salidas.map(m => m.sku)).size;
-    const totalCl     = new Set(salidas.filter(m => m.proveedor?.trim()).map(m => m.proveedor.trim().toUpperCase())).size;
+    const totalCl     = new Set(salidas.filter(m => typeof m.proveedor === 'string' && m.proveedor.trim()).map(m => m.proveedor.trim().toUpperCase())).size;
     const antMovs     = salidasAnt.length;
     const antUnid     = salidasAnt.reduce((a, m) => a + (parseInt(m.cantidad) || 0), 0);
     const antProds    = new Set(salidasAnt.map(m => m.sku)).size;
-    const antCl       = new Set(salidasAnt.filter(m => m.proveedor?.trim()).map(m => m.proveedor.trim().toUpperCase())).size;
+    const antCl       = new Set(salidasAnt.filter(m => typeof m.proveedor === 'string' && m.proveedor.trim()).map(m => m.proveedor.trim().toUpperCase())).size;
 
     const setKPI = (id, val, ant, icon, label, bg, color) => {
         const el = document.getElementById(id); if (!el) return;
@@ -4016,14 +4036,21 @@ async function exportDCPDF() {
 
 // ══ UTILS ══
 function fmtDate(iso) {
-    if (!iso) return '—';
-    const d = new Date(iso + (iso.includes('T') ? '' : 'T00:00:00'));
-    return d.toLocaleDateString('es-CL', { day:'2-digit', month:'2-digit', year:'numeric' });
+    if (!iso || !String(iso).trim()) return '—';
+    try {
+        const s = String(iso).trim();
+        const d = new Date(s.includes('T') ? s : s + 'T00:00:00');
+        if (isNaN(d.getTime())) return '—';
+        return d.toLocaleDateString('es-CL', { day:'2-digit', month:'2-digit', year:'numeric' });
+    } catch { return '—'; }
 }
 function fmtDateTime(iso) {
-    if (!iso) return '—';
-    const d = new Date(iso);
-    return d.toLocaleDateString('es-CL', { day:'2-digit', month:'2-digit', year:'numeric' }) + ' ' + d.toLocaleTimeString('es-CL', { hour:'2-digit', minute:'2-digit' });
+    if (!iso || !String(iso).trim()) return '—';
+    try {
+        const d = new Date(iso);
+        if (isNaN(d.getTime())) return '—';
+        return d.toLocaleDateString('es-CL', { day:'2-digit', month:'2-digit', year:'numeric' }) + ' ' + d.toLocaleTimeString('es-CL', { hour:'2-digit', minute:'2-digit' });
+    } catch { return '—'; }
 }
 </script>
 </body>
