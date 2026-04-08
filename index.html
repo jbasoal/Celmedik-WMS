@@ -2012,7 +2012,8 @@ function _refreshMiStatusField(tipo) {
     const miStatus      = document.getElementById('mi-status');
     const miUbicGroup   = document.getElementById('mi-ubic-group');
     const miUbicLabel   = document.getElementById('mi-ubic-label');
-    if (!miStatusGroup || !miStatus) return;
+    console.log('[DEBUG] _refreshMiStatusField tipo=', tipo, 'statusGroup=', miStatusGroup, 'ubicGroup=', miUbicGroup);
+    if (!miStatusGroup || !miStatus) { console.log('[DEBUG] elementos no encontrados, saliendo'); return; }
 
     if (tipo === 'Entrada') {
         miStatus.innerHTML =
