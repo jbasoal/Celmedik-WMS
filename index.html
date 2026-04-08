@@ -1256,12 +1256,6 @@
                     <option value="">Seleccionar...</option>
                 </select>
             </div>
-            <div class="form-group">
-                <label class="form-label">Ubicación</label>
-                <div id="md-ubic-wrap">
-                    <input type="text" class="form-input" id="md-ubic" placeholder="Ej: Estante A-3">
-                </div>
-            </div>
         </div>
         <div class="form-group">
             <label class="form-label">Observaciones generales</label>
@@ -1307,7 +1301,9 @@
                 </div>
                 <div class="form-group" id="mi-ubic-group" style="display:none">
                     <label class="form-label" id="mi-ubic-label">Ubicación</label>
-                    <input type="text" class="form-input" id="mi-ubic" placeholder="Ej: Estante A-1">
+                    <div id="mi-ubic-wrap">
+                        <input type="text" class="form-input" id="mi-ubic" placeholder="Ej: Estante A-1">
+                    </div>
                 </div>
                 <div class="form-group" id="mi-status-group" style="display:none">
                     <label class="form-label" id="mi-status-label">Estatus <span style="color:var(--danger)">*</span></label>
@@ -1978,17 +1974,18 @@ function updateBodegaSelect() {
 function onDocBodegaChange() {
     const nombre = document.getElementById('md-bodega').value;
     const bodega = Object.values(data.bodegas || {}).find(b => b.nombre === nombre);
-    const wrap = document.getElementById('md-ubic-wrap');
+    const miWrap = document.getElementById('mi-ubic-wrap');
+    if (!miWrap) return;
     if (bodega && Array.isArray(bodega.ubicaciones) && bodega.ubicaciones.length) {
         const sel = document.createElement('select');
-        sel.className = 'form-select'; sel.id = 'md-ubic';
+        sel.className = 'form-select'; sel.id = 'mi-ubic';
         sel.innerHTML = '<option value="">Seleccionar ubicación...</option>';
         bodega.ubicaciones.forEach(u => {
             const opt = document.createElement('option'); opt.value = u; opt.textContent = u; sel.appendChild(opt);
         });
-        wrap.innerHTML = ''; wrap.appendChild(sel);
+        miWrap.innerHTML = ''; miWrap.appendChild(sel);
     } else {
-        wrap.innerHTML = '<input type="text" class="form-input" id="md-ubic" placeholder="Ej: Estante A-3">';
+        miWrap.innerHTML = '<input type="text" class="form-input" id="mi-ubic" placeholder="Ej: Estante A-1">';
     }
 }
 
@@ -3279,8 +3276,8 @@ function resetMovModal() {
     const fechaEl = document.getElementById('md-fecha');
     if (fechaEl) fechaEl.value = new Date().toISOString().split('T')[0];
     const bodegaEl = document.getElementById('md-bodega'); if (bodegaEl) bodegaEl.value = '';
-    const ubicWrap = document.getElementById('md-ubic-wrap');
-    if (ubicWrap) ubicWrap.innerHTML = '<input type="text" class="form-input" id="md-ubic" placeholder="Ej: Estante A-3">';
+    const ubicWrap = document.getElementById('mi-ubic-wrap');
+    if (ubicWrap) ubicWrap.innerHTML = '<input type="text" class="form-input" id="mi-ubic" placeholder="Ej: Estante A-1">';
     const errEl = document.getElementById('movModal-err'); if (errEl) errEl.style.display = 'none';
     resetItemForm();
     _refreshMiStatusField(document.getElementById('md-tipo').value || 'Entrada');
