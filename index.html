@@ -614,6 +614,10 @@
                 <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
                 Retiro Mercado
             </a>
+            <a class="nav-link" data-page="ajustes" id="nav-ajustes" style="display:none">
+                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span>
+                Ajuste de Inventario
+            </a>
 
             <div class="nav-section">Trazabilidad</div>
             <a class="nav-link" data-page="trazabilidad">
@@ -798,7 +802,7 @@
                                 <option value="">Todos los tipos</option>
                                 <option value="Entrada">Entrada</option>
                                 <option value="Salida">Salida</option>
-                                <option value="Ajuste">Ajuste</option>
+                                <option value="Ajuste">Cambio de Status</option>
                             </select>
                             <input type="text" class="form-input" id="fMovSKU" placeholder="SKU..." onkeyup="renderMovimientos()">
                             <input type="text" class="form-input" id="fMovLote" placeholder="Lote..." onkeyup="renderMovimientos()">
@@ -867,6 +871,25 @@
                             <button class="btn btn-primary btn-sm" onclick="ejecutarRetiro()">Rastrear lote</button>
                         </div>
                         <div id="retiroResults"></div>
+                    </div>
+                </div>
+
+                <!-- ── AJUSTE DE INVENTARIO ── -->
+                <div id="ajustes" class="page">
+                    <div class="card">
+                        <div class="card-header">
+                            <div><div class="card-title">Ajuste de Inventario</div><div class="card-subtitle">Ajustes positivos y negativos de stock · Solo perfil Maestro</div></div>
+                            <button class="btn btn-primary btn-sm" onclick="openAjusteModal()">+ Nuevo Ajuste</button>
+                        </div>
+                        <div class="filter-bar">
+                            <input type="text" class="form-input" id="fAjusteSKU" placeholder="SKU..." style="max-width:160px" oninput="renderAjustes()">
+                            <input type="text" class="form-input" id="fAjusteLote" placeholder="Lote..." style="max-width:160px" oninput="renderAjustes()">
+                        </div>
+                        <div class="table-wrap">
+                            <table><thead><tr>
+                                <th>Fecha</th><th>SKU</th><th>Descripción</th><th>Lote</th><th>Bodega</th><th>Ubicación</th><th>Tipo Ajuste</th><th>Cantidad</th><th>Motivo</th><th>Usuario</th>
+                            </tr></thead><tbody id="tAjustes"></tbody></table>
+                        </div>
                     </div>
                 </div>
 
@@ -1228,7 +1251,7 @@
                     <option value="">Seleccionar...</option>
                     <option value="Entrada">Entrada</option>
                     <option value="Salida">Salida</option>
-                    <option value="Ajuste">Ajuste</option>
+                    <option value="Ajuste">Cambio de Status</option>
                     <option value="Devolución">Devolución</option>
                 </select>
             </div>
@@ -1592,6 +1615,72 @@
     </div>
 </div>
 
+<!-- ── MODAL AJUSTE DE INVENTARIO ── -->
+<div id="ajusteModal" class="modal">
+    <div class="modal-box" style="max-width:520px">
+        <div class="modal-header">
+            <div><div class="modal-title">Nuevo Ajuste de Inventario</div><div class="modal-subtitle">Solo perfil Maestro · Afecta stock inmediatamente</div></div>
+            <button class="modal-close" onclick="closeModal('ajusteModal')">✕</button>
+        </div>
+        <div id="ajusteModal-err" class="form-error-banner"></div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">SKU <span style="color:var(--danger)">*</span></label>
+                <input type="text" class="form-input" id="aj-sku" placeholder="SKU del producto" oninput="onAjSKUChange()">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Descripción</label>
+                <input type="text" class="form-input" id="aj-desc" readonly style="background:var(--bg3);color:var(--text2)">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Lote <span style="color:var(--danger)">*</span></label>
+                <input type="text" class="form-input" id="aj-lote" placeholder="Número de lote">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Vencimiento</label>
+                <input type="date" class="form-input" id="aj-vence">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Bodega <span style="color:var(--danger)">*</span></label>
+                <select class="form-select" id="aj-bodega" onchange="onAjBodegaChange()">
+                    <option value="">Seleccionar...</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Ubicación</label>
+                <div id="aj-ubic-wrap">
+                    <input type="text" class="form-input" id="aj-ubic" placeholder="Ubicación">
+                </div>
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Tipo de Ajuste <span style="color:var(--danger)">*</span></label>
+                <select class="form-select" id="aj-tipo">
+                    <option value="Positivo">➕ Positivo — aumenta stock</option>
+                    <option value="Negativo">➖ Negativo — reduce stock</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Cantidad <span style="color:var(--danger)">*</span></label>
+                <input type="number" class="form-input" id="aj-qty" min="1" placeholder="0">
+            </div>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Motivo del ajuste <span style="color:var(--danger)">*</span></label>
+            <textarea class="form-textarea" id="aj-obs" rows="2" placeholder="Describa el motivo del ajuste..."></textarea>
+        </div>
+        <div class="btn-row">
+            <button type="button" class="btn btn-ghost" onclick="closeModal('ajusteModal')">Cancelar</button>
+            <button type="button" class="btn btn-primary" onclick="saveAjuste()">Guardar Ajuste</button>
+        </div>
+    </div>
+</div>
+
 <script>
 // ══ FIREBASE ══
 const firebaseConfig = {
@@ -1627,6 +1716,8 @@ function loadProfile() {
         document.getElementById('userRole').textContent = `Perfil: ${userPerfil}`;
         document.getElementById('userEmail').textContent = currentUser.email;
         document.getElementById('userInitial').textContent = currentUser.email[0].toUpperCase();
+        const navAjustes = document.getElementById('nav-ajustes');
+        if (navAjustes) navAjustes.style.display = userPerfil === 'Maestro' ? '' : 'none';
         showScreen('app');
         attachListeners();
     });
@@ -1689,8 +1780,9 @@ function navigateTo(page) {
     if (pg) pg.classList.add('active');
     const lnk = document.querySelector(`.nav-link[data-page="${page}"]`);
     if (lnk) lnk.classList.add('active');
-    const titles = { dashboard:'Dashboard', productos:'Productos Maestro', stock:'Stock Actual', bodegas:'Bodegas', movimientos:'Movimientos', cuarentena:'Cuarentena', devoluciones:'Devoluciones', retiro:'Retiro de Mercado', trazabilidad:'Trazabilidad de Lotes', alertas:'Alertas', reportes:'Reportes ISP', auditoria:'Auditoría', dashComercial:'Dashboard Comercial' };
+    const titles = { dashboard:'Dashboard', productos:'Productos Maestro', stock:'Stock Actual', bodegas:'Bodegas', movimientos:'Movimientos', cuarentena:'Cuarentena', devoluciones:'Devoluciones', retiro:'Retiro de Mercado', ajustes:'Ajuste de Inventario', trazabilidad:'Trazabilidad de Lotes', alertas:'Alertas', reportes:'Reportes ISP', auditoria:'Auditoría', dashComercial:'Dashboard Comercial' };
     document.getElementById('pageTitle').textContent = titles[page] || page;
+    if (page === 'ajustes') { if (userPerfil !== 'Maestro') { navigateTo('dashboard'); return; } renderAjustes(); }
     if (page === 'alertas') renderAlertas();
     if (page === 'auditoria') renderAuditoria();
     if (page === 'dashComercial') renderDashComercial();
@@ -1758,6 +1850,9 @@ function calcStock() {
             if (!stock[key]) stock[key] = { sku:m.sku, lote:m.lote, cantidad:0, vence:m.vence, bodega:m.bodega||'', ubicacion:m.ubicacion||'', status:'Aprobado' };
             stock[key].cantidad += parseInt(m.cantidad)||0;
             stock[key].status = m.status || 'Aprobado';
+        } else if (m.tipo === 'AjusteInventario') {
+            if (!stock[key]) stock[key] = { sku:m.sku, lote:m.lote, cantidad:0, vence:m.vence, bodega:m.bodega||'', ubicacion:m.ubicacion||'', status:'Aprobado' };
+            stock[key].cantidad += parseInt(m.cantidad)||0; // cantidad ya viene firmada (+/-)
         } else if (m.tipo === 'CambioEstado') {
             if (stock[key]) stock[key].status = m.status || stock[key].status;
         }
@@ -2936,6 +3031,130 @@ function saveDevolucion(e) {
     };
     db.ref(`usuarios/${currentUser.uid}/devoluciones`).push(dev)
         .then(() => { logAudit('Devolución', 'Devoluciones', sku, dev.lote, dev.motivo); closeModal('devModal'); });
+}
+
+// ══ AJUSTE DE INVENTARIO ══
+function renderAjustes() {
+    const fSKU  = (document.getElementById('fAjusteSKU')?.value||'').toLowerCase();
+    const fLote = (document.getElementById('fAjusteLote')?.value||'').toLowerCase();
+    const ajustes = Object.entries(data.movimientos||{})
+        .filter(([,m]) => m.tipo === 'AjusteInventario')
+        .filter(([,m]) => (!fSKU || (m.sku||'').toLowerCase().includes(fSKU)) && (!fLote || (m.lote||'').toLowerCase().includes(fLote)))
+        .sort(([,a],[,b]) => new Date(b.fecha) - new Date(a.fecha));
+    const tb = document.getElementById('tAjustes');
+    if (!tb) return;
+    if (!ajustes.length) { tb.innerHTML = '<tr><td colspan="10" class="text-center text-muted" style="padding:24px">Sin ajustes registrados</td></tr>'; return; }
+    tb.innerHTML = ajustes.map(([,m]) => {
+        const esPos = m.ajusteTipo === 'Positivo';
+        const qty = Math.abs(parseInt(m.cantidad)||0);
+        return `<tr>
+            <td style="font-size:11px">${fmtDateTime(m.fecha)}</td>
+            <td class="text-mono" style="color:var(--accent2);font-weight:600">${m.sku}</td>
+            <td>${m.descripcion||'—'}</td>
+            <td class="text-mono" style="font-size:11px">${m.lote}</td>
+            <td>${m.bodega||'—'}</td>
+            <td style="font-size:11px">${m.ubicacion||'—'}</td>
+            <td><span class="badge ${esPos?'badge-success':'badge-danger'}">${esPos?'➕ Positivo':'➖ Negativo'}</span></td>
+            <td style="font-weight:700;color:${esPos?'var(--success)':'var(--danger)'}">${esPos?'+':'−'}${qty}</td>
+            <td style="font-size:11px;max-width:160px">${m.observaciones||'—'}</td>
+            <td style="font-size:11px;color:var(--text2)">${m.usuario||'—'}</td>
+        </tr>`;
+    }).join('');
+}
+
+function openAjusteModal() {
+    if (userPerfil !== 'Maestro') { alert('Esta función es exclusiva del perfil Maestro.'); return; }
+    ['aj-sku','aj-desc','aj-lote','aj-obs'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    const vEl = document.getElementById('aj-vence'); if (vEl) vEl.value = '';
+    const qEl = document.getElementById('aj-qty');  if (qEl) qEl.value = '';
+    const tEl = document.getElementById('aj-tipo'); if (tEl) tEl.value = 'Positivo';
+    const errEl = document.getElementById('ajusteModal-err'); if (errEl) errEl.style.display = 'none';
+    const bodSel = document.getElementById('aj-bodega');
+    if (bodSel) {
+        bodSel.innerHTML = '<option value="">Seleccionar...</option>';
+        Object.values(data.bodegas||{}).forEach(b => {
+            const opt = document.createElement('option'); opt.value = b.nombre; opt.textContent = b.nombre; bodSel.appendChild(opt);
+        });
+    }
+    const ubWrap = document.getElementById('aj-ubic-wrap');
+    if (ubWrap) ubWrap.innerHTML = '<input type="text" class="form-input" id="aj-ubic" placeholder="Ubicación">';
+    openModal('ajusteModal');
+}
+
+function onAjSKUChange() {
+    const sku = (document.getElementById('aj-sku')?.value||'').trim().toUpperCase();
+    if (document.getElementById('aj-sku')) document.getElementById('aj-sku').value = sku;
+    const descEl = document.getElementById('aj-desc');
+    if (descEl) descEl.value = data.productos[sku]?.descripcion || '';
+}
+
+function onAjBodegaChange() {
+    const nombre = document.getElementById('aj-bodega')?.value;
+    const bodega = Object.values(data.bodegas||{}).find(b => b.nombre === nombre);
+    const wrap = document.getElementById('aj-ubic-wrap');
+    if (!wrap) return;
+    if (bodega && Array.isArray(bodega.ubicaciones) && bodega.ubicaciones.length) {
+        const sel = document.createElement('select');
+        sel.className = 'form-select'; sel.id = 'aj-ubic';
+        sel.innerHTML = '<option value="">Seleccionar ubicación...</option>';
+        bodega.ubicaciones.forEach(u => { const opt = document.createElement('option'); opt.value=u; opt.textContent=u; sel.appendChild(opt); });
+        wrap.innerHTML = ''; wrap.appendChild(sel);
+    } else {
+        wrap.innerHTML = '<input type="text" class="form-input" id="aj-ubic" placeholder="Ubicación">';
+    }
+}
+
+function saveAjuste() {
+    if (userPerfil !== 'Maestro') return;
+    const sku       = (document.getElementById('aj-sku')?.value||'').trim().toUpperCase();
+    const lote      = (document.getElementById('aj-lote')?.value||'').trim();
+    const vence     = document.getElementById('aj-vence')?.value || '';
+    const bodega    = document.getElementById('aj-bodega')?.value || '';
+    const ubic      = (document.getElementById('aj-ubic')?.value||'').trim();
+    const ajusteTipo = document.getElementById('aj-tipo')?.value || 'Positivo';
+    const qty       = parseInt(document.getElementById('aj-qty')?.value)||0;
+    const obs       = (document.getElementById('aj-obs')?.value||'').trim();
+
+    if (!sku)                    { showFormError('ajusteModal-err','Ingrese el SKU.'); return; }
+    if (!data.productos[sku])    { showFormError('ajusteModal-err',`SKU "${sku}" no existe en el maestro.`); return; }
+    if (!lote)                   { showFormError('ajusteModal-err','Ingrese el lote.'); return; }
+    if (!bodega)                 { showFormError('ajusteModal-err','Seleccione la bodega.'); return; }
+    if (!qty || qty < 1)         { showFormError('ajusteModal-err','La cantidad debe ser mayor a cero.'); return; }
+    if (!obs)                    { showFormError('ajusteModal-err','Ingrese el motivo del ajuste.'); return; }
+
+    const cantidadFinal = ajusteTipo === 'Positivo' ? qty : -qty;
+    const mov = {
+        tipo: 'AjusteInventario', ajusteTipo,
+        sku, lote, vence,
+        descripcion: data.productos[sku]?.descripcion || '',
+        cantidad: cantidadFinal,
+        bodega, ubicacion: ubic,
+        observaciones: obs,
+        fecha: new Date().toISOString(),
+        usuario: currentUser.email,
+        status: 'Aprobado'
+    };
+
+    showConfirm(
+        `Confirmar Ajuste ${ajusteTipo}`,
+        'El ajuste modificará el stock permanentemente',
+        `<strong>${ajusteTipo === 'Positivo' ? '➕ Ajuste Positivo' : '➖ Ajuste Negativo'}</strong><br>
+         <span style="color:var(--text3)">SKU:</span> <strong>${sku}</strong> · <span style="color:var(--text3)">Lote:</span> <strong>${lote}</strong><br>
+         <span style="color:var(--text3)">Cantidad:</span> <strong style="color:${ajusteTipo==='Positivo'?'var(--success)':'var(--danger)'}">${ajusteTipo==='Positivo'?'+':'−'}${qty}</strong><br>
+         <span style="color:var(--text3)">Bodega:</span> ${bodega}<br>
+         <span style="color:var(--text3)">Motivo:</span> ${obs}`,
+        'Confirmar Ajuste',
+        ajusteTipo === 'Positivo' ? 'btn-primary' : 'btn-danger',
+        () => {
+            db.ref(`usuarios/${currentUser.uid}/movimientos/${Date.now()}`).set(mov)
+                .then(() => {
+                    logAudit(`Ajuste ${ajusteTipo}`, 'AjusteInventario', sku, lote, `${ajusteTipo==='Positivo'?'+':'−'}${qty} ud. · ${obs}`);
+                    closeModal('ajusteModal');
+                    renderAjustes();
+                })
+                .catch(e => showFormError('ajusteModal-err', 'Error al guardar: ' + e.message));
+        }
+    );
 }
 
 function renderDevoluciones() {
