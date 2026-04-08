@@ -263,6 +263,9 @@
         .page { display: none; }
         .page.active { display: block; animation: fadeIn 0.2s ease; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .spinner-sm { display:inline-block; width:13px; height:13px; border:2px solid rgba(255,255,255,0.4); border-top-color:#fff; border-radius:50%; animation:spin .7s linear infinite; vertical-align:middle; margin-right:6px; }
+        .spinner-sm.dark { border-color:rgba(0,0,0,0.15); border-top-color:var(--accent); }
 
         /* ══════════════════════════════════════
            CARDS
@@ -1694,7 +1697,7 @@
         </div>
         <div class="btn-row">
             <button type="button" class="btn btn-ghost" onclick="closeModal('ajusteModal')">Cancelar</button>
-            <button type="button" class="btn btn-primary" onclick="saveAjuste()">Guardar Ajuste</button>
+            <button type="button" class="btn btn-primary" id="btn-save-ajuste" onclick="saveAjuste()">Guardar Ajuste</button>
         </div>
     </div>
 </div>
@@ -1872,7 +1875,10 @@ function calcStock() {
             if (!stock[key]) stock[key] = { sku:m.sku, lote:m.lote, cantidad:0, vence:m.vence, bodega:m.bodega||'', ubicacion:m.ubicacion||'', status:'Aprobado' };
             stock[key].cantidad += parseInt(m.cantidad)||0;
         } else if (m.tipo === 'CambioEstado') {
-            if (stock[key]) stock[key].status = m.status || stock[key].status;
+            // I5: Retiro de mercado es persistente — no puede ser sobreescrito por CambioEstado
+            if (stock[key] && stock[key].status !== 'Retiro de mercado') {
+                stock[key].status = m.status || stock[key].status;
+            }
         }
     });
     // C1: Integrar devoluciones Aprobadas al stock
@@ -1989,6 +1995,7 @@ function saveProducto(e) {
     e.preventDefault();
     const sku = document.getElementById('p-sku').value.trim().toUpperCase();
     if (!sku) return;
+    const esEdicion = !!data.productos[sku]; // I2: determinar antes de escribir
     const p = {
         sku, descripcion: document.getElementById('p-desc').value.trim(),
         registroSanitario: document.getElementById('p-rs').value.trim(),
@@ -2003,7 +2010,7 @@ function saveProducto(e) {
         fecha: new Date().toISOString()
     };
     db.ref(`usuarios/${currentUser.uid}/productos/${sku}`).set(p)
-        .then(() => { logAudit('Crear/Editar', 'Productos', sku, '', p.descripcion); closeModal('productModal'); })
+        .then(() => { logAudit(esEdicion ? 'Editar' : 'Crear', 'Productos', sku, '', p.descripcion); closeModal('productModal'); })
         .catch(err => alert('Error: ' + err.message));
 }
 
@@ -2053,7 +2060,13 @@ function renderBodegas() {
 }
 
 function deleteBodega(id) {
-    if (confirm('¿Eliminar esta bodega?')) db.ref(`usuarios/${currentUser.uid}/bodegas/${id}`).remove();
+    const b = data.bodegas?.[id]; if (!b) return;
+    showConfirm('Eliminar Bodega', 'Esta acción no se puede deshacer',
+        `¿Eliminar la bodega <strong>${b.nombre}</strong>? Se perderá toda su configuración de ubicaciones.`,
+        'Eliminar', 'btn-danger',
+        () => { db.ref(`usuarios/${currentUser.uid}/bodegas/${id}`).remove()
+            .then(() => logAudit('Eliminar', 'Bodegas', id, '', b.nombre)); }
+    );
 }
 
 function renderBodegaBtns() {
@@ -2097,6 +2110,7 @@ function onDocBodegaChange() {
     const bodega = Object.values(data.bodegas || {}).find(b => b.nombre === nombre);
     const miWrap = document.getElementById('mi-ubic-wrap');
     if (!miWrap) return;
+    const prevUbic = (document.getElementById('mi-ubic')?.value || '').trim(); // I6: preservar valor actual
     if (bodega && Array.isArray(bodega.ubicaciones) && bodega.ubicaciones.length) {
         const sel = document.createElement('select');
         sel.className = 'form-select'; sel.id = 'mi-ubic';
@@ -2105,8 +2119,10 @@ function onDocBodegaChange() {
             const opt = document.createElement('option'); opt.value = u; opt.textContent = u; sel.appendChild(opt);
         });
         miWrap.innerHTML = ''; miWrap.appendChild(sel);
+        if (prevUbic) sel.value = prevUbic; // I6: restaurar si existe en nueva lista
     } else {
         miWrap.innerHTML = '<input type="text" class="form-input" id="mi-ubic" placeholder="Ej: Estante A-1">';
+        if (prevUbic) document.getElementById('mi-ubic').value = prevUbic; // I6: restaurar texto libre
     }
 }
 
@@ -2244,6 +2260,27 @@ function selectLoteNormal(lote, vence, status, stock) {
     document.querySelectorAll('.lote-selector-item').forEach(el => el.classList.remove('lote-sel-active'));
     const card = document.getElementById('lotecard-' + lote.replace(/[^a-zA-Z0-9]/g,'_'));
     if (card) card.classList.add('lote-sel-active');
+    // I4: Aviso FEFO — si no es el lote con vencimiento más próximo
+    const sku = document.getElementById('mi-sku').value.trim().toUpperCase();
+    const lotesDisp = Object.values(calcStock())
+        .filter(s => s.sku === sku && s.cantidad > 0 && getLoteStatus(s) === 'Aprobado')
+        .sort((a, b) => new Date(a.vence||'9999') - new Date(b.vence||'9999'));
+    const fefoLote = lotesDisp[0];
+    let warnEl = document.getElementById('fefo-advisory');
+    if (!warnEl) {
+        warnEl = document.createElement('div');
+        warnEl.id = 'fefo-advisory';
+        warnEl.className = 'alert-banner warning';
+        warnEl.style.cssText = 'padding:8px 12px;margin-top:6px';
+        const wrap = document.getElementById('mi-lote-wrap');
+        if (wrap) wrap.appendChild(warnEl);
+    }
+    if (fefoLote && fefoLote.lote !== lote) {
+        warnEl.style.display = '';
+        warnEl.innerHTML = `<div class="alert-banner-text">⚠ <strong>FEFO:</strong> El lote <strong>${fefoLote.lote}</strong> vence antes (${fmtDate(fefoLote.vence)}) y debería despacharse primero según BPA NT147.</div>`;
+    } else {
+        warnEl.style.display = 'none';
+    }
 }
 
 function selectLoteDestruccion(sku, lote, vence, status, stockQty) {
@@ -2420,6 +2457,7 @@ function saveDocumento() {
         `Guardar ${tipo}`,
         tipo === 'Salida' ? 'btn-danger' : 'btn-primary',
         () => {
+            _setBtnLoading('btn-save-doc', true); // I1: spinner
             const updates = {};
             const ts0 = Date.now();
             movDocItems.forEach((item, i) => {
@@ -2451,7 +2489,7 @@ function saveDocumento() {
                     closeModal('movModal');
                     generatePDF(docData);
                 })
-                .catch(err => showFormError('movModal-err', 'Error al guardar: ' + err.message));
+                .catch(err => { _setBtnLoading('btn-save-doc', false); showFormError('movModal-err', 'Error al guardar: ' + err.message); });
         }
     );
 }
@@ -3217,13 +3255,15 @@ function saveAjuste() {
         'Confirmar Ajuste',
         ajusteTipo === 'Positivo' ? 'btn-primary' : 'btn-danger',
         () => {
+            _setBtnLoading('btn-save-ajuste', true); // I1: spinner
             db.ref(`usuarios/${currentUser.uid}/movimientos/${Date.now()}`).set(mov)
                 .then(() => {
                     logAudit(`Ajuste ${ajusteTipo}`, 'AjusteInventario', sku, lote, `${ajusteTipo==='Positivo'?'+':'−'}${qty} ud. · ${obs}`);
                     closeModal('ajusteModal');
+                    _setBtnLoading('btn-save-ajuste', false);
                     renderAjustes();
                 })
-                .catch(e => showFormError('ajusteModal-err', 'Error al guardar: ' + e.message));
+                .catch(e => { _setBtnLoading('btn-save-ajuste', false); showFormError('ajusteModal-err', 'Error al guardar: ' + e.message); });
         }
     );
 }
@@ -3511,6 +3551,20 @@ function showFormError(bannerId, msg) {
     el.style.display = 'block';
     el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     setTimeout(() => { el.style.display = 'none'; }, 6000);
+}
+
+// I1: Helper para mostrar/quitar estado de carga en un botón
+function _setBtnLoading(btnId, loading, originalText) {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    if (loading) {
+        btn._origText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-sm"></span> Guardando…';
+    } else {
+        btn.disabled = false;
+        btn.innerHTML = btn._origText || originalText || 'Guardar';
+    }
 }
 
 // ══ CONFIRM DIALOG ══
