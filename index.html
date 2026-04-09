@@ -267,6 +267,27 @@
         .spinner-sm { display:inline-block; width:13px; height:13px; border:2px solid rgba(255,255,255,0.4); border-top-color:#fff; border-radius:50%; animation:spin .7s linear infinite; vertical-align:middle; margin-right:6px; }
         .spinner-sm.dark { border-color:rgba(0,0,0,0.15); border-top-color:var(--accent); }
 
+        /* D1: Responsive — sidebar off-canvas en pantallas pequeñas */
+        .sidebar-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:99; }
+        .btn-hamburger { background:none; border:none; cursor:pointer; padding:6px; display:flex; flex-direction:column; gap:4px; align-items:center; justify-content:center; border-radius:6px; transition:background .15s; }
+        .btn-hamburger:hover { background:rgba(255,255,255,0.1); }
+        .btn-hamburger span { display:block; width:18px; height:2px; background:var(--shell-text); border-radius:2px; transition:all .2s; }
+        @media (max-width: 900px) {
+            .sidebar { transform: translateX(-100%); transition: transform .25s ease; z-index:200; }
+            .sidebar.open { transform: translateX(0); }
+            .sidebar-overlay.visible { display:block; }
+            .main { margin-left: 0 !important; }
+            .btn-hamburger { display:flex !important; }
+            .content { padding: 16px 12px; }
+            .card { border-radius: 8px; }
+            .topbar { padding: 0 14px; }
+        }
+        @media (max-width: 600px) {
+            .modal-content { max-width: calc(100vw - 24px); }
+            .form-row-3 { grid-template-columns: 1fr; }
+            .form-row-2 { grid-template-columns: 1fr; }
+        }
+
         /* ══════════════════════════════════════
            CARDS
         ══════════════════════════════════════ */
@@ -567,10 +588,11 @@
      APP
 ══════════════════════════════════════ -->
 <div class="app-screen" id="appScreen">
+    <div id="sidebarOverlay" class="sidebar-overlay" onclick="closeSidebar()"></div>
     <div class="layout">
 
         <!-- SIDEBAR -->
-        <aside class="sidebar">
+        <aside class="sidebar" id="sidebar">
             <div class="sidebar-logo">
                 <img src="Logo Celmedik.png" alt="Celmedik" class="sidebar-logo-img">
             </div>
@@ -663,6 +685,9 @@
         <main class="main">
             <div class="topbar">
                 <div class="topbar-left">
+                    <button class="btn-hamburger" id="btnHamburger" onclick="toggleSidebar()" title="Menú" style="display:none">
+                        <span></span><span></span><span></span>
+                    </button>
                     <div class="topbar-title" id="pageTitle">Dashboard</div>
                 </div>
                 <div class="topbar-actions">
@@ -1007,6 +1032,7 @@
                                 <th>Fecha / Hora</th><th>Acción</th><th>Módulo</th><th>SKU</th><th>Lote</th><th>Detalle</th><th>Usuario</th>
                             </tr></thead><tbody id="tAuditoria"><tr class="empty-row"><td colspan="7">No hay registros</td></tr></tbody></table>
                         </div>
+                        <div id="auditPagination" style="text-align:center;padding:8px 0"></div>
                     </div>
                 </div>
 
@@ -1741,6 +1767,7 @@ function loadProfile() {
         if (navAjustes) navAjustes.style.display = userPerfil === 'Maestro' ? '' : 'none';
         showScreen('app');
         attachListeners();
+        _initResponsive(); // D1
     });
 }
 
@@ -1795,6 +1822,7 @@ function setupNav() {
 }
 
 function navigateTo(page) {
+    closeSidebar(); // D1: cerrar sidebar en móvil al navegar
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
     const pg = document.getElementById(page);
@@ -1814,9 +1842,9 @@ function attachListeners() {
     const uid = currentUser.uid;
     db.ref(`usuarios/${uid}/productos`).on('value', s => { data.productos = s.val()||{}; renderProductos(); updateStats(); renderStock(); });
     db.ref(`usuarios/${uid}/bodegas`).on('value', s => { data.bodegas = s.val()||{}; renderBodegas(); renderBodegaBtns(); updateBodegaSelect(); updateStats(); });
-    db.ref(`usuarios/${uid}/movimientos`).on('value', s => { data.movimientos = s.val()||{}; renderMovimientos(); renderStock(); updateStats(); });
+    db.ref(`usuarios/${uid}/movimientos`).on('value', s => { data.movimientos = s.val()||{}; _invalidateStockCache(); renderMovimientos(); renderStock(); updateStats(); });
     db.ref(`usuarios/${uid}/cuarentena`).on('value', s => { data.cuarentena = s.val()||{}; renderCuarentena(); updateStats(); });
-    db.ref(`usuarios/${uid}/devoluciones`).on('value', s => { data.devoluciones = s.val()||{}; renderDevoluciones(); });
+    db.ref(`usuarios/${uid}/devoluciones`).on('value', s => { data.devoluciones = s.val()||{}; _invalidateStockCache(); renderDevoluciones(); });
 }
 
 function detachListeners() {
@@ -1856,7 +1884,11 @@ function updateStats() {
 }
 
 // ══ STOCK CALC (FEFO) ══
+// D4: Cache — se invalida cuando cambia movimientos o devoluciones
+let _stockCache = null;
+function _invalidateStockCache() { _stockCache = null; }
 function calcStock() {
+    if (_stockCache) return _stockCache;
     const stock = {};
     const movsList = Object.values(data.movimientos||{}).sort((a,b) => new Date(a.fecha)-new Date(b.fecha));
     movsList.forEach(m => {
@@ -1889,6 +1921,7 @@ function calcStock() {
         if (!stock[key]) stock[key] = { sku:d.sku, lote:d.lote, cantidad:0, vence:'', bodega:'', ubicacion:'', status:'Aprobado' };
         stock[key].cantidad += parseInt(d.cantidad)||0;
     });
+    _stockCache = stock; // D4: guardar en caché
     return stock;
 }
 
@@ -2415,7 +2448,7 @@ function renderDocItems() {
 }
 
 function resetItemForm() {
-    ['mi-sku','mi-desc','mi-vence','mi-qty','mi-precio','mi-ubic'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    _clearFields('mi-sku','mi-desc','mi-vence','mi-qty','mi-precio','mi-ubic');
     document.getElementById('mi-lote-wrap').innerHTML = '<input type="text" class="form-input" id="mi-lote" placeholder="Número de lote">';
     const info = document.getElementById('mi-sku-info'); if (info) info.style.display = 'none';
     const err = document.getElementById('mi-err'); if (err) err.style.display = 'none';
@@ -2633,7 +2666,7 @@ function regenerarPDF(documentoId) {
 }
 
 function clearFiltrosMovimientos() {
-    ['fMovSKU','fMovLote','fMovFechaDesde','fMovFechaHasta'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    _clearFields('fMovSKU','fMovLote','fMovFechaDesde','fMovFechaHasta');
     document.getElementById('fMovTipo').value = '';
     renderMovimientos();
 }
@@ -2657,7 +2690,6 @@ function renderMovimientos() {
     const pdfRendered = new Set();
     tb.innerHTML = rows.map(m => {
         const tC = m.tipo === 'Entrada' ? 'badge-success' : m.tipo === 'Salida' ? 'badge-danger' : m.tipo === 'Destrucción' ? 'badge-danger' : m.tipo === 'CambioEstado' ? 'badge-gray' : 'badge-warning';
-        const sC = m.status === 'Aprobado' ? 'badge-success' : m.status === 'Rechazado' ? 'badge-danger' : 'badge-warning';
         let pdfCell = '—';
         if (m.documentoId) {
             if (!pdfRendered.has(m.documentoId)) {
@@ -2679,7 +2711,7 @@ function renderMovimientos() {
             <td>${m.ubicacion||'—'}</td>
             <td>${m.proveedor||'—'}</td>
             <td>${m.referencia||'—'}</td>
-            <td><span class="badge ${sC}">${m.status||'—'}</span></td>
+            <td>${statusBadgeHTML(m.status||'—')}</td>
             <td style="font-size:11px;color:var(--text3)">${m.usuario||'—'}</td>
             <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.observaciones||'—'}</td>
             <td>${pdfCell}</td>
@@ -2770,7 +2802,6 @@ function renderStock() {
         const dotCls = dias === null ? '' : dias < 0 ? 'exp' : dias <= 30 ? 'exp' : dias <= 90 ? 'warn' : 'ok';
         const isFirst = sortBy === 'fefo' && i === 0;
         const st = getLoteStatus(s);
-        const statusCls = st === 'Aprobado' ? 'badge-success' : st === 'Rechazado' || st === 'Falsificado' || st === 'Vencido' ? 'badge-danger' : 'badge-warning';
         const rs = prods[s.sku]?.registroSanitario;
         return `<tr>
             <td><div class="fefo-indicator"><div class="fefo-dot ${isFirst?'first':dotCls}"></div>${isFirst?'<span style="color:var(--accent2);font-size:10px;font-weight:600">FEFO</span>':''}</div></td>
@@ -2782,7 +2813,7 @@ function renderStock() {
             <td style="font-weight:600;color:var(--text)">${s.cantidad}</td>
             <td>${prods[s.sku]?.unidadVenta||'—'}</td>
             <td style="font-size:12px;color:var(--text2)">${prods[s.sku]?.presentacion||'—'}</td>
-            <td><span class="badge ${statusCls}">${st}</span></td>
+            <td>${statusBadgeHTML(st)}</td>
             <td>${s.bodega||'—'}</td>
             <td>${s.ubicacion||'—'}</td>
             <td><button class="btn btn-sm btn-icon" style="font-size:10px" onclick="verTrazabilidadLote('${s.sku}','${s.lote}')">Trazar</button></td>
@@ -2791,7 +2822,7 @@ function renderStock() {
 }
 
 function clearStockFilters() {
-    ['fStockSKU','fStockLote','fStockUbic'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
+    _clearFields('fStockSKU','fStockLote','fStockUbic');
     const sort = document.getElementById('fStockSort'); if(sort) sort.value = 'fefo';
     const status = document.getElementById('fStockStatus'); if(status) status.value = 'Aprobado';
     renderStock();
@@ -3166,7 +3197,7 @@ function renderAjustes() {
 
 function openAjusteModal() {
     if (userPerfil !== 'Maestro') { alert('Esta función es exclusiva del perfil Maestro.'); return; }
-    ['aj-sku','aj-desc','aj-lote','aj-obs'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    _clearFields('aj-sku','aj-desc','aj-lote','aj-obs');
     const vEl = document.getElementById('aj-vence'); if (vEl) vEl.value = '';
     const qEl = document.getElementById('aj-qty');  if (qEl) qEl.value = '';
     const tEl = document.getElementById('aj-tipo'); if (tEl) tEl.value = 'Positivo';
@@ -3277,7 +3308,6 @@ function renderDevoluciones() {
     const tb = document.getElementById('tDevoluciones');
     if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="8">No hay devoluciones</td></tr>'; return; }
     tb.innerHTML = rows.map(([id, d]) => {
-        const sC = d.status === 'Aprobado' ? 'badge-success' : d.status === 'Rechazado' ? 'badge-danger' : 'badge-warning';
         return `<tr>
             <td class="text-mono" style="font-size:11px">${fmtDate(d.fecha)}</td>
             <td class="text-mono" style="color:var(--accent2)">${d.sku}</td>
@@ -3285,7 +3315,7 @@ function renderDevoluciones() {
             <td class="text-mono" style="font-size:11px">${d.lote}</td>
             <td style="font-weight:600;color:var(--text)">${d.cantidad}</td>
             <td>${d.motivo}</td>
-            <td><span class="badge ${sC}">${d.status}</span></td>
+            <td>${statusBadgeHTML(d.status||'—')}</td>
             <td><button class="btn btn-sm btn-danger-sm" onclick="deleteDevolucion('${id}')">Eliminar</button></td>
         </tr>`;
     }).join('');
@@ -3443,7 +3473,7 @@ function showRptMovFiltros() {
 }
 
 function clearRptMovFiltros() {
-    ['rptFMovSKU','rptFMovLote'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
+    _clearFields('rptFMovSKU','rptFMovLote');
     document.getElementById('rptFMovTipo').value = '';
     rptMovimientos();
 }
@@ -3478,8 +3508,10 @@ function rptCuarentena() {
 }
 
 // ══ AUDITORÍA ══
-function renderAuditoria() {
-    db.ref(`usuarios/${currentUser.uid}/auditoria`).orderByChild('fecha').limitToLast(200).once('value', s => {
+let _auditLimit = 50; // D5: paginación auditoría
+function renderAuditoria(reset) {
+    if (reset) _auditLimit = 50;
+    db.ref(`usuarios/${currentUser.uid}/auditoria`).orderByChild('fecha').limitToLast(_auditLimit).once('value', s => {
         const rows = [];
         s.forEach(c => rows.unshift(c.val()));
         const tb = document.getElementById('tAuditoria');
@@ -3493,6 +3525,11 @@ function renderAuditoria() {
             <td style="font-size:12px">${r.detalle||'—'}</td>
             <td style="font-size:11px;color:var(--text3)">${r.usuario||'—'}</td>
         </tr>`).join('');
+        // D5: botón Cargar más
+        const wrap = document.getElementById('auditPagination');
+        if (wrap) wrap.innerHTML = rows.length >= _auditLimit
+            ? `<button class="btn btn-ghost btn-sm" style="margin-top:10px" onclick="_auditLimit+=50;renderAuditoria()">Cargar más registros (${_auditLimit} cargados)</button>`
+            : `<div style="font-size:11px;color:var(--text3);margin-top:8px;text-align:center">Mostrando ${rows.length} registros totales</div>`;
     });
 }
 
@@ -3551,6 +3588,31 @@ function showFormError(bannerId, msg) {
     el.style.display = 'block';
     el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     setTimeout(() => { el.style.display = 'none'; }, 6000);
+}
+
+// D3: Helper para limpiar campos de formulario por id
+function _clearFields(...ids) { ids.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; }); }
+
+// D1: Sidebar responsive
+function toggleSidebar() {
+    const sb = document.getElementById('sidebar');
+    const ov = document.getElementById('sidebarOverlay');
+    if (!sb) return;
+    const open = sb.classList.toggle('open');
+    if (ov) ov.classList.toggle('visible', open);
+}
+function closeSidebar() {
+    const sb = document.getElementById('sidebar');
+    const ov = document.getElementById('sidebarOverlay');
+    if (sb) sb.classList.remove('open');
+    if (ov) ov.classList.remove('visible');
+}
+function _initResponsive() {
+    const mq = window.matchMedia('(max-width:900px)');
+    const hb = document.getElementById('btnHamburger');
+    const toggle = () => { if (hb) hb.style.display = mq.matches ? 'flex' : 'none'; if (!mq.matches) closeSidebar(); };
+    mq.addEventListener('change', toggle);
+    toggle();
 }
 
 // I1: Helper para mostrar/quitar estado de carga en un botón
@@ -3621,7 +3683,7 @@ function closeModal(id) {
 
 function resetMovModal() {
     movDocItems = [];
-    ['md-tipo','md-numdoc','md-proveedor','md-obs'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    _clearFields('md-tipo','md-numdoc','md-proveedor','md-obs');
     const fechaEl = document.getElementById('md-fecha');
     if (fechaEl) fechaEl.value = new Date().toISOString().split('T')[0];
     const bodegaEl = document.getElementById('md-bodega'); if (bodegaEl) bodegaEl.value = '';
