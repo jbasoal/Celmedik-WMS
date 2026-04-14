@@ -2243,6 +2243,12 @@ function onMiSKUChange() {
 }
 
 function loadMiLotesDisponibles(sku) {
+    // Ocultar y limpiar selector de ubicación hasta que se elija un lote
+    const miUbicGroup = document.getElementById('mi-ubic-group');
+    const miUbicWrap  = document.getElementById('mi-ubic-wrap');
+    if (miUbicGroup) miUbicGroup.style.display = 'none';
+    if (miUbicWrap)  miUbicWrap.innerHTML = '<input type="text" class="form-input" id="mi-ubic" placeholder="Ej: Estante A-1">';
+
     const stock = calcStock();
     const lotes = Object.values(stock)
         .filter(s => s.sku === sku && s.cantidad > 0)
@@ -2270,10 +2276,14 @@ function loadMiLotesDisponibles(sku) {
                 : `onmousedown="selectLoteNormal('${l.lote}','${l.vence||''}','${st}',${l.cantidad})"`;
         }
         const diasLabel = dias !== null ? (dias < 0 ? '<span style="color:var(--danger);font-weight:600">VENCIDO</span>' : `${dias}d`) : '—';
+        // Mostrar cuántas ubicaciones tiene este lote
+        const nUbic = Object.values(stock).filter(s => s.sku === sku && s.lote === l.lote && s.cantidad > 0).length;
+        const ubicLabel = nUbic > 1 ? `<span style="color:var(--accent);font-size:10px;font-weight:600">📍 ${nUbic} ubicaciones</span>` : (l.ubicacion ? `<span style="font-size:10px;color:var(--text3)">📍 ${l.ubicacion}</span>` : '');
         html += `<div class="lote-selector-item ${cls} ${disabledCls}" ${onclick} id="lotecard-${l.lote.replace(/[^a-zA-Z0-9]/g,'_')}">
             <div class="lote-sel-top">
                 <span class="text-mono" style="font-weight:600;font-size:13px">${l.lote}</span>
                 ${statusBadgeHTML(st)}
+                ${ubicLabel}
             </div>
             <div class="lote-sel-meta">
                 Vence: ${l.vence ? fmtDate(l.vence) : '—'} (${diasLabel}) · Stock disponible: <strong>${l.cantidad}</strong>
@@ -2315,6 +2325,56 @@ function selectLoteNormal(lote, vence, status, stock) {
     } else {
         warnEl.style.display = 'none';
     }
+    // Mostrar ubicaciones disponibles para el lote seleccionado
+    loadUbicacionesParaLote(sku, lote);
+}
+
+function loadUbicacionesParaLote(sku, lote) {
+    const bodega      = document.getElementById('md-bodega').value;
+    const stockAll    = calcStock();
+    const miUbicGroup = document.getElementById('mi-ubic-group');
+    const miUbicWrap  = document.getElementById('mi-ubic-wrap');
+    const miUbicLabel = document.getElementById('mi-ubic-label');
+    if (!miUbicGroup || !miUbicWrap) return;
+
+    // Entradas de stock aprobado para este sku+lote en la bodega seleccionada
+    const ubicaciones = Object.values(stockAll).filter(s =>
+        s.sku === sku &&
+        s.lote === lote &&
+        s.cantidad > 0 &&
+        getLoteStatus(s) === 'Aprobado' &&
+        (!bodega || s.bodega === bodega)
+    ).sort((a, b) => (a.ubicacion || '').localeCompare(b.ubicacion || ''));
+
+    miUbicGroup.style.display = 'block';
+    if (miUbicLabel) miUbicLabel.innerHTML = 'Ubicación del lote <span style="color:var(--danger)">*</span>';
+
+    if (!ubicaciones.length) {
+        miUbicWrap.innerHTML = '<input type="text" class="form-input" id="mi-ubic" placeholder="Sin ubicación registrada">';
+        return;
+    }
+
+    if (ubicaciones.length === 1) {
+        const u = ubicaciones[0];
+        const label = u.ubicacion || '(sin ubicación)';
+        miUbicWrap.innerHTML = `
+            <input type="hidden" id="mi-ubic" value="${u.ubicacion || ''}">
+            <div class="alert-banner success" style="padding:7px 10px;margin:0">
+                <div class="alert-banner-text" style="font-size:12px">
+                    📍 <strong>${label}</strong> — Stock disponible: <strong>${u.cantidad} ud.</strong>
+                </div>
+            </div>`;
+        return;
+    }
+
+    // Múltiples ubicaciones → selector
+    let html = '<select class="form-select" id="mi-ubic"><option value="">Seleccionar ubicación...</option>';
+    ubicaciones.forEach(u => {
+        const label = u.ubicacion || '(sin ubicación)';
+        html += `<option value="${u.ubicacion || ''}">${label} — ${u.cantidad} ud. disponibles</option>`;
+    });
+    html += '</select>';
+    miUbicWrap.innerHTML = html;
 }
 
 function selectLoteDestruccion(sku, lote, vence, status, stockQty) {
@@ -2373,10 +2433,16 @@ function addItemToDoc() {
 
     if (tipo === 'Salida') {
         const stock = calcStock();
-        const loteStock = Object.values(stock).find(s => s.sku === sku && s.lote === lote);
+
+        // Buscar entrada de stock para sku+lote, preferir la que coincide con la ubicación elegida
+        let loteStock = miUbic
+            ? Object.values(stock).find(s => s.sku === sku && s.lote === lote && s.ubicacion === miUbic)
+            : null;
+        if (!loteStock) loteStock = Object.values(stock).find(s => s.sku === sku && s.lote === lote);
         if (!loteStock) { showFormError('mi-err', 'Lote no encontrado en stock.'); return; }
+
         const st = getLoteStatus(loteStock);
-        itemUbic = loteStock.ubicacion || '';  // clave consistente con entrada
+        itemUbic = miUbic || loteStock.ubicacion || '';
 
         if (st === 'Cuarentena') {
             showFormError('mi-err', '🔒 Producto en CUARENTENA — No se puede despachar. Debe ser liberado o rechazado por el responsable QA antes de continuar.');
@@ -2386,12 +2452,21 @@ function addItemToDoc() {
             showFormError('mi-err', `⚠ Lote en estado "${st}" — Solo permite salida por destrucción. Seleccione el lote en la lista para abrir el Acta de Destrucción.`);
             return;
         }
-        const enDoc = movDocItems.filter(i => i.sku === sku && i.lote === lote).reduce((a, i) => a + i.qty, 0);
-        const disponible = Object.values(stock)
-            .filter(s => s.sku === sku && s.lote === lote && getLoteStatus(s) === 'Aprobado')
-            .reduce((a, s) => a + s.cantidad, 0);
+
+        // Validar stock: por ubicación específica si fue seleccionada, o por lote total
+        const enDoc = movDocItems.filter(i => i.sku === sku && i.lote === lote && i.ubicacion === itemUbic).reduce((a, i) => a + i.qty, 0);
+        let disponible;
+        if (miUbic) {
+            const locEntry = Object.values(stock).find(s => s.sku === sku && s.lote === lote && s.ubicacion === miUbic && getLoteStatus(s) === 'Aprobado');
+            disponible = locEntry ? locEntry.cantidad : 0;
+        } else {
+            disponible = Object.values(stock)
+                .filter(s => s.sku === sku && s.lote === lote && getLoteStatus(s) === 'Aprobado')
+                .reduce((a, s) => a + s.cantidad, 0);
+        }
+        const locLabel = miUbic ? `ubicación ${miUbic}` : `lote ${lote}`;
         if (qty + enDoc > disponible) {
-            showFormError('mi-err', `Stock insuficiente. Disponible aprobado para lote ${lote}: ${disponible} ud. Ya en documento: ${enDoc}. Máximo: ${disponible - enDoc} ud.`);
+            showFormError('mi-err', `Stock insuficiente. Disponible aprobado en ${locLabel}: ${disponible} ud. Ya en documento: ${enDoc}. Máximo: ${disponible - enDoc} ud.`);
             return;
         }
     }
