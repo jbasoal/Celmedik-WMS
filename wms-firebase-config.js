@@ -19,15 +19,15 @@
 // }
 // ==========================================
 
-// CONFIGURACIÓN - REEMPLAZA CON TUS DATOS
 const firebaseConfig = {
-  apiKey: "TU_API_KEY_AQUI",
-  authDomain: "TU_PROYECTO.firebaseapp.com",
-  databaseURL: "https://TU_PROYECTO-default-rtdb.firebaseio.com",
-  projectId: "TU_PROYECTO",
-  storageBucket: "TU_PROYECTO.appspot.com",
-  messagingSenderId: "TU_SENDER_ID",
-  appId: "TU_APP_ID"
+  apiKey: "AIzaSyCJ73iFZQaqCGVMZEnUA45HmSpXD_Z0oiE",
+  authDomain: "celmedik-inventario.firebaseapp.com",
+  databaseURL: "https://celmedik-inventario-default-rtdb.firebaseio.com",
+  projectId: "celmedik-inventario",
+  storageBucket: "celmedik-inventario.firebasestorage.app",
+  messagingSenderId: "1069071656431",
+  appId: "1:1069071656431:web:5ef4c84416c016a934821a",
+  measurementId: "G-V19THRQKBW"
 };
 
 // INICIALIZACIÓN (NO MODIFICAR)

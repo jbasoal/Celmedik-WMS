@@ -535,6 +535,7 @@
     </style>
 </head>
 <body>
+<img id="logoImg" src="Logo Celmedik.png" style="display:none" crossorigin="anonymous">
 
 <!-- ══════════════════════════════════════
      LOGIN
@@ -2396,7 +2397,7 @@ function addItemToDoc() {
     }
 
     const prod = data.productos[sku];
-    const itemData = { sku, descripcion: prod?.descripcion || '', lote, vence, qty, precio, status: itemStatus, ubicacion: itemUbic };
+    const itemData = { sku, descripcion: prod?.descripcion || '', tipo: prod?.tipo || '', lote, vence, qty, precio, status: itemStatus, ubicacion: itemUbic };
 
     // Alerta especial para Falsificado
     if (itemStatus === 'Falsificado') {
@@ -2497,6 +2498,7 @@ function saveDocumento() {
                 const mov = {
                     tipo, sku: item.sku, lote: item.lote,
                     descripcion: item.descripcion,
+                    tipoProducto: item.tipo || '',
                     cantidad: item.qty,
                     vence: item.vence,
                     precio: item.precio || 0,
@@ -2540,11 +2542,24 @@ function generatePDF(docData) {
     // Encabezado
     doc.setFillColor(29, 45, 62);
     doc.rect(0, 0, pageW, 30, 'F');
+
+    // Logo empresa
+    let textStartX = margin;
+    const logoEl = document.getElementById('logoImg');
+    if (logoEl && logoEl.complete && logoEl.naturalWidth > 0) {
+        try {
+            const logoH = 22;
+            const logoW = Math.min(logoH * (logoEl.naturalWidth / logoEl.naturalHeight), 40);
+            doc.addImage(logoEl, 'PNG', margin, 4, logoW, logoH);
+            textStartX = margin + logoW + 4;
+        } catch(e) { /* silently ignore if image fails */ }
+    }
+
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(16); doc.setFont('helvetica', 'bold');
-    doc.text('Celmedik WMS', margin, 13);
+    doc.text('Celmedik WMS', textStartX, 13);
     doc.setFontSize(8); doc.setFont('helvetica', 'normal');
-    doc.text('Sistema de Gestión de Almacén Farmacéutico · NT 147 BPA ISP Chile', margin, 20);
+    doc.text('Sistema de Gestión de Almacén Farmacéutico · NT 147 BPA ISP Chile', textStartX, 20);
     doc.setFontSize(11); doc.setFont('helvetica', 'bold');
     doc.text(`DOCUMENTO DE ${docData.tipo.toUpperCase()}`, pageW - margin, 13, { align: 'right' });
     doc.setFontSize(9); doc.setFont('helvetica', 'normal');
@@ -2567,7 +2582,6 @@ function generatePDF(docData) {
     addInfo('Proveedor/Destinatario:', docData.proveedor || '—', margin, y, 52);
     y += 6;
     addInfo('Bodega:', docData.bodega || '—', margin, y, 20);
-    addInfo('Ubicación:', docData.ubic || '—', col2, y, 22);
     y += 6;
     addInfo('Usuario:', docData.usuario || '—', margin, y, 20);
     if (docData.obs) {
@@ -2583,10 +2597,11 @@ function generatePDF(docData) {
 
     doc.autoTable({
         startY: y,
-        head: [['SKU', 'Descripción', 'Lote', 'Vencimiento', 'Cant.', 'Precio Unit.', 'Estatus', 'Ubicación']],
+        head: [['SKU', 'Descripción', 'Tipo', 'Lote', 'Vencimiento', 'Cant.', 'Precio Unit.', 'Estatus', 'Ubicación']],
         body: docData.items.map(item => [
             item.sku,
             item.descripcion || '—',
+            item.tipo || '—',
             item.lote,
             item.vence ? fmtDate(item.vence) : '—',
             String(item.qty),
@@ -2599,14 +2614,15 @@ function generatePDF(docData) {
         bodyStyles: { fontSize: 7, textColor: [29, 45, 62] },
         alternateRowStyles: { fillColor: [245, 245, 245] },
         columnStyles: {
-            0: { cellWidth: 18, fontStyle: 'bold' },
-            1: { cellWidth: 42 },
+            0: { cellWidth: 17, fontStyle: 'bold' },
+            1: { cellWidth: 36 },
             2: { cellWidth: 22 },
-            3: { cellWidth: 22 },
-            4: { cellWidth: 14, halign: 'center' },
-            5: { cellWidth: 22, halign: 'right' },
-            6: { cellWidth: 20, halign: 'center' },
-            7: { cellWidth: 18, halign: 'center' }
+            3: { cellWidth: 20 },
+            4: { cellWidth: 20 },
+            5: { cellWidth: 11, halign: 'center' },
+            6: { cellWidth: 20, halign: 'right' },
+            7: { cellWidth: 18, halign: 'center' },
+            8: { cellWidth: 14, halign: 'center' }
         },
         margin: { left: margin, right: margin }
     });
@@ -2660,7 +2676,7 @@ function regenerarPDF(documentoId) {
         bodega: ref.bodega || '',
         ubic: ref.ubicacion || '',
         obs: ref.observaciones || '',
-        items: movs.map(m => ({ sku: m.sku, descripcion: m.descripcion||'', lote: m.lote, vence: m.vence||'', qty: m.cantidad, precio: m.precio||0, status: m.status||'', ubicacion: m.ubicacion||'' })),
+        items: movs.map(m => ({ sku: m.sku, descripcion: m.descripcion||'', tipo: m.tipoProducto || (data.productos[m.sku]?.tipo || ''), lote: m.lote, vence: m.vence||'', qty: m.cantidad, precio: m.precio||0, status: m.status||'', ubicacion: m.ubicacion||'' })),
         usuario: ref.usuario || ''
     });
 }
