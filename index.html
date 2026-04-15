@@ -559,29 +559,7 @@
                 <input type="password" class="form-input" id="loginPassword" placeholder="••••••••" required>
             </div>
             <button type="submit" class="btn btn-primary">Iniciar sesión</button>
-            <button type="button" class="btn btn-ghost" onclick="toggleRegister()">Crear nueva cuenta</button>
         </form>
-        <div id="registerPanel">
-            <div class="form-group">
-                <label class="form-label">Email</label>
-                <input type="email" class="form-input" id="regEmail" required>
-            </div>
-            <div class="form-group">
-                <label class="form-label">Contraseña</label>
-                <input type="password" class="form-input" id="regPassword" minlength="6" required>
-            </div>
-            <div class="form-group">
-                <label class="form-label">Perfil</label>
-                <select class="form-select" id="regPerfil" required>
-                    <option value="">Seleccionar...</option>
-                    <option value="Maestro">Maestro (Acceso completo)</option>
-                    <option value="Operador">Operador (Movimientos)</option>
-                    <option value="Visualizador">Visualizador (Solo lectura)</option>
-                </select>
-            </div>
-            <button type="button" class="btn btn-primary" onclick="handleRegister()">Crear cuenta</button>
-            <button type="button" class="btn btn-ghost" onclick="toggleRegister()">Cancelar</button>
-        </div>
     </div>
 </div>
 
@@ -643,6 +621,10 @@
             <a class="nav-link" data-page="ajustes" id="nav-ajustes" style="display:none">
                 <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span>
                 Ajuste de Inventario
+            </a>
+            <a class="nav-link" data-page="admin" id="nav-admin" style="display:none">
+                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+                Usuarios
             </a>
 
             <div class="nav-section">Trazabilidad</div>
@@ -841,7 +823,7 @@
                         <div class="card-header">
                             <div style="display:flex;align-items:center;gap:16px">
                                 <div><div class="card-title">Movimientos</div><div class="card-subtitle">Trazabilidad completa según NT 147</div></div>
-                                <button class="btn btn-primary btn-sm" onclick="openModal('movModal')">+ Nuevo movimiento</button>
+                                <button class="btn btn-primary btn-sm" onclick="openMovModal()">+ Nuevo movimiento</button>
                             </div>
                         </div>
                         <div class="filter-bar">
@@ -885,7 +867,7 @@
                     <div class="card">
                         <div class="card-header">
                             <div><div class="card-title">Devoluciones</div></div>
-                            <button class="btn btn-primary btn-sm" onclick="openModal('devModal')">+ Nueva devolución</button>
+                            <button class="btn btn-primary btn-sm" onclick="openDevModal()">+ Nueva devolución</button>
                         </div>
                         <div class="filter-bar">
                             <input type="text" class="form-input" id="fDevSKU" placeholder="SKU..." onkeyup="renderDevoluciones()">
@@ -936,6 +918,49 @@
                             <table><thead><tr>
                                 <th>Fecha</th><th>SKU</th><th>Descripción</th><th>Lote</th><th>Bodega</th><th>Ubicación</th><th>Tipo Ajuste</th><th>Cantidad</th><th>Motivo</th><th>Usuario</th>
                             </tr></thead><tbody id="tAjustes"></tbody></table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── ADMINISTRACIÓN DE USUARIOS ── -->
+                <div id="admin" class="page">
+                    <div class="card" style="max-width:520px">
+                        <div class="card-header">
+                            <div>
+                                <div class="card-title">Gestión de Usuarios</div>
+                                <div class="card-subtitle">Crear cuentas de acceso · Solo perfil Maestro</div>
+                            </div>
+                        </div>
+                        <div id="adminMsg" class="status-msg" style="display:none;margin-bottom:12px"></div>
+                        <div style="display:flex;flex-direction:column;gap:12px">
+                            <div class="form-group">
+                                <label class="form-label">Correo electrónico <span style="color:var(--danger)">*</span></label>
+                                <input type="email" class="form-input" id="adm-email" placeholder="usuario@empresa.com">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Contraseña <span style="color:var(--danger)">*</span></label>
+                                <input type="password" class="form-input" id="adm-pass" minlength="6" placeholder="Mínimo 6 caracteres">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Perfil <span style="color:var(--danger)">*</span></label>
+                                <select class="form-select" id="adm-perfil">
+                                    <option value="">Seleccionar...</option>
+                                    <option value="Maestro">Maestro — Acceso completo</option>
+                                    <option value="Farmacéutico">Farmacéutico — Cambios de estado + movimientos</option>
+                                    <option value="Operador">Operador — Entradas/Salidas/Devoluciones (cuarentena)</option>
+                                    <option value="Visualizador">Visualizador — Solo lectura</option>
+                                </select>
+                            </div>
+                            <button class="btn btn-primary" id="adm-btn" onclick="handleRegisterAdmin()">Crear cuenta</button>
+                        </div>
+                        <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+                            <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);margin-bottom:8px">Permisos por perfil</div>
+                            <div style="font-size:12px;color:var(--text2);display:flex;flex-direction:column;gap:4px">
+                                <div><strong>Maestro:</strong> Acceso total, ajustes de inventario, creación de usuarios.</div>
+                                <div><strong>Farmacéutico:</strong> Movimientos completos + cambios de estado (liberar/rechazar cuarentena).</div>
+                                <div><strong>Operador:</strong> Entradas a cuarentena, salidas de aprobados, devoluciones a cuarentena.</div>
+                                <div><strong>Visualizador:</strong> Solo lectura, sin modificaciones.</div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1766,6 +1791,8 @@ function loadProfile() {
         document.getElementById('userInitial').textContent = currentUser.email[0].toUpperCase();
         const navAjustes = document.getElementById('nav-ajustes');
         if (navAjustes) navAjustes.style.display = userPerfil === 'Maestro' ? '' : 'none';
+        const navAdmin = document.getElementById('nav-admin');
+        if (navAdmin) navAdmin.style.display = userPerfil === 'Maestro' ? '' : 'none';
         showScreen('app');
         attachListeners();
         _initResponsive(); // D1
@@ -1787,13 +1814,54 @@ function handleLogin(e) {
 }
 
 function handleRegister() {
-    const email = document.getElementById('regEmail').value;
-    const pass = document.getElementById('regPassword').value;
-    const perfil = document.getElementById('regPerfil').value;
-    if (!email || !pass || !perfil) return setLoginStatus('error', 'Complete todos los campos');
-    auth.createUserWithEmailAndPassword(email, pass)
-        .then(c => { db.ref(`usuarios/${c.user.uid}/perfil`).set(perfil); setLoginStatus('success', 'Cuenta creada. Iniciando sesión...'); toggleRegister(); })
-        .catch(err => setLoginStatus('error', translateError(err.code)));
+    // Mantenido por compatibilidad interna
+}
+
+let _secondaryApp = null;
+function _getSecondaryAuth() {
+    if (!_secondaryApp) {
+        try { _secondaryApp = firebase.app('secondary'); }
+        catch(e) { _secondaryApp = firebase.initializeApp(firebaseConfig, 'secondary'); }
+    }
+    return _secondaryApp.auth();
+}
+
+function handleRegisterAdmin() {
+    if (userPerfil !== 'Maestro') return;
+    const email  = (document.getElementById('adm-email')?.value || '').trim();
+    const pass   = (document.getElementById('adm-pass')?.value  || '').trim();
+    const perfil = document.getElementById('adm-perfil')?.value || '';
+    const msgEl  = document.getElementById('adminMsg');
+    const btn    = document.getElementById('adm-btn');
+
+    const setMsg = (type, txt) => {
+        if (!msgEl) return;
+        msgEl.className = 'status-msg ' + type;
+        msgEl.textContent = txt;
+        msgEl.style.display = txt ? 'block' : 'none';
+    };
+
+    if (!email || !pass || !perfil) { setMsg('error', 'Complete todos los campos.'); return; }
+    if (pass.length < 6) { setMsg('error', 'La contraseña debe tener al menos 6 caracteres.'); return; }
+
+    if (btn) btn.disabled = true;
+    setMsg('', '');
+
+    // Usar app secundaria para no cerrar la sesión del Maestro
+    const secAuth = _getSecondaryAuth();
+    secAuth.createUserWithEmailAndPassword(email, pass)
+        .then(cred => {
+            db.ref(`usuarios/${cred.user.uid}/perfil`).set(perfil);
+            return secAuth.signOut();
+        })
+        .then(() => {
+            setMsg('success', `✓ Cuenta creada para ${email} con perfil ${perfil}.`);
+            _clearFields('adm-email','adm-pass');
+            if (document.getElementById('adm-perfil')) document.getElementById('adm-perfil').value = '';
+            logAudit('Crear usuario', 'Admin', email, '', `Perfil: ${perfil}`);
+        })
+        .catch(err => setMsg('error', translateError(err.code)))
+        .finally(() => { if (btn) btn.disabled = false; });
 }
 
 function handleLogout() { detachListeners(); auth.signOut(); }
@@ -1833,6 +1901,7 @@ function navigateTo(page) {
     const titles = { dashboard:'Dashboard', productos:'Productos Maestro', stock:'Stock Actual', bodegas:'Bodegas', movimientos:'Movimientos', cuarentena:'Cuarentena', devoluciones:'Devoluciones', retiro:'Retiro de Mercado', ajustes:'Ajuste de Inventario', trazabilidad:'Trazabilidad de Lotes', alertas:'Alertas', reportes:'Reportes ISP', auditoria:'Auditoría', dashComercial:'Dashboard Comercial' };
     document.getElementById('pageTitle').textContent = titles[page] || page;
     if (page === 'ajustes') { if (userPerfil !== 'Maestro') { navigateTo('dashboard'); return; } renderAjustes(); }
+    if (page === 'admin')   { if (userPerfil !== 'Maestro') { navigateTo('dashboard'); return; } }
     if (page === 'alertas') renderAlertas();
     if (page === 'auditoria') renderAuditoria();
     if (page === 'dashComercial') renderDashComercial();
@@ -2139,6 +2208,20 @@ function updateBodegaSelect() {
 }
 
 // ══ MOVIMIENTOS ══
+function openMovModal() {
+    const tipoSel = document.getElementById('md-tipo');
+    if (tipoSel) {
+        const canCambioStatus = userPerfil === 'Maestro' || userPerfil === 'Farmacéutico';
+        tipoSel.innerHTML =
+            '<option value="">Seleccionar...</option>' +
+            '<option value="Entrada">Entrada</option>' +
+            '<option value="Salida">Salida</option>' +
+            (canCambioStatus ? '<option value="Ajuste">Cambio de Status</option>' : '') +
+            '<option value="Devolución">Devolución</option>';
+    }
+    openModal('movModal');
+}
+
 function onDocBodegaChange() {
     const nombre = document.getElementById('md-bodega').value;
     const bodega = Object.values(data.bodegas || {}).find(b => b.nombre === nombre);
@@ -2183,11 +2266,17 @@ function _refreshMiStatusField(tipo) {
     if (!miStatusGroup || !miStatus) return;
 
     if (tipo === 'Entrada') {
-        miStatus.innerHTML =
-            '<option value="Aprobado">✓ Aprobado</option>' +
-            '<option value="Cuarentena">🔒 Cuarentena</option>' +
-            '<option value="Falsificado">⛔ Falsificado</option>';
-        miStatus.value = 'Aprobado';
+        if (userPerfil === 'Operador') {
+            // Operador solo puede ingresar a Cuarentena
+            miStatus.innerHTML = '<option value="Cuarentena">🔒 Cuarentena</option>';
+            miStatus.value = 'Cuarentena';
+        } else {
+            miStatus.innerHTML =
+                '<option value="Aprobado">✓ Aprobado</option>' +
+                '<option value="Cuarentena">🔒 Cuarentena</option>' +
+                '<option value="Falsificado">⛔ Falsificado</option>';
+            miStatus.value = 'Aprobado';
+        }
         if (miUbicGroup)  miUbicGroup.style.display  = 'block';
         if (miStatusGroup) miStatusGroup.style.display = 'block';
         if (miUbicLabel)  miUbicLabel.innerHTML = 'Ubicación <span style="color:var(--danger)">*</span>';
@@ -2202,11 +2291,17 @@ function _refreshMiStatusField(tipo) {
         if (miStatusGroup) miStatusGroup.style.display = 'block';
         if (miUbicLabel)  miUbicLabel.innerHTML = 'Ubicación <span style="color:var(--text3);font-weight:400">(opc.)</span>';
     } else if (tipo === 'Devolución') {
-        miStatus.innerHTML =
-            '<option value="Cuarentena">🔒 Cuarentena</option>' +
-            '<option value="Aprobado">✓ Aprobado</option>' +
-            '<option value="Rechazado">⚠ Rechazado</option>';
-        miStatus.value = 'Cuarentena';
+        if (userPerfil === 'Operador') {
+            // Operador solo puede devolver a Cuarentena
+            miStatus.innerHTML = '<option value="Cuarentena">🔒 Cuarentena</option>';
+            miStatus.value = 'Cuarentena';
+        } else {
+            miStatus.innerHTML =
+                '<option value="Cuarentena">🔒 Cuarentena</option>' +
+                '<option value="Aprobado">✓ Aprobado</option>' +
+                '<option value="Rechazado">⚠ Rechazado</option>';
+            miStatus.value = 'Cuarentena';
+        }
         if (miUbicGroup)  miUbicGroup.style.display  = 'block';
         if (miStatusGroup) miStatusGroup.style.display = 'block';
         if (miUbicLabel)  miUbicLabel.innerHTML = 'Ubicación <span style="color:var(--text3);font-weight:400">(opc.)</span>';
@@ -2955,12 +3050,13 @@ function renderCuarentena() {
             <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.observaciones||'—'}</td>
             <td><span class="badge ${q.status==='Liberado'?'badge-success':q.status==='Destruido'?'badge-danger':'badge-warning'}">${q.status}</span></td>
             <td style="display:flex;gap:4px;flex-wrap:wrap">
-                ${q.status==='Pendiente'?`<button class="btn btn-sm btn-success-sm" onclick="liberarCuarentena('${id}')">✓ Liberar</button><button class="btn btn-sm btn-danger-sm" onclick="abrirRechazoCuarentena('${id}')">✕ Rechazar</button><button class="btn btn-sm btn-danger-sm" onclick="abrirDestruccionCuarentena('${id}')" style="background:rgba(107,47,190,0.1);color:var(--purple);border-color:rgba(107,47,190,0.3)">⚠ Destruir</button>`:''}
+                ${(q.status==='Pendiente' && (userPerfil==='Maestro'||userPerfil==='Farmacéutico'))?`<button class="btn btn-sm btn-success-sm" onclick="liberarCuarentena('${id}')">✓ Liberar</button><button class="btn btn-sm btn-danger-sm" onclick="abrirRechazoCuarentena('${id}')">✕ Rechazar</button><button class="btn btn-sm btn-danger-sm" onclick="abrirDestruccionCuarentena('${id}')" style="background:rgba(107,47,190,0.1);color:var(--purple);border-color:rgba(107,47,190,0.3)">⚠ Destruir</button>`:''}
             </td>
         </tr>`).join('');
 }
 
 function liberarCuarentena(id) {
+    if (userPerfil !== 'Maestro' && userPerfil !== 'Farmacéutico') { alert('Solo los perfiles Maestro y Farmacéutico pueden liberar lotes de cuarentena.'); return; }
     const q = data.cuarentena[id]; if (!q) return;
     showConfirm(
         'Liberar lote de cuarentena',
@@ -2995,6 +3091,7 @@ function liberarCuarentena(id) {
 }
 
 function abrirRechazoCuarentena(id) {
+    if (userPerfil !== 'Maestro' && userPerfil !== 'Farmacéutico') { alert('Solo los perfiles Maestro y Farmacéutico pueden rechazar lotes de cuarentena.'); return; }
     const q = data.cuarentena[id]; if (!q) return;
     document.getElementById('rcq-id').value = id;
     document.getElementById('rcq-motivo').value = '';
@@ -3040,6 +3137,7 @@ function confirmarRechazoCuarentena() {
 }
 
 function abrirDestruccionCuarentena(id) {
+    if (userPerfil !== 'Maestro' && userPerfil !== 'Farmacéutico') { alert('Solo los perfiles Maestro y Farmacéutico pueden registrar destrucción desde cuarentena.'); return; }
     const q = data.cuarentena[id]; if (!q) return;
     const stock = calcStock();
     const stockItem = Object.values(stock).find(s => s.sku === q.sku && s.lote === q.lote);
@@ -3240,6 +3338,25 @@ function generateActaPDF(d) {
 }
 
 // ══ DEVOLUCIONES ══
+function openDevModal() {
+    const dStatus = document.getElementById('d-status');
+    if (dStatus) {
+        if (userPerfil === 'Operador') {
+            dStatus.innerHTML = '<option value="Pendiente">Pendiente (Cuarentena)</option>';
+            dStatus.value = 'Pendiente';
+            dStatus.disabled = true;
+        } else {
+            dStatus.innerHTML =
+                '<option value="Pendiente">Pendiente</option>' +
+                '<option value="Aprobado">Aprobado</option>' +
+                '<option value="Rechazado">Rechazado</option>';
+            dStatus.value = 'Pendiente';
+            dStatus.disabled = false;
+        }
+    }
+    openModal('devModal');
+}
+
 function saveDevolucion(e) {
     e.preventDefault();
     const sku = document.getElementById('d-sku').value.trim().toUpperCase();
