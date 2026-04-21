@@ -639,6 +639,12 @@
                 Dashboard Comercial
             </a>
 
+            <div class="nav-section">Transporte</div>
+            <a class="nav-link" href="transporte.html" id="nav-transporte" style="display:none">
+                <span class="nav-icon">🚛</span>
+                Panel de Transporte
+            </a>
+
             <div class="nav-section">Reportes</div>
             <a class="nav-link" data-page="reportes">
                 <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></span>
@@ -949,6 +955,7 @@
                                     <option value="Farmacéutico">Farmacéutico — Cambios de estado + movimientos</option>
                                     <option value="Operador">Operador — Entradas/Salidas/Devoluciones (cuarentena)</option>
                                     <option value="Visualizador">Visualizador — Solo lectura</option>
+                                    <option value="Transportista">Transportista — App móvil de despachos</option>
                                 </select>
                             </div>
                             <button class="btn btn-primary" id="adm-btn" onclick="handleRegisterAdmin()">Crear cuenta</button>
@@ -960,7 +967,11 @@
                                 <div><strong>Farmacéutico:</strong> Movimientos completos + cambios de estado (liberar/rechazar cuarentena).</div>
                                 <div><strong>Operador:</strong> Entradas a cuarentena, salidas de aprobados, devoluciones a cuarentena.</div>
                                 <div><strong>Visualizador:</strong> Solo lectura, sin modificaciones.</div>
+                                <div><strong>Transportista:</strong> Solo acceso a la app móvil de conductor (conductor.html). No accede al WMS.</div>
                             </div>
+                        </div>
+                        <div style="margin-top:16px;padding:12px 14px;background:rgba(0,112,242,0.07);border:1px solid rgba(0,112,242,.2);border-radius:6px;font-size:12px;color:var(--text2);">
+                            ℹ Para crear un conductor con acceso móvil, use el botón <strong>+ Nuevo conductor</strong> en el <a href="transporte.html" target="_blank" style="color:var(--accent)">Panel de Transporte</a>. Esto crea automáticamente la cuenta Firebase y el registro de conductor.
                         </div>
                     </div>
                 </div>
@@ -1789,10 +1800,13 @@ function loadProfile() {
         document.getElementById('userRole').textContent = `Perfil: ${userPerfil}`;
         document.getElementById('userEmail').textContent = currentUser.email;
         document.getElementById('userInitial').textContent = currentUser.email[0].toUpperCase();
+        if (userPerfil === 'Transportista') { window.location.href = 'conductor.html'; return; }
         const navAjustes = document.getElementById('nav-ajustes');
         if (navAjustes) navAjustes.style.display = userPerfil === 'Maestro' ? '' : 'none';
         const navAdmin = document.getElementById('nav-admin');
         if (navAdmin) navAdmin.style.display = userPerfil === 'Maestro' ? '' : 'none';
+        const navTransporte = document.getElementById('nav-transporte');
+        if (navTransporte) navTransporte.style.display = (userPerfil === 'Maestro' || userPerfil === 'Farmacéutico') ? '' : 'none';
         showScreen('app');
         attachListeners();
         _initResponsive(); // D1

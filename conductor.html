@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1D2D3E">
+<title>Celmedik — Conductor</title>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
+<style>
+:root{
+  --bg:#F5F5F5;--surface:#FFFFFF;--border:#E0E0E0;--border2:#C0C2C4;
+  --accent:#0070F2;--accent-h:#0064D9;--accent-dim:rgba(0,112,242,0.09);
+  --success:#107E3E;--success-dim:rgba(16,126,62,0.09);
+  --warning:#E9730C;--warning-dim:rgba(233,115,12,0.09);
+  --danger:#BB0000;--danger-dim:rgba(187,0,0,0.08);
+  --text:#1D2D3E;--text2:#4A5568;--text3:#89919A;
+  --shell:#1D2D3E;
+  --radius:8px;--font:'Inter',system-ui,sans-serif;--mono:'JetBrains Mono',monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;font-size:15px;-webkit-font-smoothing:antialiased;}
+
+/* TOPBAR */
+.topbar{background:var(--shell);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,0.25);}
+.topbar-title{font-size:16px;font-weight:700;color:white;}
+.topbar-sub{font-size:11px;color:rgba(255,255,255,0.6);margin-top:1px;}
+.topbar-right{display:flex;align-items:center;gap:10px;}
+.online-dot{width:8px;height:8px;border-radius:50%;background:#22c55e;flex-shrink:0;}
+.online-dot.offline{background:#f59e0b;}
+.btn-logout-sm{background:rgba(255,255,255,0.1);border:none;color:rgba(255,255,255,0.7);font-size:12px;padding:5px 10px;border-radius:6px;cursor:pointer;font-family:var(--font);}
+.btn-logout-sm:hover{background:rgba(255,255,255,0.2);}
+
+/* CONTENT */
+.content{padding:16px;max-width:480px;margin:0 auto;}
+
+/* CARDS */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,0.06);}
+.card-title{font-size:13px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;}
+
+/* OT CARD */
+.ot-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.06);cursor:pointer;transition:box-shadow .15s;}
+.ot-card:hover{box-shadow:0 4px 16px rgba(0,0,0,0.12);}
+.ot-card-header{padding:14px 16px;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
+.ot-id{font-family:var(--mono);font-size:12px;color:var(--accent);font-weight:600;}
+.ot-cliente{font-size:15px;font-weight:600;color:var(--text);margin-top:2px;}
+.ot-meta{font-size:12px;color:var(--text3);margin-top:3px;}
+.ot-body{padding:0 16px 14px;border-top:1px solid var(--border);padding-top:12px;}
+.ot-items-list{font-size:12px;color:var(--text2);line-height:1.8;}
+.ot-item-pill{display:inline-block;background:var(--accent-dim);color:var(--accent);border-radius:4px;padding:1px 7px;font-size:11px;font-family:var(--mono);margin:2px 2px 0 0;}
+
+/* BADGES */
+.badge{display:inline-flex;align-items:center;gap:3px;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:700;white-space:nowrap;}
+.badge-blue{background:rgba(0,112,242,0.1);color:#0854A0;border:1px solid rgba(0,112,242,0.25);}
+.badge-warning{background:rgba(233,115,12,0.1);color:#B85700;border:1px solid rgba(233,115,12,0.3);}
+.badge-success{background:rgba(16,126,62,0.1);color:#107E3E;border:1px solid rgba(16,126,62,0.3);}
+.badge-danger{background:rgba(187,0,0,0.08);color:#BB0000;border:1px solid rgba(187,0,0,0.25);}
+.badge-gray{background:#F0F2F5;color:var(--text2);border:1px solid var(--border);}
+
+/* BOTONES DE ACCIÓN */
+.action-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;}
+.action-btn{padding:12px 10px;border:none;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .15s;display:flex;flex-direction:column;align-items:center;gap:4px;}
+.action-btn .icon{font-size:22px;}
+.action-btn-ruta{background:var(--warning-dim);color:#B85700;border:1px solid rgba(233,115,12,.3);}
+.action-btn-ruta:hover{background:var(--warning);color:white;}
+.action-btn-entregada{background:var(--success-dim);color:#107E3E;border:1px solid rgba(16,126,62,.3);}
+.action-btn-entregada:hover{background:var(--success);color:white;}
+.action-btn-novedad{background:var(--danger-dim);color:#BB0000;border:1px solid rgba(187,0,0,.25);}
+.action-btn-novedad:hover{background:var(--danger);color:white;}
+.action-btn-ubicacion{background:var(--accent-dim);color:var(--accent);border:1px solid rgba(0,112,242,.25);}
+.action-btn-ubicacion:hover{background:var(--accent);color:white;}
+.action-btn:disabled{opacity:.5;cursor:not-allowed;}
+
+/* FORMS */
+.form-group{margin-bottom:14px;}
+.form-label{display:block;font-size:11.5px;font-weight:600;color:var(--text2);margin-bottom:6px;letter-spacing:.4px;text-transform:uppercase;}
+.form-input,.form-select,.form-textarea{width:100%;padding:11px 13px;background:#FFF;border:1px solid var(--border2);border-radius:var(--radius);font-size:14px;color:var(--text);font-family:var(--font);outline:none;transition:border-color .15s;}
+.form-input:focus,.form-select:focus,.form-textarea:focus{border-color:var(--accent);}
+.form-textarea{resize:vertical;min-height:80px;}
+.form-select{appearance:auto;cursor:pointer;}
+
+/* BUTTONS */
+.btn{padding:12px 20px;border-radius:var(--radius);font-size:14px;font-weight:600;cursor:pointer;border:none;font-family:var(--font);display:inline-flex;align-items:center;justify-content:center;gap:8px;transition:all .15s;width:100%;}
+.btn-primary{background:var(--accent);color:white;}
+.btn-primary:hover{background:var(--accent-h);}
+.btn-primary:active{background:#0050B3;transform:scale(.98);}
+.btn-ghost{background:transparent;color:var(--text2);border:1px solid var(--border2);}
+.btn-ghost:hover{background:var(--bg);}
+.btn-row{display:flex;gap:10px;margin-top:16px;}
+.btn-row .btn{flex:1;}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,0.4);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* MODAL */
+.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:1000;align-items:flex-end;justify-content:center;padding:0;}
+.modal.active{display:flex;}
+.modal-sheet{background:var(--surface);border-radius:16px 16px 0 0;padding:20px 16px 32px;width:100%;max-height:90vh;overflow-y:auto;animation:slideUp .3s cubic-bezier(0.16,1,0.3,1);}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.modal-handle{width:40px;height:4px;background:var(--border2);border-radius:2px;margin:0 auto 16px;}
+.modal-title{font-size:17px;font-weight:700;color:var(--text);margin-bottom:16px;}
+
+/* LOGIN */
+.login-screen{position:fixed;inset:0;background:linear-gradient(145deg,#1D2D3E,#243647);display:flex;align-items:center;justify-content:center;z-index:2000;padding:20px;}
+.login-card{background:#FFF;border-radius:12px;padding:36px 28px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.4);}
+.login-logo{text-align:center;margin-bottom:28px;}
+.login-logo h1{font-size:20px;font-weight:700;color:var(--text);}
+.login-logo p{font-size:12px;color:var(--text3);margin-top:4px;}
+.status-msg{padding:10px 13px;border-radius:7px;font-size:13px;margin-bottom:14px;display:none;}
+.status-msg.error{background:var(--danger-dim);color:#BB0000;border:1px solid rgba(187,0,0,.3);display:block;}
+
+/* SYNC BANNER */
+.sync-banner{background:var(--warning-dim);border:1px solid rgba(233,115,12,.3);border-radius:var(--radius);padding:10px 14px;margin-bottom:12px;font-size:12.5px;color:#B85700;display:flex;align-items:center;gap:8px;}
+
+/* CAMERA PREVIEW */
+.camera-wrap{position:relative;width:100%;aspect-ratio:4/3;border-radius:var(--radius);overflow:hidden;background:#000;margin-bottom:12px;}
+.camera-wrap img{width:100%;height:100%;object-fit:cover;}
+.photo-preview{width:100%;border-radius:var(--radius);border:1px solid var(--border);margin-top:8px;}
+
+/* GPS STATUS */
+.gps-status{font-size:12px;padding:6px 12px;border-radius:6px;display:inline-flex;align-items:center;gap:6px;}
+.gps-ok{background:var(--success-dim);color:#107E3E;}
+.gps-err{background:var(--danger-dim);color:#BB0000;}
+.gps-loading{background:var(--accent-dim);color:var(--accent);}
+
+/* TIMELINE */
+.timeline{list-style:none;padding-left:20px;position:relative;}
+.timeline::before{content:'';position:absolute;left:6px;top:4px;bottom:4px;width:2px;background:var(--border2);}
+.tl-item{position:relative;padding-bottom:16px;}
+.tl-dot{position:absolute;left:-17px;top:4px;width:10px;height:10px;border-radius:50%;background:var(--accent);border:2px solid white;box-shadow:0 0 0 2px var(--accent-dim);}
+.tl-dot.green{background:var(--success);box-shadow:0 0 0 2px var(--success-dim);}
+.tl-dot.warning{background:var(--warning);box-shadow:0 0 0 2px var(--warning-dim);}
+.tl-dot.danger{background:var(--danger);box-shadow:0 0 0 2px var(--danger-dim);}
+.tl-date{font-size:10.5px;color:var(--text3);font-family:var(--mono);}
+.tl-title{font-size:13px;font-weight:600;color:var(--text);margin-top:1px;}
+.tl-meta{font-size:11.5px;color:var(--text3);margin-top:1px;}
+
+/* EMPTY STATE */
+.empty-state{text-align:center;padding:48px 20px;color:var(--text3);}
+.empty-state-icon{font-size:48px;margin-bottom:12px;}
+.empty-state-title{font-size:15px;font-weight:600;margin-bottom:6px;}
+.empty-state-sub{font-size:13px;}
+
+/* PENDING QUEUE INDICATOR */
+.queue-pill{position:fixed;bottom:20px;right:20px;background:var(--warning);color:white;border-radius:20px;padding:8px 14px;font-size:12px;font-weight:600;display:none;align-items:center;gap:6px;z-index:500;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.2);}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginScreen" class="login-screen">
+  <div class="login-card">
+    <div class="login-logo">
+      <img src="Logo Celmedik.png" style="height:44px;display:block;margin:0 auto 10px" onerror="this.style.display='none'">
+      <h1>Celmedik — Conductor</h1>
+      <p>App de despachos para conductores</p>
+    </div>
+    <div id="loginStatus" class="status-msg"></div>
+    <form onsubmit="handleLogin(event)">
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input type="email" id="loginEmail" class="form-input" autocomplete="email" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Contraseña</label>
+        <input type="password" id="loginPassword" class="form-input" autocomplete="current-password" required>
+      </div>
+      <button type="submit" class="btn btn-primary" id="loginBtn">Ingresar</button>
+    </form>
+    <div style="margin-top:12px;text-align:center">
+      <a href="index.html" style="font-size:12px;color:var(--text3);">← Panel administración</a>
+    </div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="appScreen" style="display:none;min-height:100vh;">
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div>
+      <div class="topbar-title">🚛 Mis Despachos</div>
+      <div class="topbar-sub" id="topbarSub">Cargando...</div>
+    </div>
+    <div class="topbar-right">
+      <div class="online-dot" id="onlineDot"></div>
+      <button class="btn-logout-sm" onclick="handleLogout()">Salir</button>
+    </div>
+  </div>
+
+  <div class="content">
+    <!-- SYNC BANNER -->
+    <div id="syncBanner" class="sync-banner" style="display:none">
+      ⏳ <span id="syncMsg">Sincronizando cambios offline...</span>
+    </div>
+
+    <!-- OTs LIST -->
+    <div id="otsList"></div>
+
+    <div id="emptyState" class="empty-state" style="display:none;">
+      <div class="empty-state-icon">📭</div>
+      <div class="empty-state-title">Sin despachos asignados</div>
+      <div class="empty-state-sub">Los despachos asignados a usted aparecerán aquí.</div>
+    </div>
+  </div>
+</div>
+
+<!-- QUEUE PILL -->
+<div class="queue-pill" id="queuePill" onclick="syncQueue()">
+  ⏳ <span id="queueCount">0</span> pendiente(s) — Sincronizar
+</div>
+
+<!-- ═══ MODAL: ACCIÓN OT ═══ -->
+<div id="accionModal" class="modal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div id="accionOTId" class="modal-title">Actualizar Despacho</div>
+
+    <div id="accion-sync-warn" class="sync-banner" style="display:none">
+      ⚠ Sin conexión. El cambio se guardará localmente y se enviará cuando se restablezca la conexión.
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Nuevo estado *</label>
+      <select class="form-select" id="ac-estado">
+        <option value="En Ruta">🚛 En Ruta — Saliendo a entregar</option>
+        <option value="Entregada">✓ Entregada — Entrega exitosa</option>
+        <option value="Con Novedad">⚠ Con Novedad — Problema en entrega</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Foto (factura firmada / novedad)</label>
+      <input type="file" id="ac-foto" accept="image/*" capture="environment" onchange="previewPhoto(this)" style="display:none">
+      <button type="button" onclick="document.getElementById('ac-foto').click()" class="btn btn-ghost" style="margin-bottom:8px;">📷 Tomar / Seleccionar foto</button>
+      <img id="ac-foto-preview" class="photo-preview" src="" style="display:none;max-height:200px;object-fit:cover;">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Observaciones</label>
+      <textarea class="form-textarea" id="ac-obs" placeholder="Describa la situación..."></textarea>
+    </div>
+
+    <div style="margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <span id="gpsStatus" class="gps-status gps-loading">📍 Obteniendo GPS...</span>
+      <button type="button" class="btn btn-ghost" style="width:auto;padding:6px 12px;font-size:12px;" onclick="refreshGPS()">↻ Actualizar GPS</button>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="closeAccionModal()">Cancelar</button>
+      <button class="btn btn-primary" id="btn-enviar" onclick="enviarActualizacion()">
+        Enviar actualización
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: DETALLE OT ═══ -->
+<div id="detalleModal" class="modal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div id="detOTTitle" class="modal-title">Detalle OT</div>
+    <div id="detOTInfo" style="background:#F5F5F5;border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;line-height:1.8;color:var(--text2);"></div>
+    <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Ítems</div>
+    <div id="detOTItems" style="margin-bottom:16px;font-size:13px;color:var(--text2);"></div>
+    <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Historial</div>
+    <ul class="timeline" id="detOTTimeline"></ul>
+    <div class="btn-row" style="margin-top:20px;">
+      <button class="btn btn-ghost" onclick="closeModal('detalleModal')">Cerrar</button>
+      <button class="btn btn-primary" id="detOTActionBtn">Actualizar estado</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══ FIREBASE ══
+const firebaseConfig = {
+  apiKey:"AIzaSyCJ73iFZQaqCGVMZEnUA45HmSpXD_Z0oiE",
+  authDomain:"celmedik-inventario.firebaseapp.com",
+  projectId:"celmedik-inventario",
+  storageBucket:"celmedik-inventario.firebasestorage.app",
+  messagingSenderId:"1069071656431",
+  appId:"1:1069071656431:web:5ef4c84416c016a934821a",
+  databaseURL:"https://celmedik-inventario-default-rtdb.firebaseio.com"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.database();
+const storage = firebase.storage();
+
+let currentUser = null, maestroUid = null, conductorId = null, conductorNombre = '';
+let myOTs = {}, trazabilidad = {};
+let currentGPS = null;
+let _activeOT = null;
+let isOnline = navigator.onLine;
+
+// ══ INDEXEDDB (OFFLINE QUEUE) ══
+let idb = null;
+function openIDB() {
+  return new Promise((res,rej) => {
+    const req = indexedDB.open('CelmedikConductor', 1);
+    req.onupgradeneeded = e => e.target.result.createObjectStore('queue', {keyPath:'id', autoIncrement:true});
+    req.onsuccess = e => { idb = e.target.result; res(idb); };
+    req.onerror = () => rej(req.error);
+  });
+}
+async function queueAction(action) {
+  if (!idb) await openIDB();
+  return new Promise((res,rej) => {
+    const tx = idb.transaction('queue','readwrite');
+    tx.objectStore('queue').add(action);
+    tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+  });
+}
+async function getQueue() {
+  if (!idb) await openIDB();
+  return new Promise((res,rej) => {
+    const tx = idb.transaction('queue','readonly');
+    const req = tx.objectStore('queue').getAll();
+    req.onsuccess = () => res(req.result);
+    req.onerror = () => rej(req.error);
+  });
+}
+async function clearQueueItem(id) {
+  if (!idb) return;
+  const tx = idb.transaction('queue','readwrite');
+  tx.objectStore('queue').delete(id);
+}
+async function updateQueueBadge() {
+  const q = await getQueue();
+  const pill = document.getElementById('queuePill');
+  document.getElementById('queueCount').textContent = q.length;
+  pill.style.display = q.length > 0 ? 'flex' : 'none';
+}
+
+// ══ AUTH ══
+document.addEventListener('DOMContentLoaded', async () => {
+  await openIDB();
+  auth.onAuthStateChanged(async u => {
+    if (!u) { showLogin(); return; }
+    currentUser = u;
+    const perfil = (await db.ref(`usuarios/${u.uid}/perfil`).once('value')).val();
+    if (perfil !== 'Transportista') { window.location.href = 'transporte.html'; return; }
+    maestroUid = (await db.ref(`usuarios/${u.uid}/maestroUid`).once('value')).val();
+    conductorId = (await db.ref(`usuarios/${u.uid}/conductorId`).once('value')).val();
+    if (!maestroUid) { alert('Cuenta no configurada correctamente. Contacte al administrador.'); auth.signOut(); return; }
+    const cSnap = await db.ref(`organizaciones/${maestroUid}/conductores/${conductorId}`).once('value');
+    conductorNombre = cSnap.val()?.nombre || u.email;
+    document.getElementById('topbarSub').textContent = conductorNombre;
+    showApp();
+    attachListeners();
+    updateQueueBadge();
+    getGPS();
+  });
+
+  window.addEventListener('online', () => { isOnline=true; updateOnlineUI(); syncQueue(); });
+  window.addEventListener('offline', () => { isOnline=false; updateOnlineUI(); });
+  updateOnlineUI();
+});
+
+function showLogin() {
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('appScreen').style.display = 'none';
+}
+function showApp() {
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('appScreen').style.display = 'block';
+}
+function updateOnlineUI() {
+  const dot = document.getElementById('onlineDot');
+  dot.className = 'online-dot' + (isOnline ? '' : ' offline');
+  dot.title = isOnline ? 'En línea' : 'Sin conexión';
+}
+
+function handleLogin(e) {
+  e.preventDefault();
+  const btn = document.getElementById('loginBtn');
+  btn.innerHTML = '<span class="spinner"></span>';
+  btn.disabled = true;
+  const msgEl = document.getElementById('loginStatus');
+  msgEl.style.display = 'none';
+  auth.signInWithEmailAndPassword(document.getElementById('loginEmail').value, document.getElementById('loginPassword').value)
+    .catch(err => {
+      const msgs={'auth/user-not-found':'Usuario no encontrado','auth/wrong-password':'Contraseña incorrecta','auth/invalid-credential':'Credenciales inválidas'};
+      msgEl.textContent = msgs[err.code]||err.code; msgEl.className='status-msg error'; msgEl.style.display='block';
+    })
+    .finally(() => { btn.innerHTML='Ingresar'; btn.disabled=false; });
+}
+function handleLogout() { auth.signOut(); showLogin(); }
+
+// ══ LISTENERS ══
+function attachListeners() {
+  db.ref(`organizaciones/${maestroUid}/ordenesTransporte`).on('value', s => {
+    const all = s.val() || {};
+    myOTs = Object.fromEntries(Object.entries(all).filter(([k,o]) => o.conductorId === conductorId && o.estado !== 'Cancelada'));
+    renderOTs();
+  });
+  db.ref(`organizaciones/${maestroUid}/trazabilidadTransporte`).on('value', s => { trazabilidad = s.val() || {}; });
+}
+
+// ══ RENDER OTs ══
+function renderOTs() {
+  const list = document.getElementById('otsList');
+  const empty = document.getElementById('emptyState');
+  const rows = Object.values(myOTs).sort((a,b) => {
+    const order = {'En Ruta':0,'Asignada':1,'Con Novedad':2,'Entregada':3};
+    return (order[a.estado]??9) - (order[b.estado]??9);
+  });
+
+  if (!rows.length) { list.innerHTML = ''; empty.style.display='block'; return; }
+  empty.style.display = 'none';
+
+  const hoy = new Date().toISOString().split('T')[0];
+  const hoyOTs = rows.filter(o => o.fechaDespacho === hoy);
+  const otrasFechas = rows.filter(o => o.fechaDespacho !== hoy);
+
+  let html = '';
+  if (hoyOTs.length) { html += `<div class="card-title" style="margin-bottom:8px;">Hoy — ${fmtDate(hoy)}</div>`; html += hoyOTs.map(otCard).join(''); }
+  if (otrasFechas.length) { html += `<div class="card-title" style="margin:16px 0 8px;">Próximos / Anteriores</div>`; html += otrasFechas.map(otCard).join(''); }
+  list.innerHTML = html;
+}
+
+function otCard(o) {
+  const badgeMap = {'Asignada':'badge-blue','En Ruta':'badge-warning','Entregada':'badge-success','Con Novedad':'badge-danger'};
+  const items = (o.items||[]).map(i => `<span class="ot-item-pill">${i.sku} ×${i.cantidadDespacho}</span>`).join('');
+  const canAct = ['Asignada','En Ruta','Con Novedad'].includes(o.estado);
+  return `
+    <div class="ot-card">
+      <div class="ot-card-header" onclick="openDetalle('${o.otId}')">
+        <div>
+          <div class="ot-id">${o.otId}</div>
+          <div class="ot-cliente">${o.cliente||'—'}</div>
+          <div class="ot-meta">📅 ${fmtDate(o.fechaDespacho)} · 📍 ${o.zona||'—'}</div>
+        </div>
+        <span class="badge ${badgeMap[o.estado]||'badge-gray'}">${o.estado}</span>
+      </div>
+      <div class="ot-body">
+        <div style="margin-bottom:10px;">${items || '<span style="color:var(--text3);font-size:12px;">Sin ítems</span>'}</div>
+        ${canAct ? `<div class="action-btns">${actionBtns(o)}</div>` : ''}
+      </div>
+    </div>`;
+}
+
+function actionBtns(o) {
+  const en = o.estado === 'Asignada' || o.estado === 'Con Novedad';
+  const ent = o.estado === 'En Ruta' || o.estado === 'Con Novedad';
+  const nov = o.estado === 'En Ruta';
+  return `
+    ${en ? `<button class="action-btn action-btn-ruta" onclick="openAccion('${o.otId}','En Ruta')"><span class="icon">🚛</span>En Ruta</button>` : ''}
+    ${ent ? `<button class="action-btn action-btn-entregada" onclick="openAccion('${o.otId}','Entregada')"><span class="icon">✓</span>Entregada</button>` : ''}
+    ${nov ? `<button class="action-btn action-btn-novedad" onclick="openAccion('${o.otId}','Con Novedad')"><span class="icon">⚠</span>Novedad</button>` : ''}
+  `;
+}
+
+// ══ DETALLE OT ══
+function openDetalle(otId) {
+  const o = myOTs[otId];
+  if (!o) return;
+  _activeOT = o;
+  document.getElementById('detOTTitle').textContent = o.otId;
+  document.getElementById('detOTInfo').innerHTML = `
+    <strong>Cliente:</strong> ${o.cliente||'—'}<br>
+    <strong>Fecha:</strong> ${fmtDate(o.fechaDespacho)}<br>
+    <strong>Zona:</strong> ${o.zona||'—'}<br>
+    <strong>Estado:</strong> ${o.estado}<br>
+    ${o.observaciones ? `<strong>Obs:</strong> ${o.observaciones}` : ''}`;
+  document.getElementById('detOTItems').innerHTML = (o.items||[]).map(i => `<div style="padding:6px 0;border-bottom:1px solid var(--border)"><strong>${i.sku}</strong> — ${i.descripcion||''} <span style="font-family:var(--mono);font-size:12px;float:right">×${i.cantidadDespacho}</span></div>`).join('') || '<span style="color:var(--text3)">Sin ítems</span>';
+  const hitos = Object.values(trazabilidad).filter(h => h.otId === otId).sort((a,b) => new Date(a.fecha)-new Date(b.fecha));
+  const dotMap = {'En Ruta':'warning','Entregada':'green','Con Novedad':'danger'};
+  document.getElementById('detOTTimeline').innerHTML = hitos.map(h => `<li class="tl-item"><div class="tl-dot ${dotMap[h.estado]||''}"></div><div class="tl-date">${fmtDateTime(h.fecha)}</div><div class="tl-title">${h.estado}</div><div class="tl-meta">${h.observaciones||''}</div></li>`).join('') || '<li style="color:var(--text3);font-size:13px;">Sin eventos</li>';
+  const canAct = ['Asignada','En Ruta','Con Novedad'].includes(o.estado);
+  const btn = document.getElementById('detOTActionBtn');
+  btn.style.display = canAct ? '' : 'none';
+  btn.onclick = () => { closeModal('detalleModal'); openAccion(otId, null); };
+  openModal('detalleModal');
+}
+
+// ══ ACCIÓN OT ══
+function openAccion(otId, estadoDefault) {
+  _activeOT = myOTs[otId];
+  if (!_activeOT) return;
+  document.getElementById('accionOTId').textContent = `Actualizar: ${otId}`;
+  document.getElementById('ac-obs').value = '';
+  document.getElementById('ac-foto').value = '';
+  document.getElementById('ac-foto-preview').style.display = 'none';
+  document.getElementById('ac-foto-preview').src = '';
+  const warnEl = document.getElementById('accion-sync-warn');
+  warnEl.style.display = isOnline ? 'none' : 'flex';
+  if (estadoDefault) document.getElementById('ac-estado').value = estadoDefault;
+  openModal('accionModal');
+  getGPS();
+}
+
+function closeAccionModal() { closeModal('accionModal'); }
+
+function previewPhoto(input) {
+  if (!input.files.length) return;
+  const reader = new FileReader();
+  reader.onload = e => { const img = document.getElementById('ac-foto-preview'); img.src=e.target.result; img.style.display='block'; };
+  reader.readAsDataURL(input.files[0]);
+}
+
+async function enviarActualizacion() {
+  const estado = document.getElementById('ac-estado').value;
+  const obs = document.getElementById('ac-obs').value.trim();
+  const foto = document.getElementById('ac-foto').files[0];
+  const btn = document.getElementById('btn-enviar');
+  btn.innerHTML = '<span class="spinner"></span> Enviando...';
+  btn.disabled = true;
+
+  try {
+    const now = new Date().toISOString();
+    let fotoUrl = null;
+    if (foto && isOnline) {
+      const path = `despachos/${maestroUid}/${_activeOT.otId}/foto_${Date.now()}.jpg`;
+      const ref = storage.ref(path);
+      await ref.put(foto);
+      fotoUrl = await ref.getDownloadURL();
+    }
+    const hitoData = {
+      otId: _activeOT.otId, estado, fecha: now,
+      observaciones: obs || '',
+      lat: currentGPS?.lat || null, lng: currentGPS?.lng || null,
+      fotoUrl, usuario: currentUser.email
+    };
+    if (isOnline) {
+      await submitActualizacion(hitoData);
+    } else {
+      await queueAction({ tipo:'actualizacion', hitoData, maestroUid, otId:_activeOT.otId, token:_activeOT.tokenPublico, ts:Date.now() });
+      await updateQueueBadge();
+      showSnack('Guardado localmente. Se enviará cuando haya conexión.');
+    }
+    closeModal('accionModal');
+  } catch(e) {
+    alert('Error: ' + e.message);
+  } finally {
+    btn.innerHTML = 'Enviar actualización'; btn.disabled = false;
+  }
+}
+
+async function submitActualizacion(hitoData) {
+  const hitoId = `H-${Date.now()}`;
+  const updates = {};
+  updates[`organizaciones/${maestroUid}/trazabilidadTransporte/${hitoId}`] = hitoData;
+  updates[`organizaciones/${maestroUid}/ordenesTransporte/${hitoData.otId}/estado`] = hitoData.estado;
+  updates[`tracking/${_activeOT.tokenPublico}/estado`] = hitoData.estado;
+  updates[`tracking/${_activeOT.tokenPublico}/hitos/${hitoId}`] = hitoData;
+  if (hitoData.lat) {
+    updates[`tracking/${_activeOT.tokenPublico}/ultimaLat`] = hitoData.lat;
+    updates[`tracking/${_activeOT.tokenPublico}/ultimaLng`] = hitoData.lng;
+  }
+  await db.ref().update(updates);
+  showSnack(`Estado "${hitoData.estado}" enviado correctamente.`);
+}
+
+async function syncQueue() {
+  const q = await getQueue();
+  if (!q.length || !isOnline) return;
+  const banner = document.getElementById('syncBanner');
+  banner.style.display = 'flex';
+  document.getElementById('syncMsg').textContent = `Sincronizando ${q.length} cambio(s)...`;
+  for (const item of q) {
+    try {
+      if (item.tipo === 'actualizacion') {
+        _activeOT = { tokenPublico: item.token };
+        await submitActualizacion(item.hitoData);
+      }
+      await clearQueueItem(item.id);
+    } catch(e) { console.warn('Sync error:', e); }
+  }
+  banner.style.display = 'none';
+  updateQueueBadge();
+}
+
+// ══ GPS ══
+function getGPS() {
+  const el = document.getElementById('gpsStatus');
+  if (!el) return;
+  el.textContent = '📍 Obteniendo GPS...'; el.className = 'gps-status gps-loading';
+  if (!navigator.geolocation) { el.textContent = '📍 GPS no disponible'; el.className = 'gps-status gps-err'; return; }
+  navigator.geolocation.getCurrentPosition(
+    pos => { currentGPS = { lat:pos.coords.latitude, lng:pos.coords.longitude, acc:Math.round(pos.coords.accuracy) }; el.textContent = `📍 ${currentGPS.lat.toFixed(5)}, ${currentGPS.lng.toFixed(5)} (±${currentGPS.acc}m)`; el.className = 'gps-status gps-ok'; },
+    err => { el.textContent = '📍 No se pudo obtener ubicación'; el.className = 'gps-status gps-err'; },
+    { enableHighAccuracy:true, timeout:10000, maximumAge:30000 }
+  );
+}
+function refreshGPS() { currentGPS = null; getGPS(); }
+
+// ══ MODALS ══
+function openModal(id) { document.getElementById(id).classList.add('active'); }
+function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+document.addEventListener('click', e => { if (e.target.classList.contains('modal')) { const id = e.target.id; if(id) closeModal(id); } });
+
+// ══ SNACK ══
+function showSnack(msg) {
+  const el = document.createElement('div');
+  el.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#1D2D3E;color:white;padding:10px 20px;border-radius:20px;font-size:13px;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.25);animation:fadeIn .2s ease;white-space:nowrap;max-width:90vw;text-align:center;';
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+// ══ UTILS ══
+function fmtDate(iso) {
+  if (!iso) return '—';
+  try { const d = new Date(iso.includes('T') ? iso : iso+'T00:00:00'); if(isNaN(d)) return '—'; return d.toLocaleDateString('es-CL',{day:'2-digit',month:'2-digit',year:'numeric'}); } catch { return '—'; }
+}
+function fmtDateTime(iso) {
+  if (!iso) return '—';
+  try { const d = new Date(iso); if(isNaN(d)) return '—'; return d.toLocaleDateString('es-CL',{day:'2-digit',month:'2-digit'})+' '+d.toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'}); } catch { return '—'; }
+}
+</script>
+</body>
+</html>
