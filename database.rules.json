@@ -1,0 +1,20 @@
+{
+  "rules": {
+    "usuarios": {
+      "$uid": {
+        ".read": "$uid === auth.uid",
+        ".write": "$uid === auth.uid"
+      }
+    },
+    "organizaciones": {
+      "$orgId": {
+        ".read": "auth != null",
+        ".write": "auth != null && (auth.uid === $orgId || root.child('usuarios').child(auth.uid).child('maestroUid').val() === $orgId)"
+      }
+    },
+    "tracking": {
+      ".read": true,
+      ".write": "auth != null"
+    }
+  }
+}
