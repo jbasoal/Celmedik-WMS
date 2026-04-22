@@ -161,6 +161,8 @@
         .btn-danger-sm:hover { background: var(--danger); color: white; border-color: var(--danger); }
         .btn-success-sm { background: var(--success-dim); color: #107E3E; border: 1px solid rgba(16,126,62,0.3); }
         .btn-success-sm:hover { background: var(--success); color: white; border-color: var(--success); }
+        .btn-primary-sm { background: rgba(0,112,242,0.10); color: var(--accent); border: 1px solid rgba(0,112,242,0.30); }
+        .btn-primary-sm:hover { background: var(--accent); color: white; border-color: var(--accent); }
         .btn-icon { padding: 6px 10px; background: var(--bg3); border: 1px solid var(--border); color: var(--text2); border-radius: 6px; }
         .btn-icon:hover { background: var(--bg4); color: var(--text); border-color: var(--border2); }
 
@@ -1850,27 +1852,40 @@ document.addEventListener('DOMContentLoaded', () => {
 function loadProfile() {
     db.ref(`usuarios/${currentUser.uid}`).once('value', s => {
         const info = s.val() || {};
-        userPerfil = info.perfil || 'Maestro';
-        // Persistir el perfil en DB si no estaba guardado (necesario para reglas RTDB)
+        // Si no existe registro, se marca como Pendiente y se guarda el email para
+        // que el Maestro pueda identificarlo y asignarle un perfil desde el panel.
         if (!info.perfil) {
-            db.ref(`usuarios/${currentUser.uid}/perfil`).set(userPerfil).catch(()=>{});
+            userPerfil = 'Pendiente';
+            db.ref(`usuarios/${currentUser.uid}`).update({
+                perfil: 'Pendiente',
+                email: currentUser.email,
+                creadoEn: new Date().toISOString()
+            }).catch(()=>{});
+        } else {
+            userPerfil = info.perfil;
+            // Guardar email si no estaba guardado (ayuda a identificar usuarios antiguos)
+            if (!info.email) db.ref(`usuarios/${currentUser.uid}/email`).set(currentUser.email).catch(()=>{});
         }
-        // rootUid: uid dueño de los datos (productos, stock, etc.).
-        // Si el usuario es Maestro, rootUid es su propio uid.
-        // Si es un perfil hijo (Farmacéutico, Operador, Visualizador), usa el maestroUid guardado.
+        // rootUid: uid dueño de los datos. Maestro usa su propio uid; hijos usan maestroUid.
         rootUid = (userPerfil === 'Maestro') ? currentUser.uid : (info.maestroUid || currentUser.uid);
-        // Advertencia si usuario hijo no tiene maestroUid → no verá datos
-        if (userPerfil !== 'Maestro' && userPerfil !== 'Transportista' && !info.maestroUid) {
-            setTimeout(() => {
-                alert('Su cuenta aún no está vinculada a un administrador Maestro.\n\n' +
-                      'Pida al administrador que ingrese al módulo "Usuarios" y pulse "Vincular a mí" para su cuenta.\n\n' +
-                      'Hasta entonces no podrá ver los productos, stock ni movimientos.');
-            }, 500);
-        }
         document.getElementById('userRole').textContent = `Perfil: ${userPerfil}`;
         document.getElementById('userEmail').textContent = currentUser.email;
         document.getElementById('userInitial').textContent = currentUser.email[0].toUpperCase();
         if (userPerfil === 'Transportista') { window.location.href = 'conductor.html'; return; }
+        // Cuentas pendientes o sin vínculo: bloquear app y mostrar aviso
+        if (userPerfil === 'Pendiente' || (userPerfil !== 'Maestro' && !info.maestroUid)) {
+            applyPerfilUI();
+            showScreen('app');
+            const msg = userPerfil === 'Pendiente'
+                ? `Su cuenta (${currentUser.email}) está registrada pero aún no tiene un perfil asignado.\n\n` +
+                  'El administrador Maestro debe ingresar a «Usuarios» y asignarle un perfil (Farmacéutico, Operador o Visualizador).\n\n' +
+                  'Hasta entonces no verá datos.'
+                : `Su cuenta (${currentUser.email}) tiene perfil «${userPerfil}» pero no está vinculada a un Maestro.\n\n` +
+                  'Pida al administrador Maestro que ingrese al módulo «Usuarios» y pulse «Asignar y vincular» para su cuenta.';
+            setTimeout(() => alert(msg), 300);
+            _initResponsive();
+            return;
+        }
         const navAjustes = document.getElementById('nav-ajustes');
         if (navAjustes) navAjustes.style.display = userPerfil === 'Maestro' ? '' : 'none';
         const navAdmin = document.getElementById('nav-admin');
@@ -1992,34 +2007,54 @@ function renderUsuarios() {
       .then(s => {
         const all = s.val() || {};
         const miUid = currentUser.uid;
+        // Maestros legítimos = tienen al menos un hijo vinculado; usamos esto para no "robar" Maestros reales
+        const maestrosConHijos = new Set();
+        Object.values(all).forEach(u => { if (u && u.maestroUid) maestrosConHijos.add(u.maestroUid); });
         const rows = Object.entries(all)
-            // Mostrar: el propio Maestro, sus usuarios hijos, y usuarios "huérfanos" (sin maestroUid y no-Maestro)
             .filter(([uid, u]) => {
                 if (uid === miUid) return true;
                 if (u.maestroUid === miUid) return true;
-                if (!u.maestroUid && u.perfil && u.perfil !== 'Maestro' && u.perfil !== 'Transportista') return true;
+                if (u.perfil === 'Transportista') return false;
+                // Huérfano: sin maestroUid. Incluye Pendientes y Maestros "erróneos" (sin hijos propios).
+                if (!u.maestroUid) {
+                    if (u.perfil === 'Maestro' && maestrosConHijos.has(uid)) return false;
+                    return true;
+                }
                 return false;
             })
             .sort((a, b) => (a[1].email || a[0]).localeCompare(b[1].email || b[0]));
         if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="5">Sin usuarios</td></tr>'; return; }
+        const perfilOpts = (sel) => ['Farmacéutico','Operador','Visualizador']
+            .map(p => `<option value="${p}"${sel===p?' selected':''}>${p}</option>`).join('');
         tb.innerHTML = rows.map(([uid, u]) => {
-            const esPropio    = uid === miUid;
-            const esMaestro   = u.perfil === 'Maestro';
-            const esHijoMio   = u.maestroUid === miUid;
-            const esHuerfano  = !u.maestroUid && !esMaestro;
+            const esPropio   = uid === miUid;
+            const esHijoMio  = u.maestroUid === miUid;
             let estadoHtml, accionHtml;
             if (esPropio) {
                 estadoHtml = '<span class="badge badge-blue">Usted</span>';
                 accionHtml = '<span class="text-muted">—</span>';
             } else if (esHijoMio) {
                 estadoHtml = '<span class="badge badge-success">Vinculado</span>';
-                accionHtml = `<button class="btn btn-sm btn-danger-sm" onclick="desvincularUsuario('${uid}')">Desvincular</button>`;
-            } else if (esHuerfano) {
-                estadoHtml = '<span class="badge badge-warning">Sin vínculo</span>';
-                accionHtml = `<button class="btn btn-sm btn-success-sm" onclick="asignarMaestro('${uid}')">Vincular a mí</button>`;
+                accionHtml = `
+                    <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
+                        <select id="perfilSel_${uid}" class="form-select" style="min-width:130px;font-size:12px;padding:5px 8px">${perfilOpts(u.perfil)}</select>
+                        <button class="btn btn-sm btn-primary-sm" onclick="cambiarPerfil('${uid}')">Cambiar perfil</button>
+                        <button class="btn btn-sm btn-danger-sm" onclick="desvincularUsuario('${uid}')">Desvincular</button>
+                    </div>`;
             } else {
-                estadoHtml = '<span class="badge badge-gray">Otro Maestro</span>';
-                accionHtml = '<span class="text-muted">—</span>';
+                // Huérfano (sin maestroUid): puede ser Pendiente, sin perfil, o Maestro erróneamente guardado
+                if (u.perfil === 'Maestro') {
+                    estadoHtml = '<span class="badge badge-warning" title="Cuenta marcada como Maestro pero sin usuarios vinculados. Probable error: asigne el perfil correcto.">Maestro sin hijos</span>';
+                } else if (u.perfil === 'Pendiente') {
+                    estadoHtml = '<span class="badge badge-warning">Pendiente</span>';
+                } else {
+                    estadoHtml = '<span class="badge badge-warning">Sin vínculo</span>';
+                }
+                accionHtml = `
+                    <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
+                        <select id="perfilSel_${uid}" class="form-select" style="min-width:130px;font-size:12px;padding:5px 8px">${perfilOpts(u.perfil)}</select>
+                        <button class="btn btn-sm btn-success-sm" onclick="asignarPerfilYVincular('${uid}')">Asignar y vincular</button>
+                    </div>`;
             }
             const emailTxt = u.email || `<span class="text-muted text-sm">uid: ${uid.slice(0,10)}…</span>`;
             const vinc = u.maestroUid ? (u.maestroUid === miUid ? '<span class="text-success">yo</span>' : `<span class="text-mono" style="font-size:10px">${u.maestroUid.slice(0,10)}…</span>`) : '<span class="text-muted">—</span>';
@@ -2038,13 +2073,33 @@ function renderUsuarios() {
     });
 }
 
-function asignarMaestro(uid) {
+function asignarPerfilYVincular(uid) {
     if (userPerfil !== 'Maestro') return;
-    if (!confirm('¿Vincular este usuario a su cuenta Maestro?\n\nPodrá ver y editar los datos de su bodega según su perfil.')) return;
-    db.ref(`usuarios/${uid}/maestroUid`).set(currentUser.uid)
+    const sel = document.getElementById('perfilSel_' + uid);
+    if (!sel) return;
+    const perfil = sel.value;
+    if (!['Farmacéutico','Operador','Visualizador'].includes(perfil)) { _setUsrMsg('error','Seleccione un perfil válido.'); return; }
+    if (!confirm(`¿Asignar perfil «${perfil}» y vincular este usuario a su cuenta Maestro?\n\nPodrá ver los datos según los permisos del perfil asignado.`)) return;
+    db.ref(`usuarios/${uid}`).update({ perfil: perfil, maestroUid: currentUser.uid })
         .then(() => {
-            _setUsrMsg('success', '✓ Usuario vinculado correctamente. El usuario ya puede ver los datos al iniciar sesión.');
-            logAudit('Vincular', 'Usuarios', uid, '', `maestroUid asignado a ${currentUser.email}`);
+            _setUsrMsg('success', `✓ Usuario vinculado con perfil «${perfil}». Ya puede ver los datos al iniciar sesión.`);
+            logAudit('Vincular', 'Usuarios', uid, '', `perfil=${perfil} · maestroUid=${currentUser.email}`);
+            renderUsuarios();
+        })
+        .catch(err => _setUsrMsg('error', 'Error: ' + err.message));
+}
+
+function cambiarPerfil(uid) {
+    if (userPerfil !== 'Maestro') return;
+    const sel = document.getElementById('perfilSel_' + uid);
+    if (!sel) return;
+    const perfil = sel.value;
+    if (!['Farmacéutico','Operador','Visualizador'].includes(perfil)) { _setUsrMsg('error','Seleccione un perfil válido.'); return; }
+    if (!confirm(`¿Cambiar el perfil de este usuario a «${perfil}»?`)) return;
+    db.ref(`usuarios/${uid}/perfil`).set(perfil)
+        .then(() => {
+            _setUsrMsg('success', `✓ Perfil actualizado a «${perfil}».`);
+            logAudit('Modificar', 'Usuarios', uid, '', `perfil=${perfil}`);
             renderUsuarios();
         })
         .catch(err => _setUsrMsg('error', 'Error: ' + err.message));
