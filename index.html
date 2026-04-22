@@ -164,6 +164,11 @@
         .btn-icon { padding: 6px 10px; background: var(--bg3); border: 1px solid var(--border); color: var(--text2); border-radius: 6px; }
         .btn-icon:hover { background: var(--bg4); color: var(--text); border-color: var(--border2); }
 
+        /* Restricciones por perfil: oculta botones que requieren escritura */
+        body.perfil-visualizador .need-write,
+        body.perfil-operador .need-maestro,
+        body.perfil-farmaceutico .need-maestro { display: none !important; }
+
         /* ══════════════════════════════════════
            APP LAYOUT
         ══════════════════════════════════════ */
@@ -663,6 +668,10 @@
                         <div class="user-role-tag" id="userRole">Cargando...</div>
                     </div>
                 </div>
+                <button class="btn-logout" onclick="openPasswordModal()" style="margin-bottom:6px">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    Cambiar contraseña
+                </button>
                 <button class="btn-logout" onclick="handleLogout()">
                     <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
                     Cerrar sesión
@@ -747,7 +756,7 @@
                                 <div class="card-title">Productos Maestro</div>
                                 <div class="card-subtitle">Incluye N° registro sanitario ISP (NT 147)</div>
                             </div>
-                            <button class="btn btn-primary btn-sm" onclick="openModal('productModal')">+ Nuevo producto</button>
+                            <button class="btn btn-primary btn-sm need-write" onclick="openModal('productModal')">+ Nuevo producto</button>
                         </div>
                         <div class="filter-bar">
                             <input type="text" class="form-input" id="fProdSKU" placeholder="Buscar SKU..." onkeyup="renderProductos()">
@@ -814,7 +823,7 @@
                     <div class="card">
                         <div class="card-header">
                             <div><div class="card-title">Bodegas</div></div>
-                            <button class="btn btn-primary btn-sm" onclick="openModal('bodegaModal')">+ Nueva bodega</button>
+                            <button class="btn btn-primary btn-sm need-write need-maestro" onclick="openModal('bodegaModal')">+ Nueva bodega</button>
                         </div>
                         <div class="table-wrap">
                             <table><thead><tr><th>Nombre</th><th>Ubicación</th><th>Capacidad</th><th>Tipo</th><th>Estado</th><th></th></tr></thead>
@@ -829,7 +838,7 @@
                         <div class="card-header">
                             <div style="display:flex;align-items:center;gap:16px">
                                 <div><div class="card-title">Movimientos</div><div class="card-subtitle">Trazabilidad completa según NT 147</div></div>
-                                <button class="btn btn-primary btn-sm" onclick="openMovModal()">+ Nuevo movimiento</button>
+                                <button class="btn btn-primary btn-sm need-write" onclick="openMovModal()">+ Nuevo movimiento</button>
                             </div>
                         </div>
                         <div class="filter-bar">
@@ -858,7 +867,7 @@
                     <div class="card">
                         <div class="card-header">
                             <div><div class="card-title">Gestión de Cuarentena</div><div class="card-subtitle">Lotes bloqueados pendientes de liberación QA — NT 147</div></div>
-                            <button class="btn btn-primary btn-sm" onclick="openModal('cuarModal')">+ Ingresar a cuarentena</button>
+                            <button class="btn btn-primary btn-sm need-write" onclick="openModal('cuarModal')">+ Ingresar a cuarentena</button>
                         </div>
                         <div class="table-wrap">
                             <table><thead><tr>
@@ -873,7 +882,7 @@
                     <div class="card">
                         <div class="card-header">
                             <div><div class="card-title">Devoluciones</div></div>
-                            <button class="btn btn-primary btn-sm" onclick="openDevModal()">+ Nueva devolución</button>
+                            <button class="btn btn-primary btn-sm need-write" onclick="openDevModal()">+ Nueva devolución</button>
                         </div>
                         <div class="filter-bar">
                             <input type="text" class="form-input" id="fDevSKU" placeholder="SKU..." onkeyup="renderDevoluciones()">
@@ -914,7 +923,7 @@
                     <div class="card">
                         <div class="card-header">
                             <div><div class="card-title">Ajuste de Inventario</div><div class="card-subtitle">Ajustes positivos y negativos de stock · Solo perfil Maestro</div></div>
-                            <button class="btn btn-primary btn-sm" onclick="openAjusteModal()">+ Nuevo Ajuste</button>
+                            <button class="btn btn-primary btn-sm need-write need-maestro" onclick="openAjusteModal()">+ Nuevo Ajuste</button>
                         </div>
                         <div class="filter-bar">
                             <input type="text" class="form-input" id="fAjusteSKU" placeholder="SKU..." style="max-width:160px" oninput="renderAjustes()">
@@ -1188,6 +1197,33 @@
 <!-- ══════════════════════════════════════
      MODALES
 ══════════════════════════════════════ -->
+
+<!-- CAMBIO DE CONTRASEÑA -->
+<div id="passwordModal" class="modal">
+    <div class="modal-box" style="max-width:440px">
+        <div class="modal-header">
+            <div><div class="modal-title">Cambiar contraseña</div><div class="modal-subtitle">Actualice su clave de acceso</div></div>
+            <button class="modal-close" onclick="closeModal('passwordModal')">✕</button>
+        </div>
+        <div id="pwdMsg" class="status-msg" style="display:none;margin-bottom:12px"></div>
+        <div class="form-group">
+            <label class="form-label">Contraseña actual <span style="color:var(--danger)">*</span></label>
+            <input type="password" class="form-input" id="pwd-current" placeholder="Contraseña actual" autocomplete="current-password">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Nueva contraseña <span style="color:var(--danger)">*</span></label>
+            <input type="password" class="form-input" id="pwd-new" minlength="6" placeholder="Mínimo 6 caracteres" autocomplete="new-password">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Confirmar nueva contraseña <span style="color:var(--danger)">*</span></label>
+            <input type="password" class="form-input" id="pwd-new2" minlength="6" placeholder="Repita la nueva contraseña" autocomplete="new-password">
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+            <button class="btn btn-ghost" onclick="closeModal('passwordModal')">Cancelar</button>
+            <button class="btn btn-primary" id="pwd-btn" onclick="handleChangePassword()">Actualizar contraseña</button>
+        </div>
+    </div>
+</div>
 
 <!-- PRODUCTO -->
 <div id="productModal" class="modal">
@@ -1780,7 +1816,7 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.database();
 
-let currentUser = null, userPerfil = null;
+let currentUser = null, userPerfil = null, rootUid = null;
 let data = { productos:{}, bodegas:{}, movimientos:{}, cuarentena:{}, devoluciones:{}, auditoria:{} };
 let selectedBodega = 'TOTAL';
 let movDocItems = [];
@@ -1795,8 +1831,13 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function loadProfile() {
-    db.ref(`usuarios/${currentUser.uid}/perfil`).once('value', s => {
-        userPerfil = s.val() || 'Maestro';
+    db.ref(`usuarios/${currentUser.uid}`).once('value', s => {
+        const info = s.val() || {};
+        userPerfil = info.perfil || 'Maestro';
+        // rootUid: uid dueño de los datos (productos, stock, etc.).
+        // Si el usuario es Maestro, rootUid es su propio uid.
+        // Si es un perfil hijo (Farmacéutico, Operador, Visualizador), usa el maestroUid guardado.
+        rootUid = (userPerfil === 'Maestro') ? currentUser.uid : (info.maestroUid || currentUser.uid);
         document.getElementById('userRole').textContent = `Perfil: ${userPerfil}`;
         document.getElementById('userEmail').textContent = currentUser.email;
         document.getElementById('userInitial').textContent = currentUser.email[0].toUpperCase();
@@ -1807,10 +1848,24 @@ function loadProfile() {
         if (navAdmin) navAdmin.style.display = userPerfil === 'Maestro' ? '' : 'none';
         const navTransporte = document.getElementById('nav-transporte');
         if (navTransporte) navTransporte.style.display = (userPerfil === 'Maestro' || userPerfil === 'Farmacéutico') ? '' : 'none';
+        applyPerfilUI();
         showScreen('app');
         attachListeners();
         _initResponsive(); // D1
     });
+}
+
+// Aplica restricciones visuales según perfil (ocultar botones de acción)
+function applyPerfilUI() {
+    const isMaestro       = userPerfil === 'Maestro';
+    const isFarmaceutico  = userPerfil === 'Farmacéutico';
+    const isOperador      = userPerfil === 'Operador';
+    const isVisualizador  = userPerfil === 'Visualizador';
+    // Visualizador: solo lectura (oculta botones con clase data-accion)
+    document.body.classList.toggle('perfil-visualizador', isVisualizador);
+    document.body.classList.toggle('perfil-operador', isOperador);
+    document.body.classList.toggle('perfil-farmaceutico', isFarmaceutico);
+    document.body.classList.toggle('perfil-maestro', isMaestro);
 }
 
 function showScreen(which) {
@@ -1863,9 +1918,13 @@ function handleRegisterAdmin() {
 
     // Usar app secundaria para no cerrar la sesión del Maestro
     const secAuth = _getSecondaryAuth();
+    const maestroOwnerUid = rootUid || currentUser.uid;
     secAuth.createUserWithEmailAndPassword(email, pass)
         .then(cred => {
-            db.ref(`usuarios/${cred.user.uid}/perfil`).set(perfil);
+            const userData = { perfil };
+            // Si el perfil no es Maestro, guardar el UID del Maestro dueño de los datos
+            if (perfil !== 'Maestro') userData.maestroUid = maestroOwnerUid;
+            db.ref(`usuarios/${cred.user.uid}`).update(userData);
             return secAuth.signOut();
         })
         .then(() => {
@@ -1879,6 +1938,57 @@ function handleRegisterAdmin() {
 }
 
 function handleLogout() { detachListeners(); auth.signOut(); }
+
+// ══ CAMBIO DE CONTRASEÑA ══
+function openPasswordModal() {
+    ['pwd-current','pwd-new','pwd-new2'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+    const msg = document.getElementById('pwdMsg');
+    if (msg) { msg.textContent=''; msg.style.display='none'; msg.className='status-msg'; }
+    openModal('passwordModal');
+}
+
+function _setPwdMsg(type, txt) {
+    const el = document.getElementById('pwdMsg');
+    if (!el) return;
+    el.className = 'status-msg ' + (type || '');
+    el.textContent = txt || '';
+    el.style.display = txt ? 'block' : 'none';
+}
+
+function handleChangePassword() {
+    const current = (document.getElementById('pwd-current')?.value || '').trim();
+    const nueva   = (document.getElementById('pwd-new')?.value || '').trim();
+    const nueva2  = (document.getElementById('pwd-new2')?.value || '').trim();
+    const btn     = document.getElementById('pwd-btn');
+
+    if (!current || !nueva || !nueva2) { _setPwdMsg('error','Complete todos los campos.'); return; }
+    if (nueva.length < 6)               { _setPwdMsg('error','La nueva contraseña debe tener al menos 6 caracteres.'); return; }
+    if (nueva !== nueva2)               { _setPwdMsg('error','Las contraseñas no coinciden.'); return; }
+    if (nueva === current)              { _setPwdMsg('error','La nueva contraseña debe ser distinta de la actual.'); return; }
+    if (!auth.currentUser)              { _setPwdMsg('error','Sesión no válida. Vuelva a iniciar sesión.'); return; }
+
+    if (btn) btn.disabled = true;
+    _setPwdMsg('', '');
+    const cred = firebase.auth.EmailAuthProvider.credential(auth.currentUser.email, current);
+    auth.currentUser.reauthenticateWithCredential(cred)
+        .then(() => auth.currentUser.updatePassword(nueva))
+        .then(() => {
+            _setPwdMsg('success','✓ Contraseña actualizada correctamente.');
+            logAudit('Cambio contraseña','Usuarios','','','Contraseña actualizada por el usuario');
+            setTimeout(() => closeModal('passwordModal'), 1200);
+        })
+        .catch(err => {
+            const m = {
+                'auth/wrong-password':'La contraseña actual es incorrecta.',
+                'auth/invalid-credential':'La contraseña actual es incorrecta.',
+                'auth/weak-password':'La nueva contraseña es demasiado débil.',
+                'auth/requires-recent-login':'Debe cerrar sesión e iniciar nuevamente para cambiar la contraseña.',
+                'auth/too-many-requests':'Demasiados intentos. Intente más tarde.'
+            };
+            _setPwdMsg('error', m[err.code] || ('Error: ' + err.message));
+        })
+        .finally(() => { if (btn) btn.disabled = false; });
+}
 
 function setLoginStatus(type, msg) {
     const el = document.getElementById('loginStatus');
@@ -1923,7 +2033,7 @@ function navigateTo(page) {
 
 // ══ DATA LISTENERS ══
 function attachListeners() {
-    const uid = currentUser.uid;
+    const uid = rootUid || currentUser.uid;
     db.ref(`usuarios/${uid}/productos`).on('value', s => { data.productos = s.val()||{}; renderProductos(); updateStats(); renderStock(); });
     db.ref(`usuarios/${uid}/bodegas`).on('value', s => { data.bodegas = s.val()||{}; renderBodegas(); renderBodegaBtns(); updateBodegaSelect(); updateStats(); });
     db.ref(`usuarios/${uid}/movimientos`).on('value', s => { data.movimientos = s.val()||{}; _invalidateStockCache(); renderMovimientos(); renderStock(); updateStats(); });
@@ -1933,15 +2043,16 @@ function attachListeners() {
 
 function detachListeners() {
     if (!currentUser) return;
-    const uid = currentUser.uid;
+    const uid = rootUid || currentUser.uid;
     ['productos','bodegas','movimientos','cuarentena','devoluciones'].forEach(k => db.ref(`usuarios/${uid}/${k}`).off());
 }
 
 // ══ AUDIT LOG ══
 function logAudit(accion, modulo, sku, lote, detalle) {
     if (!currentUser) return;
+    const uid = rootUid || currentUser.uid;
     const entry = { fecha: new Date().toISOString(), accion, modulo, sku: sku||'', lote: lote||'', detalle: detalle||'', usuario: currentUser.email };
-    db.ref(`usuarios/${currentUser.uid}/auditoria`).push(entry);
+    db.ref(`usuarios/${uid}/auditoria`).push(entry);
 }
 
 // ══ STATS ══
@@ -2099,7 +2210,7 @@ function renderProductos() {
             <td>${p.unidadVenta||'—'}</td>
             <td>${p.stockMin > 0 ? p.stockMin : '—'}</td>
             <td><span class="badge badge-gray" style="font-size:10px">${p.almacenamiento||'Ambiente'}</span></td>
-            <td><button class="btn btn-sm btn-icon" onclick="editProducto('${p.sku}')">✎</button></td>
+            <td>${userPerfil === 'Visualizador' ? '<span class="text-muted">—</span>' : `<button class="btn btn-sm btn-icon" onclick="editProducto('${p.sku}')">✎</button>`}</td>
         </tr>`).join('');
 }
 
@@ -2110,6 +2221,7 @@ function badgeTipo(tipo) {
 
 function saveProducto(e) {
     e.preventDefault();
+    if (userPerfil === 'Visualizador') { alert('Su perfil es de solo lectura.'); return; }
     const sku = document.getElementById('p-sku').value.trim().toUpperCase();
     if (!sku) return;
     const esEdicion = !!data.productos[sku]; // I2: determinar antes de escribir
@@ -2126,7 +2238,7 @@ function saveProducto(e) {
         principioActivo: document.getElementById('p-principio').value.trim(),
         fecha: new Date().toISOString()
     };
-    db.ref(`usuarios/${currentUser.uid}/productos/${sku}`).set(p)
+    db.ref(`usuarios/${rootUid || currentUser.uid}/productos/${sku}`).set(p)
         .then(() => { logAudit(esEdicion ? 'Editar' : 'Crear', 'Productos', sku, '', p.descripcion); closeModal('productModal'); })
         .catch(err => alert('Error: ' + err.message));
 }
@@ -2150,6 +2262,7 @@ function editProducto(sku) {
 // ══ BODEGAS ══
 function saveBodega(e) {
     e.preventDefault();
+    if (userPerfil !== 'Maestro') { alert('Solo el perfil Maestro puede administrar bodegas.'); return; }
     const b = {
         nombre: document.getElementById('b-nombre').value.trim(),
         tipo: document.getElementById('b-tipo').value,
@@ -2157,7 +2270,7 @@ function saveBodega(e) {
         capacidad: document.getElementById('b-cap').value||'',
         fecha: new Date().toISOString()
     };
-    db.ref(`usuarios/${currentUser.uid}/bodegas/${Date.now()}`).set(b)
+    db.ref(`usuarios/${rootUid || currentUser.uid}/bodegas/${Date.now()}`).set(b)
         .then(() => { logAudit('Crear', 'Bodegas', '', '', b.nombre); closeModal('bodegaModal'); });
 }
 
@@ -2172,16 +2285,17 @@ function renderBodegas() {
             <td>${b.capacidad ? b.capacidad + ' m³' : '—'}</td>
             <td><span class="badge ${b.tipo === 'Cuarentena' ? 'badge-warning' : b.tipo === 'Rechazados' ? 'badge-danger' : 'badge-success'}">${b.tipo||'General'}</span></td>
             <td><span class="badge badge-success">Activa</span></td>
-            <td><button class="btn btn-sm btn-danger-sm" onclick="deleteBodega('${id}')">Eliminar</button></td>
+            <td>${userPerfil === 'Maestro' ? `<button class="btn btn-sm btn-danger-sm" onclick="deleteBodega('${id}')">Eliminar</button>` : '<span class="text-muted">—</span>'}</td>
         </tr>`).join('');
 }
 
 function deleteBodega(id) {
+    if (userPerfil !== 'Maestro') { alert('Solo el perfil Maestro puede eliminar bodegas.'); return; }
     const b = data.bodegas?.[id]; if (!b) return;
     showConfirm('Eliminar Bodega', 'Esta acción no se puede deshacer',
         `¿Eliminar la bodega <strong>${b.nombre}</strong>? Se perderá toda su configuración de ubicaciones.`,
         'Eliminar', 'btn-danger',
-        () => { db.ref(`usuarios/${currentUser.uid}/bodegas/${id}`).remove()
+        () => { db.ref(`usuarios/${rootUid || currentUser.uid}/bodegas/${id}`).remove()
             .then(() => logAudit('Eliminar', 'Bodegas', id, '', b.nombre)); }
     );
 }
@@ -2643,6 +2757,7 @@ function resetItemForm() {
 }
 
 function saveDocumento() {
+    if (userPerfil === 'Visualizador') { alert('Su perfil es de solo lectura.'); return; }
     const tipo = document.getElementById('md-tipo').value;
     const numDoc = document.getElementById('md-numdoc').value.trim();
     const proveedor = document.getElementById('md-proveedor').value.trim();
@@ -2657,7 +2772,7 @@ function saveDocumento() {
 
     const documentoId = numDoc || `DOC-${Date.now()}`;
     const fechaISO = new Date().toISOString();
-    const uid = currentUser.uid;
+    const uid = rootUid || currentUser.uid;
     const usuario = currentUser.email;
     const totalUnidades = movDocItems.reduce((a, i) => a + i.qty, 0);
 
@@ -3031,6 +3146,7 @@ function clearStockFilters() {
 // ══ CUARENTENA ══
 function saveCuarentena(e) {
     e.preventDefault();
+    if (userPerfil === 'Visualizador') { alert('Su perfil es de solo lectura.'); return; }
     const sku = document.getElementById('q-sku').value.trim().toUpperCase();
     const q = {
         sku, lote: document.getElementById('q-lote').value.trim(),
@@ -3043,7 +3159,7 @@ function saveCuarentena(e) {
         fechaIngreso: new Date().toISOString(),
         usuario: currentUser.email
     };
-    db.ref(`usuarios/${currentUser.uid}/cuarentena`).push(q)
+    db.ref(`usuarios/${rootUid || currentUser.uid}/cuarentena`).push(q)
         .then(() => { logAudit('Ingresar', 'Cuarentena', sku, q.lote, q.motivo); closeModal('cuarModal'); })
         .catch(err => alert('Error: ' + err.message));
 }
@@ -3078,7 +3194,7 @@ function liberarCuarentena(id) {
         `<strong>¿Confirmar liberación?</strong><br>El lote quedará en estado <span style="color:var(--success);font-weight:600">APROBADO</span> y podrá despacharse normalmente.<br><span style="color:var(--text3);font-size:12px">Se registrará un evento de cambio de estado en trazabilidad.</span>`,
         'Confirmar liberación', 'btn-success-sm',
         () => {
-            const uid = currentUser.uid;
+            const uid = rootUid || currentUser.uid;
             const ahora = new Date().toISOString();
             const stock = calcStock();
             const stockItem = Object.values(stock).find(s => s.sku === q.sku && s.lote === q.lote);
@@ -3122,7 +3238,7 @@ function confirmarRechazoCuarentena() {
     if (!motivo) { alert('Seleccione el motivo de rechazo.'); return; }
     if (!resp) { alert('Ingrese el nombre del responsable QA.'); return; }
     const q = data.cuarentena[id]; if (!q) return;
-    const uid = currentUser.uid;
+    const uid = rootUid || currentUser.uid;
     const ahora = new Date().toISOString();
     const stock = calcStock();
     const stockItem = Object.values(stock).find(s => s.sku === q.sku && s.lote === q.lote);
@@ -3196,7 +3312,7 @@ function saveDestruccion() {
     const maxQty = parseInt(document.getElementById('dest-qty').max) || Infinity;
     if (qty > maxQty) { showFormError('dest-err', `Cantidad excede el stock disponible (${maxQty} unidades).`); return; }
 
-    const uid = currentUser.uid;
+    const uid = rootUid || currentUser.uid;
     const ahora = new Date().toISOString();
     const stock = calcStock();
     const stockItem = Object.values(stock).find(s => s.sku === sku && s.lote === lote);
@@ -3373,6 +3489,7 @@ function openDevModal() {
 
 function saveDevolucion(e) {
     e.preventDefault();
+    if (userPerfil === 'Visualizador') { alert('Su perfil es de solo lectura.'); return; }
     const sku = document.getElementById('d-sku').value.trim().toUpperCase();
     const dev = {
         sku, lote: document.getElementById('d-lote').value.trim(),
@@ -3384,7 +3501,7 @@ function saveDevolucion(e) {
         fecha: new Date().toISOString(),
         usuario: currentUser.email
     };
-    db.ref(`usuarios/${currentUser.uid}/devoluciones`).push(dev)
+    db.ref(`usuarios/${rootUid || currentUser.uid}/devoluciones`).push(dev)
         .then(() => { logAudit('Devolución', 'Devoluciones', sku, dev.lote, dev.motivo); closeModal('devModal'); });
 }
 
@@ -3509,7 +3626,7 @@ function saveAjuste() {
         ajusteTipo === 'Positivo' ? 'btn-primary' : 'btn-danger',
         () => {
             _setBtnLoading('btn-save-ajuste', true); // I1: spinner
-            db.ref(`usuarios/${currentUser.uid}/movimientos/${Date.now()}`).set(mov)
+            db.ref(`usuarios/${rootUid || currentUser.uid}/movimientos/${Date.now()}`).set(mov)
                 .then(() => {
                     logAudit(`Ajuste ${ajusteTipo}`, 'AjusteInventario', sku, lote, `${ajusteTipo==='Positivo'?'+':'−'}${qty} ud. · ${obs}`);
                     closeModal('ajusteModal');
@@ -3538,13 +3655,14 @@ function renderDevoluciones() {
             <td style="font-weight:600;color:var(--text)">${d.cantidad}</td>
             <td>${d.motivo}</td>
             <td>${statusBadgeHTML(d.status||'—')}</td>
-            <td><button class="btn btn-sm btn-danger-sm" onclick="deleteDevolucion('${id}')">Eliminar</button></td>
+            <td>${userPerfil === 'Visualizador' ? '<span class="text-muted">—</span>' : `<button class="btn btn-sm btn-danger-sm" onclick="deleteDevolucion('${id}')">Eliminar</button>`}</td>
         </tr>`;
     }).join('');
 }
 
 function deleteDevolucion(id) {
-    if (confirm('¿Eliminar esta devolución?')) db.ref(`usuarios/${currentUser.uid}/devoluciones/${id}`).remove();
+    if (userPerfil === 'Visualizador') { alert('Su perfil es de solo lectura.'); return; }
+    if (confirm('¿Eliminar esta devolución?')) db.ref(`usuarios/${rootUid || currentUser.uid}/devoluciones/${id}`).remove();
 }
 
 // ══ RETIRO DE MERCADO ══
@@ -3733,7 +3851,7 @@ function rptCuarentena() {
 let _auditLimit = 50; // D5: paginación auditoría
 function renderAuditoria(reset) {
     if (reset) _auditLimit = 50;
-    db.ref(`usuarios/${currentUser.uid}/auditoria`).orderByChild('fecha').limitToLast(_auditLimit).once('value', s => {
+    db.ref(`usuarios/${rootUid || currentUser.uid}/auditoria`).orderByChild('fecha').limitToLast(_auditLimit).once('value', s => {
         const rows = [];
         s.forEach(c => rows.unshift(c.val()));
         const tb = document.getElementById('tAuditoria');

@@ -676,10 +676,12 @@ document.addEventListener('DOMContentLoaded', () => {
   auth.onAuthStateChanged(async u => {
     if (!u) { showScreen('login'); return; }
     currentUser = u;
-    const snap = await db.ref(`usuarios/${u.uid}/perfil`).once('value');
-    userPerfil = snap.val() || 'Maestro';
+    const infoSnap = await db.ref(`usuarios/${u.uid}`).once('value');
+    const info = infoSnap.val() || {};
+    userPerfil = info.perfil || 'Maestro';
     if (userPerfil === 'Transportista') { window.location.href = 'conductor.html'; return; }
-    orgUid = u.uid;
+    // orgUid = UID del Maestro dueño de los datos (o el propio uid si es Maestro)
+    orgUid = (userPerfil === 'Maestro') ? u.uid : (info.maestroUid || u.uid);
     document.getElementById('userEmail').textContent = u.email;
     document.getElementById('userInitial').textContent = u.email[0].toUpperCase();
     document.getElementById('userRole').textContent = `Perfil: ${userPerfil}`;

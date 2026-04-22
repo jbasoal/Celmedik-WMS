@@ -2,8 +2,8 @@
   "rules": {
     "usuarios": {
       "$uid": {
-        ".read": "$uid === auth.uid",
-        ".write": "$uid === auth.uid"
+        ".read": "$uid === auth.uid || root.child('usuarios').child(auth.uid).child('maestroUid').val() === $uid",
+        ".write": "$uid === auth.uid || root.child('usuarios').child(auth.uid).child('maestroUid').val() === $uid"
       }
     },
     "organizaciones": {
