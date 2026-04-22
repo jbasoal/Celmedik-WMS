@@ -1859,6 +1859,14 @@ function loadProfile() {
         // Si el usuario es Maestro, rootUid es su propio uid.
         // Si es un perfil hijo (Farmacéutico, Operador, Visualizador), usa el maestroUid guardado.
         rootUid = (userPerfil === 'Maestro') ? currentUser.uid : (info.maestroUid || currentUser.uid);
+        // Advertencia si usuario hijo no tiene maestroUid → no verá datos
+        if (userPerfil !== 'Maestro' && userPerfil !== 'Transportista' && !info.maestroUid) {
+            setTimeout(() => {
+                alert('Su cuenta aún no está vinculada a un administrador Maestro.\n\n' +
+                      'Pida al administrador que ingrese al módulo "Usuarios" y pulse "Vincular a mí" para su cuenta.\n\n' +
+                      'Hasta entonces no podrá ver los productos, stock ni movimientos.');
+            }, 500);
+        }
         document.getElementById('userRole').textContent = `Perfil: ${userPerfil}`;
         document.getElementById('userEmail').textContent = currentUser.email;
         document.getElementById('userInitial').textContent = currentUser.email[0].toUpperCase();
