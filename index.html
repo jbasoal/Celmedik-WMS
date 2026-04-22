@@ -1957,6 +1957,8 @@ function handleRegisterAdmin() {
 
     if (!email || !pass || !perfil) { setMsg('error', 'Complete todos los campos.'); return; }
     if (pass.length < 6) { setMsg('error', 'La contraseña debe tener al menos 6 caracteres.'); return; }
+    const perfilesValidos = ['Maestro', 'Farmacéutico', 'Operador', 'Visualizador'];
+    if (!perfilesValidos.includes(perfil)) { setMsg('error', 'Seleccione un perfil válido.'); return; }
 
     if (btn) btn.disabled = true;
     setMsg('', '');
@@ -1966,22 +1968,42 @@ function handleRegisterAdmin() {
     const secAuth = secApp.auth();
     const secDb = secApp.database();
     const maestroOwnerUid = rootUid || currentUser.uid;
+    let nuevoUsuario = null;
+
     secAuth.createUserWithEmailAndPassword(email, pass)
         .then(cred => {
-            const userData = { perfil, email, creadoEn: new Date().toISOString(), creadoPor: currentUser.email };
+            nuevoUsuario = cred.user;
+            const userData = {
+                perfil,
+                email,
+                creadoEn: new Date().toISOString(),
+                creadoPor: currentUser.email
+            };
             // Si el perfil no es Maestro, guardar el UID del Maestro dueño de los datos
             if (perfil !== 'Maestro') userData.maestroUid = maestroOwnerUid;
-            // Escribir con la app secundaria (autenticada como el nuevo usuario) para cumplir reglas RTDB
-            return secDb.ref(`usuarios/${cred.user.uid}`).update(userData)
-                .then(() => secAuth.signOut());
+            // Escribir con la app secundaria (autenticada como el nuevo usuario) para cumplir reglas RTDB.
+            // Importante: si este write falla, NO debemos dejar la cuenta Auth huérfana.
+            return secDb.ref(`usuarios/${cred.user.uid}`).update(userData);
         })
+        .then(() => secAuth.signOut())
         .then(() => {
             setMsg('success', `✓ Cuenta creada para ${email} con perfil ${perfil}.`);
             _clearFields('adm-email','adm-pass');
             if (document.getElementById('adm-perfil')) document.getElementById('adm-perfil').value = '';
             logAudit('Crear usuario', 'Admin', email, '', `Perfil: ${perfil}`);
+            // Refresca la lista si el panel está abierto
+            if (document.getElementById('tUsuarios')) renderUsuarios();
         })
-        .catch(err => setMsg('error', translateError(err.code)))
+        .catch(async (err) => {
+            // Si ya se creó la cuenta Auth pero falló el write RTDB, revertir para no dejar huérfanos
+            if (nuevoUsuario) {
+                try { await nuevoUsuario.delete(); } catch(_) {}
+                try { await secAuth.signOut(); } catch(_) {}
+                setMsg('error', 'La cuenta no pudo guardarse en la base de datos. Se revirtió la creación en Auth. Reintente. Detalle: ' + (err.message || err.code || ''));
+            } else {
+                setMsg('error', translateError(err.code) || err.message || 'Error al crear la cuenta.');
+            }
+        })
         .finally(() => { if (btn) btn.disabled = false; });
 }
 
