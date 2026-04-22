@@ -1851,6 +1851,10 @@ function loadProfile() {
     db.ref(`usuarios/${currentUser.uid}`).once('value', s => {
         const info = s.val() || {};
         userPerfil = info.perfil || 'Maestro';
+        // Persistir el perfil en DB si no estaba guardado (necesario para reglas RTDB)
+        if (!info.perfil) {
+            db.ref(`usuarios/${currentUser.uid}/perfil`).set(userPerfil).catch(()=>{});
+        }
         // rootUid: uid dueño de los datos (productos, stock, etc.).
         // Si el usuario es Maestro, rootUid es su propio uid.
         // Si es un perfil hijo (Farmacéutico, Operador, Visualizador), usa el maestroUid guardado.
@@ -1974,7 +1978,10 @@ function renderUsuarios() {
     const tb = document.getElementById('tUsuarios');
     if (!tb) return;
     tb.innerHTML = '<tr class="empty-row"><td colspan="5">Cargando usuarios...</td></tr>';
-    db.ref('usuarios').once('value').then(s => {
+    // Garantiza que perfil='Maestro' esté persistido en DB para que la regla .read de /usuarios aplique
+    db.ref(`usuarios/${currentUser.uid}/perfil`).set('Maestro').catch(()=>{})
+      .then(() => db.ref('usuarios').once('value'))
+      .then(s => {
         const all = s.val() || {};
         const miUid = currentUser.uid;
         const rows = Object.entries(all)
