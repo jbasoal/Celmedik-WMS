@@ -1,9 +1,10 @@
 {
   "rules": {
     "usuarios": {
+      ".read": "auth != null && root.child('usuarios').child(auth.uid).child('perfil').val() === 'Maestro'",
       "$uid": {
-        ".read": "$uid === auth.uid || root.child('usuarios').child(auth.uid).child('maestroUid').val() === $uid",
-        ".write": "$uid === auth.uid || root.child('usuarios').child(auth.uid).child('maestroUid').val() === $uid"
+        ".read": "$uid === auth.uid || root.child('usuarios').child(auth.uid).child('maestroUid').val() === $uid || root.child('usuarios').child(auth.uid).child('perfil').val() === 'Maestro'",
+        ".write": "$uid === auth.uid || root.child('usuarios').child(auth.uid).child('maestroUid').val() === $uid || root.child('usuarios').child(auth.uid).child('perfil').val() === 'Maestro'"
       }
     },
     "organizaciones": {

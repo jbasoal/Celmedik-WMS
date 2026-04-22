@@ -983,6 +983,23 @@
                             ℹ Para crear un conductor con acceso móvil, use el botón <strong>+ Nuevo conductor</strong> en el <a href="transporte.html" target="_blank" style="color:var(--accent)">Panel de Transporte</a>. Esto crea automáticamente la cuenta Firebase y el registro de conductor.
                         </div>
                     </div>
+
+                    <!-- Lista de usuarios -->
+                    <div class="card" style="margin-top:16px">
+                        <div class="card-header">
+                            <div>
+                                <div class="card-title">Usuarios registrados</div>
+                                <div class="card-subtitle">Asignar vínculo con Maestro · Reparar cuentas antiguas que no puedan ver datos</div>
+                            </div>
+                            <button class="btn btn-ghost btn-sm" onclick="renderUsuarios()">🔄 Actualizar</button>
+                        </div>
+                        <div class="table-wrap">
+                            <table><thead><tr>
+                                <th>Correo</th><th>Perfil</th><th>Vinculado a (maestroUid)</th><th>Estado</th><th>Acción</th>
+                            </tr></thead><tbody id="tUsuarios"><tr class="empty-row"><td colspan="5">Presione «Actualizar» para cargar usuarios</td></tr></tbody></table>
+                        </div>
+                        <div id="usrMsg" class="status-msg" style="display:none;margin-top:12px"></div>
+                    </div>
                 </div>
 
                 <!-- ── TRAZABILIDAD ── -->
@@ -1887,13 +1904,14 @@ function handleRegister() {
 }
 
 let _secondaryApp = null;
-function _getSecondaryAuth() {
+function _getSecondaryApp() {
     if (!_secondaryApp) {
         try { _secondaryApp = firebase.app('secondary'); }
         catch(e) { _secondaryApp = firebase.initializeApp(firebaseConfig, 'secondary'); }
     }
-    return _secondaryApp.auth();
+    return _secondaryApp;
 }
+function _getSecondaryAuth() { return _getSecondaryApp().auth(); }
 
 function handleRegisterAdmin() {
     if (userPerfil !== 'Maestro') return;
@@ -1917,15 +1935,18 @@ function handleRegisterAdmin() {
     setMsg('', '');
 
     // Usar app secundaria para no cerrar la sesión del Maestro
-    const secAuth = _getSecondaryAuth();
+    const secApp = _getSecondaryApp();
+    const secAuth = secApp.auth();
+    const secDb = secApp.database();
     const maestroOwnerUid = rootUid || currentUser.uid;
     secAuth.createUserWithEmailAndPassword(email, pass)
         .then(cred => {
-            const userData = { perfil };
+            const userData = { perfil, email, creadoEn: new Date().toISOString(), creadoPor: currentUser.email };
             // Si el perfil no es Maestro, guardar el UID del Maestro dueño de los datos
             if (perfil !== 'Maestro') userData.maestroUid = maestroOwnerUid;
-            db.ref(`usuarios/${cred.user.uid}`).update(userData);
-            return secAuth.signOut();
+            // Escribir con la app secundaria (autenticada como el nuevo usuario) para cumplir reglas RTDB
+            return secDb.ref(`usuarios/${cred.user.uid}`).update(userData)
+                .then(() => secAuth.signOut());
         })
         .then(() => {
             setMsg('success', `✓ Cuenta creada para ${email} con perfil ${perfil}.`);
@@ -1938,6 +1959,93 @@ function handleRegisterAdmin() {
 }
 
 function handleLogout() { detachListeners(); auth.signOut(); }
+
+// ══ LISTADO Y VINCULACIÓN DE USUARIOS ══
+function _setUsrMsg(type, txt) {
+    const el = document.getElementById('usrMsg');
+    if (!el) return;
+    el.className = 'status-msg ' + (type || '');
+    el.textContent = txt || '';
+    el.style.display = txt ? 'block' : 'none';
+}
+
+function renderUsuarios() {
+    if (userPerfil !== 'Maestro') return;
+    const tb = document.getElementById('tUsuarios');
+    if (!tb) return;
+    tb.innerHTML = '<tr class="empty-row"><td colspan="5">Cargando usuarios...</td></tr>';
+    db.ref('usuarios').once('value').then(s => {
+        const all = s.val() || {};
+        const miUid = currentUser.uid;
+        const rows = Object.entries(all)
+            // Mostrar: el propio Maestro, sus usuarios hijos, y usuarios "huérfanos" (sin maestroUid y no-Maestro)
+            .filter(([uid, u]) => {
+                if (uid === miUid) return true;
+                if (u.maestroUid === miUid) return true;
+                if (!u.maestroUid && u.perfil && u.perfil !== 'Maestro' && u.perfil !== 'Transportista') return true;
+                return false;
+            })
+            .sort((a, b) => (a[1].email || a[0]).localeCompare(b[1].email || b[0]));
+        if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="5">Sin usuarios</td></tr>'; return; }
+        tb.innerHTML = rows.map(([uid, u]) => {
+            const esPropio    = uid === miUid;
+            const esMaestro   = u.perfil === 'Maestro';
+            const esHijoMio   = u.maestroUid === miUid;
+            const esHuerfano  = !u.maestroUid && !esMaestro;
+            let estadoHtml, accionHtml;
+            if (esPropio) {
+                estadoHtml = '<span class="badge badge-blue">Usted</span>';
+                accionHtml = '<span class="text-muted">—</span>';
+            } else if (esHijoMio) {
+                estadoHtml = '<span class="badge badge-success">Vinculado</span>';
+                accionHtml = `<button class="btn btn-sm btn-danger-sm" onclick="desvincularUsuario('${uid}')">Desvincular</button>`;
+            } else if (esHuerfano) {
+                estadoHtml = '<span class="badge badge-warning">Sin vínculo</span>';
+                accionHtml = `<button class="btn btn-sm btn-success-sm" onclick="asignarMaestro('${uid}')">Vincular a mí</button>`;
+            } else {
+                estadoHtml = '<span class="badge badge-gray">Otro Maestro</span>';
+                accionHtml = '<span class="text-muted">—</span>';
+            }
+            const emailTxt = u.email || `<span class="text-muted text-sm">uid: ${uid.slice(0,10)}…</span>`;
+            const vinc = u.maestroUid ? (u.maestroUid === miUid ? '<span class="text-success">yo</span>' : `<span class="text-mono" style="font-size:10px">${u.maestroUid.slice(0,10)}…</span>`) : '<span class="text-muted">—</span>';
+            return `<tr>
+                <td>${emailTxt}</td>
+                <td><span class="badge badge-blue" style="font-size:10px">${u.perfil || '—'}</span></td>
+                <td>${vinc}</td>
+                <td>${estadoHtml}</td>
+                <td>${accionHtml}</td>
+            </tr>`;
+        }).join('');
+        _setUsrMsg('', '');
+    }).catch(err => {
+        tb.innerHTML = `<tr class="empty-row"><td colspan="5">Error: ${err.message}</td></tr>`;
+        _setUsrMsg('error', 'No se pudo cargar la lista: ' + err.message);
+    });
+}
+
+function asignarMaestro(uid) {
+    if (userPerfil !== 'Maestro') return;
+    if (!confirm('¿Vincular este usuario a su cuenta Maestro?\n\nPodrá ver y editar los datos de su bodega según su perfil.')) return;
+    db.ref(`usuarios/${uid}/maestroUid`).set(currentUser.uid)
+        .then(() => {
+            _setUsrMsg('success', '✓ Usuario vinculado correctamente. El usuario ya puede ver los datos al iniciar sesión.');
+            logAudit('Vincular', 'Usuarios', uid, '', `maestroUid asignado a ${currentUser.email}`);
+            renderUsuarios();
+        })
+        .catch(err => _setUsrMsg('error', 'Error: ' + err.message));
+}
+
+function desvincularUsuario(uid) {
+    if (userPerfil !== 'Maestro') return;
+    if (!confirm('¿Desvincular este usuario? Dejará de ver los datos de su bodega al iniciar sesión.')) return;
+    db.ref(`usuarios/${uid}/maestroUid`).remove()
+        .then(() => {
+            _setUsrMsg('success', '✓ Usuario desvinculado.');
+            logAudit('Desvincular', 'Usuarios', uid, '', 'maestroUid removido');
+            renderUsuarios();
+        })
+        .catch(err => _setUsrMsg('error', 'Error: ' + err.message));
+}
 
 // ══ CAMBIO DE CONTRASEÑA ══
 function openPasswordModal() {
@@ -2025,7 +2133,7 @@ function navigateTo(page) {
     const titles = { dashboard:'Dashboard', productos:'Productos Maestro', stock:'Stock Actual', bodegas:'Bodegas', movimientos:'Movimientos', cuarentena:'Cuarentena', devoluciones:'Devoluciones', retiro:'Retiro de Mercado', ajustes:'Ajuste de Inventario', trazabilidad:'Trazabilidad de Lotes', alertas:'Alertas', reportes:'Reportes ISP', auditoria:'Auditoría', dashComercial:'Dashboard Comercial' };
     document.getElementById('pageTitle').textContent = titles[page] || page;
     if (page === 'ajustes') { if (userPerfil !== 'Maestro') { navigateTo('dashboard'); return; } renderAjustes(); }
-    if (page === 'admin')   { if (userPerfil !== 'Maestro') { navigateTo('dashboard'); return; } }
+    if (page === 'admin')   { if (userPerfil !== 'Maestro') { navigateTo('dashboard'); return; } renderUsuarios(); }
     if (page === 'alertas') renderAlertas();
     if (page === 'auditoria') renderAuditoria();
     if (page === 'dashComercial') renderDashComercial();
