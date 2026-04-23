@@ -1002,6 +1002,31 @@
                         </div>
                         <div id="usrMsg" class="status-msg" style="display:none;margin-top:12px"></div>
                     </div>
+
+                    <!-- OneDrive: configurar endpoint de la Cloud Function -->
+                    <div class="card" style="margin-top:16px;max-width:720px">
+                        <div class="card-header">
+                            <div>
+                                <div class="card-title">Guardado automático en OneDrive</div>
+                                <div class="card-subtitle">Configura el endpoint de la Cloud Function que sube los PDFs de Salida a la carpeta compartida</div>
+                            </div>
+                        </div>
+                        <div style="display:flex;flex-direction:column;gap:12px">
+                            <div class="form-group">
+                                <label class="form-label">URL de la Cloud Function (uploadSalidaPdf)</label>
+                                <input type="url" class="form-input" id="onedrive-endpoint" placeholder="https://us-central1-celmedik-inventario.cloudfunctions.net/uploadSalidaPdf">
+                                <div style="font-size:11px;color:var(--text3);margin-top:4px">Se despliega con <code style="font-size:11px">firebase deploy --only functions</code>. Firebase te entrega la URL al terminar.</div>
+                            </div>
+                            <div style="display:flex;gap:8px">
+                                <button class="btn btn-primary" id="odv-save-btn" onclick="saveOneDriveCfg()" style="width:auto">Guardar configuración</button>
+                                <button class="btn btn-ghost btn-sm" onclick="loadOneDriveCfg()">🔄 Recargar</button>
+                            </div>
+                            <div id="odvMsg" class="status-msg" style="display:none"></div>
+                            <div style="padding:10px 12px;background:rgba(0,112,242,0.07);border:1px solid rgba(0,112,242,.2);border-radius:6px;font-size:12px;color:var(--text2);">
+                                ℹ Se aplica solo a movimientos tipo <strong>Salida</strong> y a los perfiles <strong>Maestro, Farmacéutico, Operador</strong>. El PDF se descarga igual que siempre y se sube en segundo plano.
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- ── TRAZABILIDAD ── -->
@@ -2139,6 +2164,40 @@ function desvincularUsuario(uid) {
         .catch(err => _setUsrMsg('error', 'Error: ' + err.message));
 }
 
+// ══ CONFIGURACIÓN ONEDRIVE ══
+function _setOdvMsg(type, txt) {
+    const el = document.getElementById('odvMsg');
+    if (!el) return;
+    el.className = 'status-msg ' + (type || '');
+    el.textContent = txt || '';
+    el.style.display = txt ? 'block' : 'none';
+}
+function loadOneDriveCfg() {
+    if (userPerfil !== 'Maestro') return;
+    const inp = document.getElementById('onedrive-endpoint');
+    if (!inp) return;
+    db.ref(`usuarios/${rootUid}/onedrive`).once('value')
+      .then(s => {
+        const cfg = s.val() || {};
+        inp.value = cfg.endpoint || '';
+        _onedriveCfg = cfg; // refresca cache cliente
+      })
+      .catch(err => _setOdvMsg('error', 'No se pudo leer: ' + err.message));
+}
+function saveOneDriveCfg() {
+    if (userPerfil !== 'Maestro') return;
+    const endpoint = (document.getElementById('onedrive-endpoint')?.value || '').trim();
+    if (endpoint && !/^https:\/\//i.test(endpoint)) { _setOdvMsg('error', 'La URL debe ser HTTPS.'); return; }
+    const payload = endpoint ? { endpoint, actualizadoEn: new Date().toISOString(), actualizadoPor: currentUser.email } : null;
+    const ref = db.ref(`usuarios/${rootUid}/onedrive`);
+    const prom = payload ? ref.set(payload) : ref.remove();
+    prom.then(() => {
+        _onedriveCfg = payload || {};
+        _setOdvMsg('success', endpoint ? '✓ Endpoint guardado. Los PDFs de Salida se subirán automáticamente.' : '✓ Configuración eliminada. Se deshabilita la subida.');
+        logAudit(endpoint ? 'Configurar' : 'Eliminar', 'OneDrive', '', '', endpoint || '—');
+    }).catch(err => _setOdvMsg('error', 'Error: ' + err.message));
+}
+
 // ══ CAMBIO DE CONTRASEÑA ══
 function openPasswordModal() {
     ['pwd-current','pwd-new','pwd-new2'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
@@ -2225,7 +2284,7 @@ function navigateTo(page) {
     const titles = { dashboard:'Dashboard', productos:'Productos Maestro', stock:'Stock Actual', bodegas:'Bodegas', movimientos:'Movimientos', cuarentena:'Cuarentena', devoluciones:'Devoluciones', retiro:'Retiro de Mercado', ajustes:'Ajuste de Inventario', trazabilidad:'Trazabilidad de Lotes', alertas:'Alertas', reportes:'Reportes ISP', auditoria:'Auditoría', dashComercial:'Dashboard Comercial' };
     document.getElementById('pageTitle').textContent = titles[page] || page;
     if (page === 'ajustes') { if (userPerfil !== 'Maestro') { navigateTo('dashboard'); return; } renderAjustes(); }
-    if (page === 'admin')   { if (userPerfil !== 'Maestro') { navigateTo('dashboard'); return; } renderUsuarios(); }
+    if (page === 'admin')   { if (userPerfil !== 'Maestro') { navigateTo('dashboard'); return; } renderUsuarios(); loadOneDriveCfg(); }
     if (page === 'alertas') renderAlertas();
     if (page === 'auditoria') renderAuditoria();
     if (page === 'dashComercial') renderDashComercial();
@@ -3018,7 +3077,9 @@ function saveDocumento() {
                     const docData = {
                         documentoId, tipo, numDoc, fecha: fechaISO, fechaDoc,
                         proveedor, bodega, ubic, obs,
-                        items: [...movDocItems], usuario
+                        items: [...movDocItems], usuario,
+                        usuarioPerfil: userPerfil || '',
+                        usuarioUid: currentUser.uid
                     };
                     closeModal('movModal');
                     generatePDF(docData);
@@ -3082,7 +3143,10 @@ function generatePDF(docData) {
     y += 6;
     addInfo('Bodega:', docData.bodega || '—', margin, y, 20);
     y += 6;
-    addInfo('Usuario:', docData.usuario || '—', margin, y, 20);
+    const usuarioLabel = docData.usuarioPerfil
+        ? `${docData.usuario || '—'}  ·  ${docData.usuarioPerfil}`
+        : (docData.usuario || '—');
+    addInfo('Generado por:', usuarioLabel, margin, y, 28);
     if (docData.obs) {
         y += 6;
         addInfo('Observaciones:', docData.obs, margin, y, 35);
@@ -3158,13 +3222,53 @@ function generatePDF(docData) {
     doc.text('Documento generado por Celmedik WMS · Normativa ISP Chile · Norma Técnica N°147 BPA', pageW / 2, pageH - 10, { align: 'center' });
     doc.text(`${new Date().toLocaleString('es-CL')} · ${docData.usuario}`, pageW / 2, pageH - 5, { align: 'center' });
 
-    doc.save(`${docData.tipo}_${docData.documentoId}_${new Date().toISOString().split('T')[0]}.pdf`);
+    // Metadatos PDF: trazabilidad embebida en el archivo
+    try {
+        doc.setProperties({
+            title: `${docData.tipo} ${docData.documentoId}`,
+            subject: `Celmedik WMS · ${docData.tipo}`,
+            author: docData.usuario || 'Celmedik WMS',
+            creator: 'Celmedik WMS',
+            keywords: [
+                `tipo:${docData.tipo}`,
+                `doc:${docData.documentoId}`,
+                `usuario:${docData.usuario||''}`,
+                `perfil:${docData.usuarioPerfil||''}`,
+                `uid:${docData.usuarioUid||''}`,
+                `fecha:${docData.fecha||new Date().toISOString()}`
+            ].join(' ')
+        });
+    } catch(_) { /* setProperties opcional */ }
+
+    // Nombre con slug de usuario para trazabilidad inmediata en OneDrive
+    const userSlug = (docData.usuario || 'sinuser')
+        .replace(/@.*$/, '')            // quitar dominio
+        .replace(/[^a-zA-Z0-9._-]/g, '_') // sanitizar
+        .slice(0, 24);
+    const fechaSlug = new Date().toISOString().split('T')[0];
+    const filename = `${docData.tipo}_${docData.documentoId}_${userSlug}_${fechaSlug}.pdf`;
+    doc.save(filename);
+
+    // Subida automática a OneDrive: solo para Salidas y perfiles autorizados
+    if (docData.tipo === 'Salida' && ['Maestro','Farmacéutico','Operador'].includes(userPerfil)) {
+        try {
+            const blob = doc.output('blob');
+            uploadSalidaToOneDrive(blob, filename, docData).catch(err => {
+                console.warn('OneDrive upload falló:', err);
+            });
+        } catch (err) {
+            console.warn('No se pudo preparar blob para OneDrive:', err);
+        }
+    }
 }
 
 function regenerarPDF(documentoId) {
     const movs = Object.values(data.movimientos || {}).filter(m => m.documentoId === documentoId);
     if (!movs.length) { alert('No se encontraron movimientos para este documento.'); return; }
     const ref = movs[0];
+    // Solo mostramos perfil/uid si quien regenera coincide con el usuario original del movimiento
+    const perfilRegen = (ref.usuario && ref.usuario === currentUser.email) ? (userPerfil || '') : '';
+    const uidRegen    = (ref.usuario && ref.usuario === currentUser.email) ? currentUser.uid : '';
     generatePDF({
         documentoId,
         tipo: ref.tipo,
@@ -3176,8 +3280,73 @@ function regenerarPDF(documentoId) {
         ubic: ref.ubicacion || '',
         obs: ref.observaciones || '',
         items: movs.map(m => ({ sku: m.sku, descripcion: m.descripcion||'', tipo: m.tipoProducto || (data.productos[m.sku]?.tipo || ''), lote: m.lote, vence: m.vence||'', qty: m.cantidad, precio: m.precio||0, status: m.status||'', ubicacion: m.ubicacion||'' })),
-        usuario: ref.usuario || ''
+        usuario: ref.usuario || '',
+        usuarioPerfil: perfilRegen,
+        usuarioUid: uidRegen
     });
+}
+
+// ══ INTEGRACIÓN ONEDRIVE (via Cloud Function) ══
+// Endpoint de la Cloud Function que recibe el PDF y lo sube a OneDrive.
+// Se lee de config/onedrive en RTDB (el Maestro lo configura en Ajustes) o usa el default.
+let _onedriveCfg = null;
+function _getOnedriveEndpoint() {
+    if (_onedriveCfg && _onedriveCfg.endpoint) return Promise.resolve(_onedriveCfg);
+    return db.ref(`usuarios/${rootUid}/onedrive`).once('value').then(s => {
+        _onedriveCfg = s.val() || {};
+        return _onedriveCfg;
+    }).catch(() => ({}));
+}
+
+function _toastOneDrive(tipo, msg) {
+    // Mini-toast no bloqueante: no interrumpe el flujo del usuario
+    try {
+        const host = document.body;
+        const el = document.createElement('div');
+        el.style.cssText = `position:fixed;bottom:20px;right:20px;z-index:9999;padding:10px 14px;border-radius:6px;font-size:13px;font-family:var(--font);color:#fff;box-shadow:0 2px 10px rgba(0,0,0,0.25);max-width:380px;background:${tipo==='ok'?'#107E3E':(tipo==='err'?'#BB0000':'#0854A0')}`;
+        el.textContent = msg;
+        host.appendChild(el);
+        setTimeout(() => { el.style.transition='opacity .4s'; el.style.opacity='0'; setTimeout(()=>el.remove(), 450); }, 4500);
+    } catch(_) {}
+}
+
+async function uploadSalidaToOneDrive(blob, filename, docData) {
+    const cfg = await _getOnedriveEndpoint();
+    if (!cfg || !cfg.endpoint) {
+        console.info('OneDrive no configurado (falta config/onedrive.endpoint). Se omite la subida.');
+        return;
+    }
+    _toastOneDrive('info', `Subiendo ${filename} a OneDrive...`);
+    const metadata = {
+        documentoId: docData.documentoId,
+        tipo: docData.tipo,
+        fecha: docData.fecha,
+        bodega: docData.bodega || '',
+        proveedor: docData.proveedor || '',
+        usuario: docData.usuario || '',
+        usuarioPerfil: docData.usuarioPerfil || '',
+        usuarioUid: docData.usuarioUid || '',
+        generadoEn: new Date().toISOString()
+    };
+    const token = await currentUser.getIdToken(/*forceRefresh*/ false);
+    const form = new FormData();
+    form.append('filename', filename);
+    form.append('metadata', JSON.stringify(metadata));
+    form.append('file', blob, filename);
+    const resp = await fetch(cfg.endpoint, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: form
+    });
+    if (!resp.ok) {
+        const txt = await resp.text().catch(() => '');
+        _toastOneDrive('err', `OneDrive: error ${resp.status}. ${txt.slice(0,120)}`);
+        throw new Error(`OneDrive upload HTTP ${resp.status}: ${txt}`);
+    }
+    const result = await resp.json().catch(() => ({}));
+    _toastOneDrive('ok', `✓ ${filename} guardado en OneDrive`);
+    if (result && result.webUrl) console.info('OneDrive:', result.webUrl);
+    return result;
 }
 
 function clearFiltrosMovimientos() {
