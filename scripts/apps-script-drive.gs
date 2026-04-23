@@ -23,9 +23,16 @@ var SHARED_SECRET = 'REEMPLAZAR_POR_SECRET_ALEATORIO_LARGO';
 // Las claves se buscan por "contains" sobre el nombre normalizado (sin acentos,
 // minusculas). Orden importa: la primera coincidencia gana, por eso los alias
 // especificos (p.ej. 'stgo') van antes que los genericos.
+// IMPORTANTE sobre el orden:
+//   - 'los angeles' y 'angeles' deben ir ANTES que 'celmedik', porque la
+//     bodega de Los Angeles se llama "Celmedik Los Angeles" y contiene ambas
+//     palabras clave. Si 'celmedik' estuviera primero, los PDFs de LA caerian
+//     por error en la carpeta de Santiago.
+//   - La bodega de Santiago en el WMS se llama literalmente "Bodega Celmedik".
 var FOLDERS_BY_BODEGA = [
   { match: 'los angeles', folderId: '1owwGo7NWjDS6H76Wwma7nLWFMg89hpk-' },
   { match: 'angeles',     folderId: '1owwGo7NWjDS6H76Wwma7nLWFMg89hpk-' },
+  { match: 'celmedik',    folderId: '15ta8pQZlNZfE6AO-qv_DWFqLRAvoe9eu' },
   { match: 'stgo',        folderId: '15ta8pQZlNZfE6AO-qv_DWFqLRAvoe9eu' },
   { match: 'santiago',    folderId: '15ta8pQZlNZfE6AO-qv_DWFqLRAvoe9eu' }
 ];
