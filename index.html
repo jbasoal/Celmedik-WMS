@@ -1003,27 +1003,33 @@
                         <div id="usrMsg" class="status-msg" style="display:none;margin-top:12px"></div>
                     </div>
 
-                    <!-- OneDrive: configurar endpoint de la Cloud Function -->
+                    <!-- Google Drive: configurar endpoint del Apps Script -->
                     <div class="card" style="margin-top:16px;max-width:720px">
                         <div class="card-header">
                             <div>
-                                <div class="card-title">Guardado automático en OneDrive</div>
-                                <div class="card-subtitle">Configura el endpoint de la Cloud Function que sube los PDFs de Salida a la carpeta compartida</div>
+                                <div class="card-title">Guardado automático en Google Drive</div>
+                                <div class="card-subtitle">Los PDFs de Salida se suben a la carpeta correspondiente según la bodega (Los Ángeles / Santiago)</div>
                             </div>
                         </div>
                         <div style="display:flex;flex-direction:column;gap:12px">
                             <div class="form-group">
-                                <label class="form-label">URL de la Cloud Function (uploadSalidaPdf)</label>
-                                <input type="url" class="form-input" id="onedrive-endpoint" placeholder="https://us-central1-celmedik-inventario.cloudfunctions.net/uploadSalidaPdf">
-                                <div style="font-size:11px;color:var(--text3);margin-top:4px">Se despliega con <code style="font-size:11px">firebase deploy --only functions</code>. Firebase te entrega la URL al terminar.</div>
+                                <label class="form-label">URL del Web App de Apps Script</label>
+                                <input type="url" class="form-input" id="drive-endpoint" placeholder="https://script.google.com/macros/s/XXXXXXXX/exec">
+                                <div style="font-size:11px;color:var(--text3);margin-top:4px">Se obtiene al desplegar el script desde <a href="https://script.google.com" target="_blank" style="color:var(--accent)">script.google.com</a>. Ver <code style="font-size:11px">scripts/DRIVE-SETUP.md</code> en el repo.</div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Secret compartido</label>
+                                <input type="text" class="form-input" id="drive-secret" placeholder="el mismo SHARED_SECRET del Apps Script" autocomplete="off">
+                                <div style="font-size:11px;color:var(--text3);margin-top:4px">Cadena aleatoria que valida el origen. Debe coincidir con <code style="font-size:11px">SHARED_SECRET</code> dentro del Apps Script.</div>
                             </div>
                             <div style="display:flex;gap:8px">
-                                <button class="btn btn-primary" id="odv-save-btn" onclick="saveOneDriveCfg()" style="width:auto">Guardar configuración</button>
-                                <button class="btn btn-ghost btn-sm" onclick="loadOneDriveCfg()">🔄 Recargar</button>
+                                <button class="btn btn-primary" id="drv-save-btn" onclick="saveDriveCfg()" style="width:auto">Guardar configuración</button>
+                                <button class="btn btn-ghost btn-sm" onclick="loadDriveCfg()">🔄 Recargar</button>
+                                <button class="btn btn-ghost btn-sm" onclick="testDriveEndpoint()">🧪 Probar conexión</button>
                             </div>
-                            <div id="odvMsg" class="status-msg" style="display:none"></div>
+                            <div id="drvMsg" class="status-msg" style="display:none"></div>
                             <div style="padding:10px 12px;background:rgba(0,112,242,0.07);border:1px solid rgba(0,112,242,.2);border-radius:6px;font-size:12px;color:var(--text2);">
-                                ℹ Se aplica solo a movimientos tipo <strong>Salida</strong> y a los perfiles <strong>Maestro, Farmacéutico, Operador</strong>. El PDF se descarga igual que siempre y se sube en segundo plano.
+                                ℹ Se aplica solo a movimientos tipo <strong>Salida</strong> y a los perfiles <strong>Maestro, Farmacéutico, Operador</strong>. El PDF se descarga igual que siempre y se sube en segundo plano a Drive.
                             </div>
                         </div>
                     </div>
@@ -2164,38 +2170,61 @@ function desvincularUsuario(uid) {
         .catch(err => _setUsrMsg('error', 'Error: ' + err.message));
 }
 
-// ══ CONFIGURACIÓN ONEDRIVE ══
-function _setOdvMsg(type, txt) {
-    const el = document.getElementById('odvMsg');
+// ══ CONFIGURACIÓN GOOGLE DRIVE (Apps Script) ══
+function _setDrvMsg(type, txt) {
+    const el = document.getElementById('drvMsg');
     if (!el) return;
     el.className = 'status-msg ' + (type || '');
     el.textContent = txt || '';
     el.style.display = txt ? 'block' : 'none';
 }
-function loadOneDriveCfg() {
+function loadDriveCfg() {
     if (userPerfil !== 'Maestro') return;
-    const inp = document.getElementById('onedrive-endpoint');
-    if (!inp) return;
-    db.ref(`usuarios/${rootUid}/onedrive`).once('value')
+    const inpEp  = document.getElementById('drive-endpoint');
+    const inpSec = document.getElementById('drive-secret');
+    if (!inpEp || !inpSec) return;
+    db.ref(`usuarios/${rootUid}/driveArchive`).once('value')
       .then(s => {
         const cfg = s.val() || {};
-        inp.value = cfg.endpoint || '';
-        _onedriveCfg = cfg; // refresca cache cliente
+        inpEp.value  = cfg.endpoint || '';
+        inpSec.value = cfg.secret   || '';
+        _driveCfg = cfg;
       })
-      .catch(err => _setOdvMsg('error', 'No se pudo leer: ' + err.message));
+      .catch(err => _setDrvMsg('error', 'No se pudo leer: ' + err.message));
 }
-function saveOneDriveCfg() {
+function saveDriveCfg() {
     if (userPerfil !== 'Maestro') return;
-    const endpoint = (document.getElementById('onedrive-endpoint')?.value || '').trim();
-    if (endpoint && !/^https:\/\//i.test(endpoint)) { _setOdvMsg('error', 'La URL debe ser HTTPS.'); return; }
-    const payload = endpoint ? { endpoint, actualizadoEn: new Date().toISOString(), actualizadoPor: currentUser.email } : null;
-    const ref = db.ref(`usuarios/${rootUid}/onedrive`);
+    const endpoint = (document.getElementById('drive-endpoint')?.value || '').trim();
+    const secret   = (document.getElementById('drive-secret')?.value   || '').trim();
+    if (endpoint && !/^https:\/\/script\.google\.com\/macros\/s\//i.test(endpoint)) {
+        _setDrvMsg('error', 'La URL debe ser del tipo https://script.google.com/macros/s/.../exec'); return;
+    }
+    if (endpoint && !secret) { _setDrvMsg('error', 'Ingrese también el secret compartido.'); return; }
+    const payload = endpoint ? { endpoint, secret, actualizadoEn: new Date().toISOString(), actualizadoPor: currentUser.email } : null;
+    const ref = db.ref(`usuarios/${rootUid}/driveArchive`);
     const prom = payload ? ref.set(payload) : ref.remove();
     prom.then(() => {
-        _onedriveCfg = payload || {};
-        _setOdvMsg('success', endpoint ? '✓ Endpoint guardado. Los PDFs de Salida se subirán automáticamente.' : '✓ Configuración eliminada. Se deshabilita la subida.');
-        logAudit(endpoint ? 'Configurar' : 'Eliminar', 'OneDrive', '', '', endpoint || '—');
-    }).catch(err => _setOdvMsg('error', 'Error: ' + err.message));
+        _driveCfg = payload || {};
+        _setDrvMsg('success', endpoint ? '✓ Configuración guardada. Los PDFs de Salida se subirán automáticamente a Drive.' : '✓ Configuración eliminada. Se deshabilita la subida.');
+        logAudit(endpoint ? 'Configurar' : 'Eliminar', 'DriveArchive', '', '', endpoint || '—');
+    }).catch(err => _setDrvMsg('error', 'Error: ' + err.message));
+}
+async function testDriveEndpoint() {
+    if (userPerfil !== 'Maestro') return;
+    const endpoint = (document.getElementById('drive-endpoint')?.value || '').trim();
+    if (!endpoint) { _setDrvMsg('error', 'Primero pegue la URL del Web App.'); return; }
+    _setDrvMsg('', 'Probando conexión...');
+    try {
+        const resp = await fetch(endpoint, { method: 'GET' });
+        const txt = await resp.text();
+        if (!resp.ok) { _setDrvMsg('error', `HTTP ${resp.status}: ${txt.slice(0,200)}`); return; }
+        // Apps Script responde { ok:true, service:'celmedik-drive-archive' }
+        let body = {}; try { body = JSON.parse(txt); } catch(_) { body = { raw: txt.slice(0, 120) }; }
+        if (body.ok) _setDrvMsg('success', `✓ Conexión OK (${body.service || 'apps-script'}).`);
+        else _setDrvMsg('error', 'Respuesta inesperada: ' + (body.raw || txt.slice(0,120)));
+    } catch (err) {
+        _setDrvMsg('error', 'Error de red: ' + err.message);
+    }
 }
 
 // ══ CAMBIO DE CONTRASEÑA ══
@@ -2284,7 +2313,7 @@ function navigateTo(page) {
     const titles = { dashboard:'Dashboard', productos:'Productos Maestro', stock:'Stock Actual', bodegas:'Bodegas', movimientos:'Movimientos', cuarentena:'Cuarentena', devoluciones:'Devoluciones', retiro:'Retiro de Mercado', ajustes:'Ajuste de Inventario', trazabilidad:'Trazabilidad de Lotes', alertas:'Alertas', reportes:'Reportes ISP', auditoria:'Auditoría', dashComercial:'Dashboard Comercial' };
     document.getElementById('pageTitle').textContent = titles[page] || page;
     if (page === 'ajustes') { if (userPerfil !== 'Maestro') { navigateTo('dashboard'); return; } renderAjustes(); }
-    if (page === 'admin')   { if (userPerfil !== 'Maestro') { navigateTo('dashboard'); return; } renderUsuarios(); loadOneDriveCfg(); }
+    if (page === 'admin')   { if (userPerfil !== 'Maestro') { navigateTo('dashboard'); return; } renderUsuarios(); loadDriveCfg(); }
     if (page === 'alertas') renderAlertas();
     if (page === 'auditoria') renderAuditoria();
     if (page === 'dashComercial') renderDashComercial();
@@ -3240,7 +3269,7 @@ function generatePDF(docData) {
         });
     } catch(_) { /* setProperties opcional */ }
 
-    // Nombre con slug de usuario para trazabilidad inmediata en OneDrive
+    // Nombre con slug de usuario para trazabilidad inmediata en Drive
     const userSlug = (docData.usuario || 'sinuser')
         .replace(/@.*$/, '')            // quitar dominio
         .replace(/[^a-zA-Z0-9._-]/g, '_') // sanitizar
@@ -3249,15 +3278,15 @@ function generatePDF(docData) {
     const filename = `${docData.tipo}_${docData.documentoId}_${userSlug}_${fechaSlug}.pdf`;
     doc.save(filename);
 
-    // Subida automática a OneDrive: solo para Salidas y perfiles autorizados
+    // Subida automática a Google Drive: solo para Salidas y perfiles autorizados
     if (docData.tipo === 'Salida' && ['Maestro','Farmacéutico','Operador'].includes(userPerfil)) {
         try {
             const blob = doc.output('blob');
-            uploadSalidaToOneDrive(blob, filename, docData).catch(err => {
-                console.warn('OneDrive upload falló:', err);
+            uploadSalidaToDrive(blob, filename, docData).catch(err => {
+                console.warn('Drive upload falló:', err);
             });
         } catch (err) {
-            console.warn('No se pudo preparar blob para OneDrive:', err);
+            console.warn('No se pudo preparar blob para Drive:', err);
         }
     }
 }
@@ -3286,19 +3315,19 @@ function regenerarPDF(documentoId) {
     });
 }
 
-// ══ INTEGRACIÓN ONEDRIVE (via Cloud Function) ══
-// Endpoint de la Cloud Function que recibe el PDF y lo sube a OneDrive.
-// Se lee de config/onedrive en RTDB (el Maestro lo configura en Ajustes) o usa el default.
-let _onedriveCfg = null;
-function _getOnedriveEndpoint() {
-    if (_onedriveCfg && _onedriveCfg.endpoint) return Promise.resolve(_onedriveCfg);
-    return db.ref(`usuarios/${rootUid}/onedrive`).once('value').then(s => {
-        _onedriveCfg = s.val() || {};
-        return _onedriveCfg;
+// ══ INTEGRACIÓN GOOGLE DRIVE (via Apps Script Web App) ══
+// El Apps Script recibe el PDF en base64 (JSON) y lo guarda en la carpeta
+// de Drive que corresponda según la bodega. Se configura en Ajustes → Admin.
+let _driveCfg = null;
+function _getDriveCfg() {
+    if (_driveCfg && _driveCfg.endpoint) return Promise.resolve(_driveCfg);
+    return db.ref(`usuarios/${rootUid}/driveArchive`).once('value').then(s => {
+        _driveCfg = s.val() || {};
+        return _driveCfg;
     }).catch(() => ({}));
 }
 
-function _toastOneDrive(tipo, msg) {
+function _toastDrive(tipo, msg) {
     // Mini-toast no bloqueante: no interrumpe el flujo del usuario
     try {
         const host = document.body;
@@ -3310,13 +3339,22 @@ function _toastOneDrive(tipo, msg) {
     } catch(_) {}
 }
 
-async function uploadSalidaToOneDrive(blob, filename, docData) {
-    const cfg = await _getOnedriveEndpoint();
-    if (!cfg || !cfg.endpoint) {
-        console.info('OneDrive no configurado (falta config/onedrive.endpoint). Se omite la subida.');
+function _blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(String(r.result).split(',')[1] || '');
+        r.onerror = () => reject(r.error);
+        r.readAsDataURL(blob);
+    });
+}
+
+async function uploadSalidaToDrive(blob, filename, docData) {
+    const cfg = await _getDriveCfg();
+    if (!cfg || !cfg.endpoint || !cfg.secret) {
+        console.info('Drive no configurado. Se omite la subida.');
         return;
     }
-    _toastOneDrive('info', `Subiendo ${filename} a OneDrive...`);
+    _toastDrive('info', `Subiendo ${filename} a Google Drive...`);
     const metadata = {
         documentoId: docData.documentoId,
         tipo: docData.tipo,
@@ -3328,24 +3366,46 @@ async function uploadSalidaToOneDrive(blob, filename, docData) {
         usuarioUid: docData.usuarioUid || '',
         generadoEn: new Date().toISOString()
     };
-    const token = await currentUser.getIdToken(/*forceRefresh*/ false);
-    const form = new FormData();
-    form.append('filename', filename);
-    form.append('metadata', JSON.stringify(metadata));
-    form.append('file', blob, filename);
+    const pdfBase64 = await _blobToBase64(blob);
+    const body = {
+        secret: cfg.secret,
+        filename,
+        bodega: docData.bodega || '',
+        metadata,
+        pdfBase64
+    };
+    // text/plain evita el preflight CORS que Apps Script no maneja en redirects
     const resp = await fetch(cfg.endpoint, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
-        body: form
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(body),
+        redirect: 'follow'
     });
-    if (!resp.ok) {
-        const txt = await resp.text().catch(() => '');
-        _toastOneDrive('err', `OneDrive: error ${resp.status}. ${txt.slice(0,120)}`);
-        throw new Error(`OneDrive upload HTTP ${resp.status}: ${txt}`);
+    const txt = await resp.text();
+    let result = {};
+    try { result = JSON.parse(txt); } catch(_) { result = { error: 'Respuesta no JSON', raw: txt.slice(0, 200) }; }
+    if (!resp.ok || !result.ok) {
+        const err = result.error || `HTTP ${resp.status}`;
+        _toastDrive('err', `Drive: ${err}`);
+        throw new Error('Drive upload: ' + err);
     }
-    const result = await resp.json().catch(() => ({}));
-    _toastOneDrive('ok', `✓ ${filename} guardado en OneDrive`);
-    if (result && result.webUrl) console.info('OneDrive:', result.webUrl);
+    _toastDrive('ok', `✓ ${filename} guardado en Drive`);
+    // Auditoría: bitácora de subidas exitosas
+    try {
+        db.ref(`usuarios/${rootUid}/driveUploads`).push({
+            fecha: new Date().toISOString(),
+            uid: currentUser.uid,
+            email: currentUser.email,
+            perfil: userPerfil,
+            filename,
+            url: result.url || '',
+            fileId: result.id || '',
+            folderId: result.folderId || '',
+            bodega: docData.bodega || '',
+            documentoId: docData.documentoId
+        }).catch(()=>{});
+    } catch(_) {}
+    if (result.url) console.info('Drive:', result.url);
     return result;
 }
 
