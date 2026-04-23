@@ -2657,6 +2657,14 @@ function onDocBodegaChange() {
         miWrap.innerHTML = '<input type="text" class="form-input" id="mi-ubic" placeholder="Ej: Estante A-1">';
         if (prevUbic) document.getElementById('mi-ubic').value = prevUbic; // I6: restaurar texto libre
     }
+
+    // Si en una Salida el usuario cambia la bodega después de elegir un SKU,
+    // refrescar la lista de lotes para que refleje el stock de la nueva bodega.
+    const tipo = document.getElementById('md-tipo')?.value || '';
+    if (tipo === 'Salida') {
+        const sku = (document.getElementById('mi-sku')?.value || '').trim().toUpperCase();
+        if (sku && data.productos[sku]) loadMiLotesDisponibles(sku);
+    }
 }
 
 function onMdTipoChange() {
@@ -2673,6 +2681,19 @@ function onMdTipoChange() {
     renderDocItems();
 }
 
+// Operador puede ingresar directamente a "Aprobado" solo cuando el SKU no
+// corresponde a un medicamento que requiere liberación QA. Aplica a:
+//   - Insumos
+//   - Dispositivos médicos sin registro sanitario ISP
+// Medicamentos y Psicotrópicos siempre caen en Cuarentena para el Operador.
+function _canOperadorAprobar(sku) {
+    const prod = sku ? (data.productos || {})[sku] : null;
+    if (!prod) return false;
+    if (prod.tipo === 'Insumo') return true;
+    if (prod.tipo === 'Dispositivo Médico' && !(prod.registroSanitario || '').trim()) return true;
+    return false;
+}
+
 // Actualiza opciones y visibilidad del campo Estatus por ítem
 function _refreshMiStatusField(tipo) {
     const miStatusGroup = document.getElementById('mi-status-group');
@@ -2683,9 +2704,17 @@ function _refreshMiStatusField(tipo) {
 
     if (tipo === 'Entrada') {
         if (userPerfil === 'Operador') {
-            // Operador solo puede ingresar a Cuarentena
-            miStatus.innerHTML = '<option value="Cuarentena">🔒 Cuarentena</option>';
-            miStatus.value = 'Cuarentena';
+            const skuAct = (document.getElementById('mi-sku')?.value || '').trim().toUpperCase();
+            if (_canOperadorAprobar(skuAct)) {
+                miStatus.innerHTML =
+                    '<option value="Aprobado">✓ Aprobado</option>' +
+                    '<option value="Cuarentena">🔒 Cuarentena</option>';
+                miStatus.value = 'Aprobado';
+            } else {
+                // Medicamento/Psicotrópico/SKU aún no elegido: solo Cuarentena
+                miStatus.innerHTML = '<option value="Cuarentena">🔒 Cuarentena</option>';
+                miStatus.value = 'Cuarentena';
+            }
         } else {
             miStatus.innerHTML =
                 '<option value="Aprobado">✓ Aprobado</option>' +
@@ -2743,6 +2772,9 @@ function onMiSKUChange() {
         info.style.display = 'block';
         const tipo = document.getElementById('md-tipo').value;
         if (tipo === 'Salida') loadMiLotesDisponibles(sku);
+        // Entrada: las opciones de estatus para el Operador dependen del tipo
+        // de producto (medicamento vs dispositivo médico sin RS / insumo).
+        if (tipo === 'Entrada') _refreshMiStatusField(tipo);
     } else if (sku) {
         if (descEl) descEl.value = '';
         document.getElementById('mi-sku-info-text').innerHTML = `<span style="color:var(--danger)">⚠ SKU no encontrado en maestro de productos</span>`;
@@ -2760,15 +2792,22 @@ function loadMiLotesDisponibles(sku) {
     if (miUbicGroup) miUbicGroup.style.display = 'none';
     if (miUbicWrap)  miUbicWrap.innerHTML = '<input type="text" class="form-input" id="mi-ubic" placeholder="Ej: Estante A-1">';
 
+    const wrap = document.getElementById('mi-lote-wrap');
+    const bodegaSel = (document.getElementById('md-bodega')?.value || '').trim();
+
+    // Exigir bodega antes de listar lotes — previene cargar stock de otras bodegas.
+    if (!bodegaSel) {
+        wrap.innerHTML = '<div class="alert-banner warning" style="padding:8px 12px"><div class="alert-banner-text">Seleccione primero la bodega del documento para ver el stock disponible.</div></div><input type="hidden" id="mi-lote" value=""><input type="hidden" id="mi-lote-status" value="">';
+        return;
+    }
+
     const stock = calcStock();
     const lotes = Object.values(stock)
-        .filter(s => s.sku === sku && s.cantidad > 0)
+        .filter(s => s.sku === sku && s.cantidad > 0 && s.bodega === bodegaSel)
         .sort((a, b) => new Date(a.vence||'9999') - new Date(b.vence||'9999'));
 
-    const wrap = document.getElementById('mi-lote-wrap');
-
     if (!lotes.length) {
-        wrap.innerHTML = '<div class="alert-banner danger" style="padding:8px 12px"><div class="alert-banner-text">Sin stock disponible para este SKU</div></div><input type="hidden" id="mi-lote" value=""><input type="hidden" id="mi-lote-status" value="">';
+        wrap.innerHTML = `<div class="alert-banner danger" style="padding:8px 12px"><div class="alert-banner-text">Sin stock disponible para este SKU en la bodega <strong>${bodegaSel}</strong>.</div></div><input type="hidden" id="mi-lote" value=""><input type="hidden" id="mi-lote-status" value="">`;
         return;
     }
 
@@ -2937,6 +2976,14 @@ function addItemToDoc() {
     if (tipo === 'Entrada' || tipo === 'Ajuste') {
         itemStatus = document.getElementById('mi-status')?.value || '';
         if (!itemStatus) { showFormError('mi-err', 'Seleccione el estatus del producto.'); return; }
+    }
+
+    // Guard de servidor local: un Operador no puede marcar como "Aprobado" una
+    // Entrada de medicamento / psicotrópico — deben pasar por Cuarentena y
+    // ser liberados por QA. Para Dispositivo Médico sin RS e Insumos sí aplica.
+    if (tipo === 'Entrada' && userPerfil === 'Operador' && itemStatus === 'Aprobado' && !_canOperadorAprobar(sku)) {
+        showFormError('mi-err', 'Su perfil solo puede aprobar directamente Dispositivos Médicos sin Registro Sanitario o Insumos. Este SKU debe ingresar a Cuarentena.');
+        return;
     }
 
     // Ubicación del ítem (para Salida la tomamos del stock para mantener consistencia de clave)
