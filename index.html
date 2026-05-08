@@ -1889,6 +1889,37 @@ function bodegaFijaPerfil(p) {
 function bodegaFijaActual() {
     return bodegaFijaPerfil(userPerfil);
 }
+
+// Cache de pares "SKU|LOTE" presentes en la bodega fija del operador.
+// Se invalida junto con el cache de stock cuando cambian movimientos/devoluciones.
+let _bodegaFijaLoteCache = null;
+function _invalidateBodegaFijaLoteCache() { _bodegaFijaLoteCache = null; }
+function bodegaFijaLoteSet() {
+    const bFija = bodegaFijaActual();
+    if (!bFija) return null;
+    if (_bodegaFijaLoteCache) return _bodegaFijaLoteCache;
+    const set = new Set();
+    Object.values(data.movimientos||{}).forEach(m => {
+        if ((m.bodega||'') === bFija) set.add(`${m.sku||''}|${m.lote||''}`);
+    });
+    _bodegaFijaLoteCache = set;
+    return set;
+}
+function _matchBodegaFijaLote(sku, lote) {
+    const s = bodegaFijaLoteSet();
+    if (!s) return true;
+    return s.has(`${sku||''}|${lote||''}`);
+}
+// Devuelve solo las entradas de stock que pertenecen a la bodega fija del operador
+// (o el stock completo si no aplica restricción).
+function getStockFiltrado() {
+    const stock = calcStock();
+    const bFija = bodegaFijaActual();
+    if (!bFija) return stock;
+    const out = {};
+    Object.entries(stock).forEach(([k, s]) => { if (s.bodega === bFija) out[k] = s; });
+    return out;
+}
 let data = { productos:{}, bodegas:{}, movimientos:{}, cuarentena:{}, devoluciones:{}, auditoria:{} };
 let selectedBodega = 'TOTAL';
 let movDocItems = [];
@@ -2351,9 +2382,9 @@ function attachListeners() {
     const uid = rootUid || currentUser.uid;
     db.ref(`usuarios/${uid}/productos`).on('value', s => { data.productos = s.val()||{}; renderProductos(); updateStats(); renderStock(); });
     db.ref(`usuarios/${uid}/bodegas`).on('value', s => { data.bodegas = s.val()||{}; renderBodegas(); renderBodegaBtns(); updateBodegaSelect(); updateStats(); });
-    db.ref(`usuarios/${uid}/movimientos`).on('value', s => { data.movimientos = s.val()||{}; _invalidateStockCache(); renderMovimientos(); renderStock(); updateStats(); });
+    db.ref(`usuarios/${uid}/movimientos`).on('value', s => { data.movimientos = s.val()||{}; _invalidateStockCache(); _invalidateBodegaFijaLoteCache(); renderMovimientos(); renderStock(); updateStats(); });
     db.ref(`usuarios/${uid}/cuarentena`).on('value', s => { data.cuarentena = s.val()||{}; renderCuarentena(); updateStats(); });
-    db.ref(`usuarios/${uid}/devoluciones`).on('value', s => { data.devoluciones = s.val()||{}; _invalidateStockCache(); renderDevoluciones(); });
+    db.ref(`usuarios/${uid}/devoluciones`).on('value', s => { data.devoluciones = s.val()||{}; _invalidateStockCache(); _invalidateBodegaFijaLoteCache(); renderDevoluciones(); });
 }
 
 function detachListeners() {
@@ -2372,12 +2403,23 @@ function logAudit(accion, modulo, sku, lote, detalle) {
 
 // ══ STATS ══
 function updateStats() {
-    const prods = Object.keys(data.productos||{}).length;
-    const movs = Object.keys(data.movimientos||{}).length;
-    // Calcular lotes en stock
-    const stockMap = calcStock();
+    const bFija = bodegaFijaActual();
+    const stockMap = bFija ? getStockFiltrado() : calcStock();
     const lotesEnStock = Object.values(stockMap).filter(s => s.cantidad > 0).length;
-    const cuarCount = Object.values(data.cuarentena||{}).filter(q => q.status === 'Pendiente').length;
+    let prods, movs, cuarCount;
+    if (bFija) {
+        // Productos: sólo SKUs con stock o movimientos en la bodega fija
+        const skusEnBodega = new Set();
+        Object.values(stockMap).forEach(s => { if (s.cantidad > 0) skusEnBodega.add(s.sku); });
+        Object.values(data.movimientos||{}).forEach(m => { if ((m.bodega||'') === bFija) skusEnBodega.add(m.sku); });
+        prods = skusEnBodega.size;
+        movs  = Object.values(data.movimientos||{}).filter(m => (m.bodega||'') === bFija).length;
+        cuarCount = Object.values(data.cuarentena||{}).filter(q => q.status === 'Pendiente' && _matchBodegaFijaLote(q.sku, q.lote)).length;
+    } else {
+        prods = Object.keys(data.productos||{}).length;
+        movs  = Object.keys(data.movimientos||{}).length;
+        cuarCount = Object.values(data.cuarentena||{}).filter(q => q.status === 'Pendiente').length;
+    }
     const alertCount = calcAlertas().length;
 
     document.getElementById('st-productos').textContent = prods;
@@ -2460,7 +2502,8 @@ function statusBadgeHTML(st) {
 function calcAlertas() {
     const alertas = [];
     const hoy = new Date();
-    const stock = calcStock();
+    const bFija = bodegaFijaActual();
+    const stock = bFija ? getStockFiltrado() : calcStock();
     const prods = data.productos||{};
 
     Object.values(stock).filter(s => s.cantidad > 0).forEach(s => {
@@ -2473,10 +2516,12 @@ function calcAlertas() {
         else if (dias <= 90) alertas.push({ tipo:'warning', titulo:`Próximo a vencer: ${desc}`, texto:`Lote ${s.lote} — vence en ${dias} días (${fmtDate(s.vence)}). Stock: ${s.cantidad} ud.`, dias });
     });
 
-    // Stock bajo mínimo
+    // Stock bajo mínimo — sólo SKUs con presencia en la bodega fija (si aplica)
     Object.values(prods).forEach(p => {
         if (!p.stockMin || p.stockMin <= 0) return;
-        const totalStock = Object.values(stock).filter(s => s.sku === p.sku && s.cantidad > 0).reduce((a, s) => a + s.cantidad, 0);
+        const lotesSku = Object.values(stock).filter(s => s.sku === p.sku && s.cantidad > 0);
+        if (bFija && lotesSku.length === 0) return;
+        const totalStock = lotesSku.reduce((a, s) => a + s.cantidad, 0);
         if (totalStock < p.stockMin) alertas.push({ tipo:'info', titulo:`Stock bajo mínimo: ${p.descripcion}`, texto:`Stock actual: ${totalStock} ud. Mínimo: ${p.stockMin} ud.`, dias: 9999 });
     });
 
@@ -3694,7 +3739,10 @@ function saveCuarentena(e) {
 
 function renderCuarentena() {
     const tb = document.getElementById('tCuarentena');
-    const rows = Object.entries(data.cuarentena||{}).sort((a, b) => new Date(b[1].fechaIngreso) - new Date(a[1].fechaIngreso));
+    const bFija = bodegaFijaActual();
+    let rows = Object.entries(data.cuarentena||{});
+    if (bFija) rows = rows.filter(([,q]) => _matchBodegaFijaLote(q.sku, q.lote));
+    rows = rows.sort((a, b) => new Date(b[1].fechaIngreso) - new Date(a[1].fechaIngreso));
     if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="10">No hay lotes en cuarentena</td></tr>'; return; }
     tb.innerHTML = rows.map(([id, q]) => `
         <tr>
@@ -4169,8 +4217,10 @@ function saveAjuste() {
 function renderDevoluciones() {
     const fSKU = (document.getElementById('fDevSKU')?.value||'').toLowerCase();
     const fLote = (document.getElementById('fDevLote')?.value||'').toLowerCase();
+    const bFija = bodegaFijaActual();
     const rows = Object.entries(data.devoluciones||{})
         .filter(([,d]) => (d.sku||'').toLowerCase().includes(fSKU) && (d.lote||'').toLowerCase().includes(fLote))
+        .filter(([,d]) => bFija ? _matchBodegaFijaLote(d.sku, d.lote) : true)
         .sort((a, b) => new Date(b[1].fecha) - new Date(a[1].fecha));
     const tb = document.getElementById('tDevoluciones');
     if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="8">No hay devoluciones</td></tr>'; return; }
@@ -4200,8 +4250,9 @@ function ejecutarRetiro() {
     const c = document.getElementById('retiroResults');
     if (!lote) { c.innerHTML = '<p class="text-muted text-sm">Ingrese un número de lote.</p>'; return; }
 
+    const _bFijaRet = bodegaFijaActual();
     const movs = Object.values(data.movimientos||{}).filter(m =>
-        m.lote === lote && (!sku || m.sku === sku)
+        m.lote === lote && (!sku || m.sku === sku) && (!_bFijaRet || (m.bodega||'') === _bFijaRet)
     ).sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
 
     if (!movs.length) { c.innerHTML = `<div class="alert-banner success"><div class="alert-banner-icon">✓</div><div><div class="alert-banner-title">Sin registros encontrados</div><div class="alert-banner-text">El lote ${lote} no tiene movimientos registrados en el sistema.</div></div></div>`; return; }
@@ -4249,12 +4300,14 @@ function verTrazabilidadLote(sku, lote) {
     const c = document.getElementById('trazResults');
     if (!lote) { c.innerHTML = '<p class="text-muted text-sm">Ingrese un número de lote.</p>'; return; }
 
+    const _bFijaTraz = bodegaFijaActual();
     const movs = Object.values(data.movimientos||{})
-        .filter(m => m.lote === lote && (!sku || m.sku === sku))
+        .filter(m => m.lote === lote && (!sku || m.sku === sku) && (!_bFijaTraz || (m.bodega||'') === _bFijaTraz))
         .sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
 
-    const cuars = Object.values(data.cuarentena||{}).filter(q => q.lote === lote && (!sku || q.sku === sku));
-    const devs = Object.values(data.devoluciones||{}).filter(d => d.lote === lote && (!sku || d.sku === sku));
+    const _passLote = (skuL, loteL) => !_bFijaTraz || _matchBodegaFijaLote(skuL, loteL);
+    const cuars = Object.values(data.cuarentena||{}).filter(q => q.lote === lote && (!sku || q.sku === sku) && _passLote(q.sku, q.lote));
+    const devs = Object.values(data.devoluciones||{}).filter(d => d.lote === lote && (!sku || d.sku === sku) && _passLote(d.sku, d.lote));
 
     if (!movs.length && !cuars.length && !devs.length) {
         c.innerHTML = `<p class="text-muted text-sm">Sin registros para el lote "${lote}".</p>`;
@@ -4313,7 +4366,7 @@ function rptTable(title, headers, rows, subtitle) {
 }
 
 function rptInventario() {
-    const stock = calcStock();
+    const stock = bodegaFijaActual() ? getStockFiltrado() : calcStock();
     const prods = data.productos||{};
     const rows = Object.values(stock).filter(s => s.cantidad > 0)
         .sort((a, b) => new Date(a.vence+'T00:00:00') - new Date(b.vence+'T00:00:00'))
@@ -4322,7 +4375,7 @@ function rptInventario() {
 }
 
 function rptVencimientos() {
-    const stock = calcStock();
+    const stock = bodegaFijaActual() ? getStockFiltrado() : calcStock();
     const prods = data.productos||{};
     const hoy = new Date();
     const rows = Object.values(stock).filter(s => s.cantidad > 0 && s.vence)
@@ -4352,6 +4405,8 @@ function rptMovimientos() {
     const fTipo = (document.getElementById('rptFMovTipo')?.value||'');
 
     let movs = Object.values(data.movimientos||{});
+    const _bFijaRpt = bodegaFijaActual();
+    if (_bFijaRpt) movs = movs.filter(m => (m.bodega||'') === _bFijaRpt);
     if (fSKU)  movs = movs.filter(m => (m.sku||'').toLowerCase().includes(fSKU));
     if (fLote) movs = movs.filter(m => (m.lote||'').toLowerCase().includes(fLote));
     if (fTipo) movs = movs.filter(m => m.tipo === fTipo);
@@ -4370,7 +4425,10 @@ function rptMovimientos() {
 }
 
 function rptCuarentena() {
-    const rows = Object.values(data.cuarentena||{}).sort((a,b) => new Date(b.fechaIngreso)-new Date(a.fechaIngreso))
+    const _bFijaCQ = bodegaFijaActual();
+    let qs = Object.values(data.cuarentena||{});
+    if (_bFijaCQ) qs = qs.filter(q => _matchBodegaFijaLote(q.sku, q.lote));
+    const rows = qs.sort((a,b) => new Date(b.fechaIngreso)-new Date(a.fechaIngreso))
         .map(q => [fmtDate(q.fechaIngreso), q.sku, q.descripcion||'—', q.lote, q.cantidad, q.motivo, q.responsable||'—', q.status]);
     rptTable('Reporte de Cuarentena', ['Fecha ingreso','SKU','Descripción','Lote','Qty','Motivo','Responsable','Status'], rows, 'Gestión QA — NT 147');
 }
@@ -4380,8 +4438,10 @@ let _auditLimit = 50; // D5: paginación auditoría
 function renderAuditoria(reset) {
     if (reset) _auditLimit = 50;
     db.ref(`usuarios/${rootUid || currentUser.uid}/auditoria`).orderByChild('fecha').limitToLast(_auditLimit).once('value', s => {
-        const rows = [];
+        let rows = [];
         s.forEach(c => rows.unshift(c.val()));
+        const bFija = bodegaFijaActual();
+        if (bFija) rows = rows.filter(r => r.sku && _matchBodegaFijaLote(r.sku, r.lote));
         const tb = document.getElementById('tAuditoria');
         if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="7">Sin registros</td></tr>'; return; }
         tb.innerHTML = rows.map(r => `<tr>
@@ -4609,8 +4669,10 @@ function getDCRango() {
 }
 
 function getDCSalidas(desde, hasta) {
+    const bFija = bodegaFijaActual();
     return Object.values(data.movimientos || {}).filter(m => {
         if (m.tipo !== 'Salida') return false;
+        if (bFija && (m.bodega||'') !== bFija) return false;
         const f = new Date(m.fecha);
         return f >= desde && f <= hasta;
     });
@@ -4834,12 +4896,24 @@ function renderDCEvolucion(salidas, desdeDate, hastaDate) {
 function renderDCAlertas() {
     const dias = parseInt(document.getElementById('dcAlertDias')?.value || 30);
     const hoy  = new Date(); hoy.setHours(0, 0, 0, 0);
-    const stock = calcStock();
+    const bFija = bodegaFijaActual();
+    const stock = bFija ? getStockFiltrado() : calcStock();
     const prods = data.productos || {};
-    const movs  = Object.values(data.movimientos || {});
+    const movs  = bFija
+        ? Object.values(data.movimientos || {}).filter(m => (m.bodega||'') === bFija)
+        : Object.values(data.movimientos || {});
+
+    // SKUs visibles para este perfil (con stock o movimientos en su bodega fija)
+    let skuSet = null;
+    if (bFija) {
+        skuSet = new Set();
+        Object.values(stock).forEach(s => skuSet.add(s.sku));
+        movs.forEach(m => skuSet.add(m.sku));
+    }
+    const skuListBase = skuSet ? Array.from(skuSet).filter(s => prods[s]) : Object.keys(prods);
 
     // 1. Sin rotación
-    const sinRotacion = Object.keys(prods).map(sku => {
+    const sinRotacion = skuListBase.map(sku => {
         const ultSalida = movs.filter(m => m.tipo === 'Salida' && m.sku === sku)
             .reduce((max, m) => m.fecha > max ? m.fecha : max, '');
         const diasSin = ultSalida ? Math.ceil((hoy - new Date(ultSalida)) / 86400000) : null;
@@ -4850,6 +4924,7 @@ function renderDCAlertas() {
     // 2. Stock bajo mínimo
     const bajoMin = Object.values(prods).filter(p => {
         if (!p.stockMin || p.stockMin <= 0) return false;
+        if (skuSet && !skuSet.has(p.sku)) return false;
         return Object.values(stock).filter(s => s.sku === p.sku && s.cantidad > 0).reduce((a, s) => a + s.cantidad, 0) < p.stockMin;
     });
 
