@@ -3333,25 +3333,51 @@ function generatePDF(docData) {
     doc.text('DETALLE DE PRODUCTOS', margin, y);
     y += 2;
 
+    const esSalida = docData.tipo === 'Salida';
+    // En Salidas se consolidan los ítems por SKU+lote sumando cantidades,
+    // y se omiten las columnas Estatus y Ubicación.
+    let itemsTabla = docData.items;
+    if (esSalida) {
+        const agg = {};
+        docData.items.forEach(it => {
+            const k = `${it.sku}|${it.lote}`;
+            if (!agg[k]) agg[k] = { ...it, qty: 0 };
+            agg[k].qty += parseInt(it.qty) || 0;
+        });
+        itemsTabla = Object.values(agg);
+    }
+
+    const headSalida = ['SKU', 'Descripción', 'Tipo', 'Lote', 'Vencimiento', 'Cant.', 'Precio Unit.'];
+    const headDefault = ['SKU', 'Descripción', 'Tipo', 'Lote', 'Vencimiento', 'Cant.', 'Precio Unit.', 'Estatus', 'Ubicación'];
+
     doc.autoTable({
         startY: y,
-        head: [['SKU', 'Descripción', 'Tipo', 'Lote', 'Vencimiento', 'Cant.', 'Precio Unit.', 'Estatus', 'Ubicación']],
-        body: docData.items.map(item => [
-            item.sku,
-            item.descripcion || '—',
-            item.tipo || '—',
-            item.lote,
-            item.vence ? fmtDate(item.vence) : '—',
-            String(item.qty),
-            item.precio > 0 ? '$' + item.precio.toLocaleString('es-CL') : '—',
-            item.status || 'Aprobado',
-            item.ubicacion || '—'
-        ]),
+        head: [esSalida ? headSalida : headDefault],
+        body: itemsTabla.map(item => {
+            const base = [
+                item.sku,
+                item.descripcion || '—',
+                item.tipo || '—',
+                item.lote,
+                item.vence ? fmtDate(item.vence) : '—',
+                String(item.qty),
+                item.precio > 0 ? '$' + item.precio.toLocaleString('es-CL') : '—'
+            ];
+            return esSalida ? base : base.concat([item.status || 'Aprobado', item.ubicacion || '—']);
+        }),
         theme: 'striped',
         headStyles: { fillColor: [8, 84, 160], textColor: 255, fontSize: 7, fontStyle: 'bold' },
         bodyStyles: { fontSize: 7, textColor: [29, 45, 62] },
         alternateRowStyles: { fillColor: [245, 245, 245] },
-        columnStyles: {
+        columnStyles: esSalida ? {
+            0: { cellWidth: 20, fontStyle: 'bold' },
+            1: { cellWidth: 48 },
+            2: { cellWidth: 28 },
+            3: { cellWidth: 26 },
+            4: { cellWidth: 22 },
+            5: { cellWidth: 14, halign: 'center' },
+            6: { cellWidth: 22, halign: 'right' }
+        } : {
             0: { cellWidth: 17, fontStyle: 'bold' },
             1: { cellWidth: 36 },
             2: { cellWidth: 22 },
@@ -3366,8 +3392,8 @@ function generatePDF(docData) {
     });
 
     y = doc.lastAutoTable.finalY + 8;
-    const totalQty = docData.items.reduce((a, i) => a + i.qty, 0);
-    const totalPrecio = docData.items.reduce((a, i) => a + (i.precio * i.qty), 0);
+    const totalQty = itemsTabla.reduce((a, i) => a + (parseInt(i.qty)||0), 0);
+    const totalPrecio = itemsTabla.reduce((a, i) => a + ((i.precio||0) * (parseInt(i.qty)||0)), 0);
     doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(29, 45, 62);
     doc.text(`Total unidades: ${totalQty}`, pageW - margin, y, { align: 'right' });
     if (totalPrecio > 0) { y += 5; doc.text(`Total neto: $${totalPrecio.toLocaleString('es-CL')}`, pageW - margin, y, { align: 'right' }); }
