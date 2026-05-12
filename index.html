@@ -3347,13 +3347,14 @@ function generatePDF(docData) {
         itemsTabla = Object.values(agg);
     }
 
-    const headSalida = ['SKU', 'Descripción', 'Tipo', 'Lote', 'Vencimiento', 'Cant.', 'Precio Unit.'];
-    const headDefault = ['SKU', 'Descripción', 'Tipo', 'Lote', 'Vencimiento', 'Cant.', 'Precio Unit.', 'Estatus', 'Ubicación'];
+    const headSalida = ['SKU', 'Descripción', 'Tipo', 'Lote', 'Vencimiento', 'Cant.', 'U. Venta', 'Precio Unit.'];
+    const headDefault = ['SKU', 'Descripción', 'Tipo', 'Lote', 'Vencimiento', 'Cant.', 'U. Venta', 'Precio Unit.', 'Estatus', 'Ubicación'];
 
     doc.autoTable({
         startY: y,
         head: [esSalida ? headSalida : headDefault],
         body: itemsTabla.map(item => {
+            const uVenta = (data.productos && data.productos[item.sku] && data.productos[item.sku].unidadVenta) || '—';
             const base = [
                 item.sku,
                 item.descripcion || '—',
@@ -3361,6 +3362,7 @@ function generatePDF(docData) {
                 item.lote,
                 item.vence ? fmtDate(item.vence) : '—',
                 String(item.qty),
+                uVenta,
                 item.precio > 0 ? '$' + item.precio.toLocaleString('es-CL') : '—'
             ];
             return esSalida ? base : base.concat([item.status || 'Aprobado', item.ubicacion || '—']);
@@ -3370,23 +3372,25 @@ function generatePDF(docData) {
         bodyStyles: { fontSize: 7, textColor: [29, 45, 62] },
         alternateRowStyles: { fillColor: [245, 245, 245] },
         columnStyles: esSalida ? {
-            0: { cellWidth: 20, fontStyle: 'bold' },
-            1: { cellWidth: 48 },
-            2: { cellWidth: 28 },
-            3: { cellWidth: 26 },
-            4: { cellWidth: 22 },
-            5: { cellWidth: 14, halign: 'center' },
-            6: { cellWidth: 22, halign: 'right' }
-        } : {
-            0: { cellWidth: 17, fontStyle: 'bold' },
-            1: { cellWidth: 36 },
-            2: { cellWidth: 22 },
-            3: { cellWidth: 20 },
+            0: { cellWidth: 19, fontStyle: 'bold' },
+            1: { cellWidth: 44 },
+            2: { cellWidth: 26 },
+            3: { cellWidth: 24 },
             4: { cellWidth: 20 },
+            5: { cellWidth: 13, halign: 'center' },
+            6: { cellWidth: 18, halign: 'center' },
+            7: { cellWidth: 20, halign: 'right' }
+        } : {
+            0: { cellWidth: 16, fontStyle: 'bold' },
+            1: { cellWidth: 32 },
+            2: { cellWidth: 20 },
+            3: { cellWidth: 18 },
+            4: { cellWidth: 18 },
             5: { cellWidth: 11, halign: 'center' },
-            6: { cellWidth: 20, halign: 'right' },
-            7: { cellWidth: 18, halign: 'center' },
-            8: { cellWidth: 14, halign: 'center' }
+            6: { cellWidth: 15, halign: 'center' },
+            7: { cellWidth: 18, halign: 'right' },
+            8: { cellWidth: 16, halign: 'center' },
+            9: { cellWidth: 14, halign: 'center' }
         },
         margin: { left: margin, right: margin }
     });
@@ -3699,26 +3703,46 @@ function renderStock() {
         return;
     }
 
-    // ── VISTA POR LOTE ──
+    // ── VISTA POR LOTE (agrupada SKU+Lote+Bodega) ──
     if (thead) thead.innerHTML = '<th>SKU</th><th>Descripción</th><th>Lote</th><th>Vencimiento</th><th>Qty</th><th>Unidad de Venta</th><th>Presentación</th><th>Status</th><th>Bodega</th><th>Ubicación</th><th>Acciones</th>';
 
+    // Agrupar filas por SKU+Lote+Bodega+Status. En vista TOTAL la bodega forma parte de la clave
+    // (cada bodega es una fila); con bodega específica seleccionada, sólo hay una bodega visible.
+    const grouped = {};
+    rows.forEach(s => {
+        const stRow = getLoteStatus(s);
+        const k = `${s.sku}|${s.lote}|${s.bodega||''}|${stRow}`;
+        if (!grouped[k]) {
+            grouped[k] = { sku: s.sku, lote: s.lote, vence: s.vence, bodega: s.bodega, status: stRow, cantidad: 0, ubicaciones: [] };
+        } else if (s.vence && (!grouped[k].vence || s.vence < grouped[k].vence)) {
+            grouped[k].vence = s.vence;
+        }
+        const qty = parseInt(s.cantidad) || 0;
+        grouped[k].cantidad += qty;
+        if (qty > 0) grouped[k].ubicaciones.push({ ubic: s.ubicacion || '—', qty });
+    });
+    let aggRows = Object.values(grouped).filter(r => r.cantidad > 0);
+
     if (sortBy === 'fefo') {
-        rows.sort((a, b) => { if (!a.vence) return 1; if (!b.vence) return -1; return new Date(a.vence+'T00:00:00') - new Date(b.vence+'T00:00:00'); });
+        aggRows.sort((a, b) => { if (!a.vence) return 1; if (!b.vence) return -1; return new Date(a.vence+'T00:00:00') - new Date(b.vence+'T00:00:00'); });
         if (subtitleEl) subtitleEl.textContent = 'Ordenado por FEFO — Vencimiento más próximo primero';
     } else if (sortBy === 'sku') {
-        rows.sort((a, b) => a.sku.localeCompare(b.sku));
+        aggRows.sort((a, b) => a.sku.localeCompare(b.sku));
         if (subtitleEl) subtitleEl.textContent = 'Ordenado por SKU — A a Z';
     } else {
-        rows.sort((a, b) => ((prods[a.sku]?.descripcion||a.sku).toLowerCase()).localeCompare((prods[b.sku]?.descripcion||b.sku).toLowerCase()));
+        aggRows.sort((a, b) => ((prods[a.sku]?.descripcion||a.sku).toLowerCase()).localeCompare((prods[b.sku]?.descripcion||b.sku).toLowerCase()));
         if (subtitleEl) subtitleEl.textContent = 'Ordenado por Descripción — A a Z';
     }
 
-    if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="11">No hay stock para el filtro seleccionado</td></tr>'; return; }
+    if (!aggRows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="11">No hay stock para el filtro seleccionado</td></tr>'; return; }
 
-    tb.innerHTML = rows.map((s, i) => {
+    tb.innerHTML = aggRows.map(s => {
         const vD = s.vence ? new Date(s.vence+'T00:00:00') : null;
-        const dias = vD ? Math.ceil((vD - hoy) / 86400000) : null;
-        const st = getLoteStatus(s);
+        const ubicCell = s.ubicaciones
+            .slice()
+            .sort((a, b) => a.ubic.localeCompare(b.ubic))
+            .map(u => `${u.ubic} (${u.qty})`)
+            .join(', ');
         return `<tr>
             <td class="text-mono" style="color:var(--accent2)">${s.sku}</td>
             <td style="color:var(--text)">${prods[s.sku]?.descripcion||'—'}</td>
@@ -3727,9 +3751,9 @@ function renderStock() {
             <td style="font-weight:600;color:var(--text)">${s.cantidad}</td>
             <td>${prods[s.sku]?.unidadVenta||'—'}</td>
             <td style="font-size:12px;color:var(--text2)">${prods[s.sku]?.presentacion||'—'}</td>
-            <td>${statusBadgeHTML(st)}</td>
+            <td>${statusBadgeHTML(s.status)}</td>
             <td>${s.bodega||'—'}</td>
-            <td>${s.ubicacion||'—'}</td>
+            <td style="font-size:12px">${ubicCell || '—'}</td>
             <td><button class="btn btn-sm btn-icon" style="font-size:10px" onclick="verTrazabilidadLote('${s.sku}','${s.lote}')">Trazar</button></td>
         </tr>`;
     }).join('');
