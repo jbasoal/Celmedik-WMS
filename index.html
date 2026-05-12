@@ -1800,6 +1800,21 @@
         <div id="ajusteModal-err" class="form-error-banner"></div>
         <div class="form-row">
             <div class="form-group">
+                <label class="form-label">Bodega <span style="color:var(--danger)">*</span></label>
+                <select class="form-select" id="aj-bodega" onchange="onAjBodegaChange()">
+                    <option value="">Seleccionar...</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Tipo de Ajuste <span style="color:var(--danger)">*</span></label>
+                <select class="form-select" id="aj-tipo">
+                    <option value="Positivo">➕ Positivo — aumenta stock</option>
+                    <option value="Negativo">➖ Negativo — reduce stock</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
                 <label class="form-label">SKU <span style="color:var(--danger)">*</span></label>
                 <input type="text" class="form-input" id="aj-sku" placeholder="SKU del producto" oninput="onAjSKUChange()">
             </div>
@@ -1811,7 +1826,9 @@
         <div class="form-row">
             <div class="form-group">
                 <label class="form-label">Lote <span style="color:var(--danger)">*</span></label>
-                <input type="text" class="form-input" id="aj-lote" placeholder="Número de lote">
+                <div id="aj-lote-wrap">
+                    <input type="text" class="form-input" id="aj-lote" placeholder="Número de lote" oninput="onAjLoteChange()">
+                </div>
             </div>
             <div class="form-group">
                 <label class="form-label">Vencimiento</label>
@@ -1820,25 +1837,10 @@
         </div>
         <div class="form-row">
             <div class="form-group">
-                <label class="form-label">Bodega <span style="color:var(--danger)">*</span></label>
-                <select class="form-select" id="aj-bodega" onchange="onAjBodegaChange()">
-                    <option value="">Seleccionar...</option>
-                </select>
-            </div>
-            <div class="form-group">
                 <label class="form-label">Ubicación</label>
                 <div id="aj-ubic-wrap">
                     <input type="text" class="form-input" id="aj-ubic" placeholder="Ubicación">
                 </div>
-            </div>
-        </div>
-        <div class="form-row">
-            <div class="form-group">
-                <label class="form-label">Tipo de Ajuste <span style="color:var(--danger)">*</span></label>
-                <select class="form-select" id="aj-tipo">
-                    <option value="Positivo">➕ Positivo — aumenta stock</option>
-                    <option value="Negativo">➖ Negativo — reduce stock</option>
-                </select>
             </div>
             <div class="form-group">
                 <label class="form-label">Cantidad <span style="color:var(--danger)">*</span></label>
@@ -3252,10 +3254,11 @@ function saveDocumento() {
                         usuarioPerfil: userPerfil || '',
                         usuarioUid: currentUser.uid
                     };
+                    _setBtnLoading('btn-save-doc', false, 'Finalizar y Guardar');
                     closeModal('movModal');
                     generatePDF(docData);
                 })
-                .catch(err => { _setBtnLoading('btn-save-doc', false); showFormError('movModal-err', 'Error al guardar: ' + err.message); });
+                .catch(err => { _setBtnLoading('btn-save-doc', false, 'Finalizar y Guardar'); showFormError('movModal-err', 'Error al guardar: ' + err.message); });
         }
     );
 }
@@ -4162,7 +4165,7 @@ function renderAjustes() {
 
 function openAjusteModal() {
     if (userPerfil !== 'Maestro') { alert('Esta función es exclusiva del perfil Maestro.'); return; }
-    _clearFields('aj-sku','aj-desc','aj-lote','aj-obs');
+    _clearFields('aj-sku','aj-desc','aj-obs');
     const vEl = document.getElementById('aj-vence'); if (vEl) vEl.value = '';
     const qEl = document.getElementById('aj-qty');  if (qEl) qEl.value = '';
     const tEl = document.getElementById('aj-tipo'); if (tEl) tEl.value = 'Positivo';
@@ -4173,32 +4176,162 @@ function openAjusteModal() {
         Object.values(data.bodegas||{}).forEach(b => {
             const opt = document.createElement('option'); opt.value = b.nombre; opt.textContent = b.nombre; bodSel.appendChild(opt);
         });
+        bodSel.value = '';
     }
+    const loteWrap = document.getElementById('aj-lote-wrap');
+    if (loteWrap) loteWrap.innerHTML = '<input type="text" class="form-input" id="aj-lote" placeholder="Seleccione bodega y SKU primero" oninput="onAjLoteChange()">';
     const ubWrap = document.getElementById('aj-ubic-wrap');
     if (ubWrap) ubWrap.innerHTML = '<input type="text" class="form-input" id="aj-ubic" placeholder="Ubicación">';
+    // Reset visual del botón guardar (por si quedó en estado loading)
+    const saveBtn = document.getElementById('btn-save-ajuste');
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = 'Guardar Ajuste'; }
     openModal('ajusteModal');
+    // Foco en bodega (primer campo)
+    setTimeout(() => { try { bodSel && bodSel.focus(); } catch(_){} }, 80);
 }
 
 function onAjSKUChange() {
     const sku = (document.getElementById('aj-sku')?.value||'').trim().toUpperCase();
-    if (document.getElementById('aj-sku')) document.getElementById('aj-sku').value = sku;
+    const skuEl = document.getElementById('aj-sku');
+    if (skuEl) skuEl.value = sku;
     const descEl = document.getElementById('aj-desc');
     if (descEl) descEl.value = data.productos[sku]?.descripcion || '';
+    _refreshAjusteLotes();
 }
 
 function onAjBodegaChange() {
-    const nombre = document.getElementById('aj-bodega')?.value;
-    const bodega = Object.values(data.bodegas||{}).find(b => b.nombre === nombre);
+    _refreshAjusteLotes();
+    _refreshAjusteUbicaciones();
+}
+
+function onAjLoteChange() {
+    const loteEl = document.getElementById('aj-lote');
+    if (!loteEl) return;
+    const val = (loteEl.value || '').trim();
+    if (val === '__nuevo__') {
+        const wrap = document.getElementById('aj-lote-wrap');
+        wrap.innerHTML = '<input type="text" class="form-input" id="aj-lote" placeholder="Ingrese nuevo lote" oninput="onAjLoteChange()">';
+        const vEl = document.getElementById('aj-vence'); if (vEl) vEl.value = '';
+        setTimeout(() => { try { document.getElementById('aj-lote').focus(); } catch(_){} }, 20);
+        _refreshAjusteUbicaciones();
+        return;
+    }
+    // Autocompletar vencimiento si el lote existe en stock para el SKU/bodega seleccionados
+    const sku    = (document.getElementById('aj-sku')?.value || '').trim().toUpperCase();
+    const bodega = document.getElementById('aj-bodega')?.value || '';
+    if (sku && bodega && val) {
+        const stock = calcStock();
+        const matches = Object.values(stock).filter(s => s.sku === sku && s.lote === val && s.bodega === bodega && s.cantidad > 0);
+        if (matches.length) {
+            const vence = matches[0].vence || '';
+            const vEl = document.getElementById('aj-vence');
+            if (vEl && vence) vEl.value = vence;
+        }
+    }
+    _refreshAjusteUbicaciones();
+}
+
+// Pinta el selector de lotes en función del SKU+Bodega elegidos.
+// Si hay stock, lista lotes con vencimiento y unidades; siempre ofrece "lote nuevo".
+function _refreshAjusteLotes() {
+    const wrap = document.getElementById('aj-lote-wrap');
+    if (!wrap) return;
+    const prevVal = (document.getElementById('aj-lote')?.value || '').trim();
+    const sku    = (document.getElementById('aj-sku')?.value || '').trim().toUpperCase();
+    const bodega = document.getElementById('aj-bodega')?.value || '';
+
+    if (!sku || !bodega || !data.productos[sku]) {
+        wrap.innerHTML = '<input type="text" class="form-input" id="aj-lote" placeholder="Seleccione bodega y SKU primero" oninput="onAjLoteChange()">';
+        if (prevVal) document.getElementById('aj-lote').value = prevVal;
+        return;
+    }
+
+    const stock = calcStock();
+    const lotesMap = {};
+    Object.values(stock).forEach(s => {
+        if (s.sku !== sku || s.bodega !== bodega || (parseInt(s.cantidad)||0) <= 0) return;
+        if (!lotesMap[s.lote]) lotesMap[s.lote] = { lote: s.lote, vence: s.vence || '', qty: 0 };
+        lotesMap[s.lote].qty += parseInt(s.cantidad) || 0;
+        if (s.vence && (!lotesMap[s.lote].vence || s.vence < lotesMap[s.lote].vence)) lotesMap[s.lote].vence = s.vence;
+    });
+    const lotes = Object.values(lotesMap).sort((a, b) => {
+        if (!a.vence) return 1; if (!b.vence) return -1;
+        return new Date(a.vence) - new Date(b.vence);
+    });
+
+    if (!lotes.length) {
+        wrap.innerHTML = '<input type="text" class="form-input" id="aj-lote" placeholder="Sin stock previo — ingrese lote nuevo" oninput="onAjLoteChange()">';
+        if (prevVal && prevVal !== '__nuevo__') document.getElementById('aj-lote').value = prevVal;
+        return;
+    }
+
+    let html = '<select class="form-select" id="aj-lote" onchange="onAjLoteChange()">';
+    html += '<option value="">Seleccionar lote...</option>';
+    lotes.forEach(l => {
+        const sel = l.lote === prevVal ? ' selected' : '';
+        const venceLbl = l.vence ? fmtDate(l.vence) : 'sin vencimiento';
+        html += `<option value="${l.lote}"${sel}>${l.lote} · vence ${venceLbl} · ${l.qty} ud.</option>`;
+    });
+    html += '<option value="__nuevo__">+ Lote nuevo (escribir manualmente)…</option>';
+    html += '</select>';
+    wrap.innerHTML = html;
+}
+
+// Sugiere ubicaciones: si hay stock para el SKU+Lote+Bodega, muestra las ubicaciones
+// donde existe (con cantidad). En caso contrario usa el listado de ubicaciones de la bodega.
+function _refreshAjusteUbicaciones() {
     const wrap = document.getElementById('aj-ubic-wrap');
     if (!wrap) return;
-    if (bodega && Array.isArray(bodega.ubicaciones) && bodega.ubicaciones.length) {
-        const sel = document.createElement('select');
-        sel.className = 'form-select'; sel.id = 'aj-ubic';
-        sel.innerHTML = '<option value="">Seleccionar ubicación...</option>';
-        bodega.ubicaciones.forEach(u => { const opt = document.createElement('option'); opt.value=u; opt.textContent=u; sel.appendChild(opt); });
-        wrap.innerHTML = ''; wrap.appendChild(sel);
-    } else {
-        wrap.innerHTML = '<input type="text" class="form-input" id="aj-ubic" placeholder="Ubicación">';
+    const prevUbic = (document.getElementById('aj-ubic')?.value || '').trim();
+    const sku    = (document.getElementById('aj-sku')?.value || '').trim().toUpperCase();
+    const bodega = document.getElementById('aj-bodega')?.value || '';
+    const lote   = (document.getElementById('aj-lote')?.value || '').trim();
+
+    // 1) Si hay SKU+Lote+Bodega con stock: ofrecer esas ubicaciones
+    if (sku && bodega && lote && lote !== '__nuevo__') {
+        const stock = calcStock();
+        const ubics = Object.values(stock).filter(s => s.sku === sku && s.lote === lote && s.bodega === bodega && (parseInt(s.cantidad)||0) > 0);
+        if (ubics.length) {
+            ubics.sort((a, b) => (a.ubicacion||'').localeCompare(b.ubicacion||''));
+            let html = '<select class="form-select" id="aj-ubic" onchange="onAjUbicChange()">';
+            html += '<option value="">Seleccionar ubicación...</option>';
+            ubics.forEach(u => {
+                const ubic = u.ubicacion || '—';
+                const sel = ubic === prevUbic ? ' selected' : '';
+                html += `<option value="${ubic}"${sel}>${ubic} (${u.cantidad} ud.)</option>`;
+            });
+            html += '<option value="__nueva__">+ Otra ubicación…</option>';
+            html += '</select>';
+            wrap.innerHTML = html;
+            return;
+        }
+    }
+
+    // 2) Fallback: ubicaciones del maestro de la bodega
+    const bod = Object.values(data.bodegas||{}).find(b => b.nombre === bodega);
+    if (bod && Array.isArray(bod.ubicaciones) && bod.ubicaciones.length) {
+        let html = '<select class="form-select" id="aj-ubic">';
+        html += '<option value="">Seleccionar ubicación...</option>';
+        bod.ubicaciones.forEach(u => {
+            const sel = u === prevUbic ? ' selected' : '';
+            html += `<option value="${u}"${sel}>${u}</option>`;
+        });
+        html += '</select>';
+        wrap.innerHTML = html;
+        return;
+    }
+
+    // 3) Bodega sin ubicaciones definidas: texto libre
+    wrap.innerHTML = '<input type="text" class="form-input" id="aj-ubic" placeholder="Ubicación">';
+    if (prevUbic) document.getElementById('aj-ubic').value = prevUbic;
+}
+
+function onAjUbicChange() {
+    const el = document.getElementById('aj-ubic');
+    if (el && el.value === '__nueva__') {
+        const wrap = document.getElementById('aj-ubic-wrap');
+        wrap.innerHTML = '<input type="text" class="form-input" id="aj-ubic" placeholder="Nueva ubicación">';
+        setTimeout(() => { try { document.getElementById('aj-ubic').focus(); } catch(_){} }, 20);
     }
 }
 
@@ -4251,15 +4384,15 @@ function saveAjuste() {
         'Confirmar Ajuste',
         ajusteTipo === 'Positivo' ? 'btn-primary' : 'btn-danger',
         () => {
-            _setBtnLoading('btn-save-ajuste', true); // I1: spinner
+            // Cierre optimista: el listener de RTDB refrescará Movimientos/Stock/Ajustes
+            closeModal('ajusteModal');
+            const saveBtn = document.getElementById('btn-save-ajuste');
+            if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = 'Guardar Ajuste'; }
             db.ref(`usuarios/${rootUid || currentUser.uid}/movimientos/${Date.now()}`).set(mov)
                 .then(() => {
                     logAudit(`Ajuste ${ajusteTipo}`, 'AjusteInventario', sku, lote, `${ajusteTipo==='Positivo'?'+':'−'}${qty} ud. · ${obs}`);
-                    closeModal('ajusteModal');
-                    _setBtnLoading('btn-save-ajuste', false);
-                    renderAjustes();
                 })
-                .catch(e => { _setBtnLoading('btn-save-ajuste', false); showFormError('ajusteModal-err', 'Error al guardar: ' + e.message); });
+                .catch(e => { alert('Error al guardar el ajuste: ' + e.message); });
         }
     );
 }
@@ -4648,7 +4781,12 @@ function printReport() {
 // ══ MODAL HELPERS ══
 function openModal(id) {
     const m = document.getElementById(id);
-    if (m) { m.classList.add('active'); if (id === 'movModal') { resetMovModal(); updateBodegaSelect(); } }
+    if (!m) return;
+    m.classList.add('active');
+    if (id === 'movModal') { resetMovModal(); updateBodegaSelect(); }
+    // Asegura que el modal se vea desde el inicio (no quede scrolleado por una apertura previa)
+    const box = m.querySelector('.modal-box');
+    if (box) { try { box.scrollTop = 0; } catch(_){} }
 }
 
 function closeModal(id) {
@@ -4668,6 +4806,9 @@ function resetMovModal() {
     const ubicWrap = document.getElementById('mi-ubic-wrap');
     if (ubicWrap) ubicWrap.innerHTML = '<input type="text" class="form-input" id="mi-ubic" placeholder="Ej: Estante A-1">';
     const errEl = document.getElementById('movModal-err'); if (errEl) errEl.style.display = 'none';
+    // Restaurar botón Guardar (puede haber quedado en estado loading tras guardar el documento previo)
+    const saveBtn = document.getElementById('btn-save-doc');
+    if (saveBtn) { saveBtn.innerHTML = 'Finalizar y Guardar'; saveBtn.disabled = true; }
     resetItemForm();
     _refreshMiStatusField(document.getElementById('md-tipo').value || 'Entrada');
     renderDocItems();
