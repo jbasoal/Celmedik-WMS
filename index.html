@@ -171,6 +171,8 @@
         body.perfil-operador .need-maestro,
         body.perfil-farmaceutico .need-maestro { display: none !important; }
         body.perfil-operador-bodega .need-maestro { display: none !important; }
+        /* Filtro Bodega en Movimientos: oculto para operadores (vista atada a su bodega fija) */
+        body.perfil-operador .filtro-bodega-mov { display: none !important; }
 
         /* ══════════════════════════════════════
            APP LAYOUT
@@ -845,6 +847,9 @@
                             </div>
                         </div>
                         <div class="filter-bar">
+                            <select class="form-select filtro-bodega-mov" id="fMovBodega" onchange="renderMovimientos()" style="width:auto" title="Bodega">
+                                <option value="">Todas las bodegas</option>
+                            </select>
                             <select class="form-select" id="fMovTipo" onchange="renderMovimientos()" style="width:auto">
                                 <option value="">Todos los tipos</option>
                                 <option value="Entrada">Entrada</option>
@@ -2716,6 +2721,22 @@ function updateBodegaSelect() {
             if (cur) sel.value = cur;
         }
     });
+    _refreshMovBodegaFilter();
+}
+
+// Pobla el select de filtro de Bodega en la página Movimientos.
+// Para operadores con bodega fija el control está oculto por CSS, igual lo dejamos coherente.
+function _refreshMovBodegaFilter() {
+    const sel = document.getElementById('fMovBodega');
+    if (!sel) return;
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">Todas las bodegas</option>';
+    Object.values(data.bodegas||{}).forEach(b => {
+        const o = document.createElement('option');
+        o.value = b.nombre; o.textContent = b.nombre;
+        sel.appendChild(o);
+    });
+    if (cur) sel.value = cur;
 }
 
 // ══ MOVIMIENTOS ══
@@ -3591,11 +3612,13 @@ async function uploadSalidaToDrive(blob, filename, docData) {
 function clearFiltrosMovimientos() {
     _clearFields('fMovSKU','fMovLote','fMovFechaDesde','fMovFechaHasta');
     document.getElementById('fMovTipo').value = '';
+    const bSel = document.getElementById('fMovBodega'); if (bSel) bSel.value = '';
     renderMovimientos();
 }
 
 function renderMovimientos() {
     const fTipo = document.getElementById('fMovTipo')?.value||'';
+    const fBodega = document.getElementById('fMovBodega')?.value||'';
     const fSKU = (document.getElementById('fMovSKU')?.value||'').toLowerCase();
     const fLote = (document.getElementById('fMovLote')?.value||'').toLowerCase();
     const fDesde = document.getElementById('fMovFechaDesde')?.value||'';
@@ -3603,6 +3626,7 @@ function renderMovimientos() {
     let rows = Object.values(data.movimientos||{});
     const _bFijaMov = bodegaFijaActual();
     if (_bFijaMov) rows = rows.filter(m => (m.bodega||'') === _bFijaMov);
+    else if (fBodega) rows = rows.filter(m => (m.bodega||'') === fBodega);
     if (fTipo) rows = rows.filter(m => m.tipo === fTipo);
     if (fSKU) rows = rows.filter(m => (m.sku||'').toLowerCase().includes(fSKU));
     if (fLote) rows = rows.filter(m => (m.lote||'').toLowerCase().includes(fLote));
