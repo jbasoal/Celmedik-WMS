@@ -1494,9 +1494,14 @@
             <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">Cantidad <span style="color:var(--danger)">*</span></label>
-                    <input type="number" class="form-input" id="mi-qty" min="1" placeholder="0">
+                    <input type="number" class="form-input" id="mi-qty" min="1" placeholder="0" oninput="_updPalletSum()">
+                </div>
+                <div class="form-group" id="mi-pallet-qty-group">
+                    <label class="form-label">Cantidad de Pallet</label>
+                    <input type="number" class="form-input" id="mi-pallet-qty" min="1" placeholder="1" oninput="onMiPalletQtyChange()">
                 </div>
             </div>
+            <div id="mi-pallet-dist" style="display:none;margin-top:4px;margin-bottom:8px;padding:10px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:6px"></div>
             <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:8px">
                 <div class="form-group">
                     <label class="form-label">Precio unit. (opc.)</label>
@@ -3064,6 +3069,86 @@ function selectLoteDestruccion(sku, lote, vence, status, stockQty) {
     openModal('destruccionModal');
 }
 
+// Construye/oculta las filas de distribución por pallet. Cada fila pide cantidad
+// y ubicación para ese pallet. Si cantidad de pallet ≤ 1 vuelve al flujo simple
+// con un único campo de ubicación.
+function onMiPalletQtyChange() {
+    const palletCount = parseInt(document.getElementById('mi-pallet-qty')?.value) || 1;
+    const dist = document.getElementById('mi-pallet-dist');
+    const ubicGroup = document.getElementById('mi-ubic-group');
+    if (!dist) return;
+
+    if (palletCount <= 1) {
+        dist.style.display = 'none';
+        dist.innerHTML = '';
+        if (ubicGroup) {
+            // Reactivar el campo único de ubicación si era visible antes
+            const tipo = document.getElementById('md-tipo')?.value || '';
+            if (tipo === 'Entrada' || tipo === 'Devolución' || tipo === 'Salida') ubicGroup.style.display = 'block';
+        }
+        return;
+    }
+
+    const tipo = document.getElementById('md-tipo')?.value || '';
+    const bodegaNombre = document.getElementById('md-bodega')?.value || '';
+    const bodega = Object.values(data.bodegas||{}).find(b => b.nombre === bodegaNombre);
+    const sku   = (document.getElementById('mi-sku')?.value || '').trim().toUpperCase();
+    const lote  = (document.getElementById('mi-lote')?.value || '').trim();
+
+    // Para Salida, las ubicaciones disponibles vienen del stock real del SKU+Lote+Bodega.
+    let ubicOptions = [];
+    if (tipo === 'Salida' && sku && lote && bodegaNombre) {
+        const stock = calcStock();
+        ubicOptions = Object.values(stock)
+            .filter(s => s.sku === sku && s.lote === lote && s.bodega === bodegaNombre && (parseInt(s.cantidad)||0) > 0 && getLoteStatus(s) === 'Aprobado')
+            .sort((a, b) => (a.ubicacion||'').localeCompare(b.ubicacion||''))
+            .map(s => ({ value: s.ubicacion || '', label: `${s.ubicacion || '—'} (${s.cantidad} ud.)` }));
+    } else if (bodega && Array.isArray(bodega.ubicaciones) && bodega.ubicaciones.length) {
+        ubicOptions = bodega.ubicaciones.map(u => ({ value: u, label: u }));
+    }
+
+    let html = '<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text2);margin-bottom:8px">Distribución por pallet</div>';
+    html += '<div style="display:grid;grid-template-columns:60px 1fr 2fr;gap:8px;font-size:11px;color:var(--text3);margin-bottom:4px;font-weight:600"><span>Pallet</span><span>Cantidad</span><span>Ubicación</span></div>';
+    for (let i = 1; i <= palletCount; i++) {
+        let ubicCtrl;
+        if (ubicOptions.length) {
+            ubicCtrl = `<select class="form-select" id="mi-pal-ubic-${i}" style="font-size:12px"><option value="">Seleccionar ubicación...</option>` +
+                ubicOptions.map(o => `<option value="${o.value}">${o.label}</option>`).join('') + '</select>';
+        } else {
+            ubicCtrl = `<input type="text" class="form-input" id="mi-pal-ubic-${i}" placeholder="Ubicación pallet ${i}" style="font-size:12px">`;
+        }
+        html += `<div style="display:grid;grid-template-columns:60px 1fr 2fr;gap:8px;align-items:center;margin-bottom:6px">
+            <span style="font-weight:600;color:var(--text2);text-align:center">${i}</span>
+            <input type="number" class="form-input" id="mi-pal-qty-${i}" min="1" placeholder="0" style="font-size:12px" oninput="_updPalletSum()">
+            ${ubicCtrl}
+        </div>`;
+    }
+    html += '<div id="mi-pal-sum" style="font-size:11px;color:var(--text3);margin-top:6px;text-align:right"></div>';
+    dist.innerHTML = html;
+    dist.style.display = 'block';
+
+    // Oculta el campo único de ubicación cuando se trabaja con varios pallets
+    if (ubicGroup) ubicGroup.style.display = 'none';
+    _updPalletSum();
+}
+
+function _updPalletSum() {
+    const palletCount = parseInt(document.getElementById('mi-pallet-qty')?.value) || 1;
+    if (palletCount <= 1) return;
+    let sum = 0;
+    for (let i = 1; i <= palletCount; i++) {
+        sum += parseInt(document.getElementById(`mi-pal-qty-${i}`)?.value) || 0;
+    }
+    const totalQty = parseInt(document.getElementById('mi-qty')?.value) || 0;
+    const sumEl = document.getElementById('mi-pal-sum');
+    if (sumEl) {
+        const ok = totalQty > 0 && sum === totalQty;
+        const color = ok ? 'var(--success)' : (sum > totalQty ? 'var(--danger)' : 'var(--text3)');
+        sumEl.style.color = color;
+        sumEl.innerHTML = `Suma pallets: <strong>${sum}</strong> / Cantidad total: <strong>${totalQty}</strong>${ok ? ' ✓' : ''}`;
+    }
+}
+
 function addItemToDoc() {
     const sku    = document.getElementById('mi-sku').value.trim().toUpperCase();
     const loteEl = document.getElementById('mi-lote');
@@ -3146,7 +3231,61 @@ function addItemToDoc() {
     }
 
     const prod = data.productos[sku];
+
+    // ── Distribución por pallets ──
+    // Si Cantidad de Pallet > 1: validamos sumatoria, generamos un ítem por pallet
+    // (cada uno con su propia ubicación) y los agrupamos con un palletGroupId.
+    const palletCount = parseInt(document.getElementById('mi-pallet-qty')?.value) || 1;
+    let palletItems = null;
+    if (palletCount > 1) {
+        palletItems = [];
+        let sumPal = 0;
+        for (let i = 1; i <= palletCount; i++) {
+            const palQty  = parseInt(document.getElementById(`mi-pal-qty-${i}`)?.value) || 0;
+            const palUbic = (document.getElementById(`mi-pal-ubic-${i}`)?.value || '').trim();
+            if (!palQty || palQty < 1) { showFormError('mi-err', `Pallet ${i}: ingrese la cantidad de unidades.`); return; }
+            if ((tipo === 'Entrada' || tipo === 'Devolución') && !palUbic) { showFormError('mi-err', `Pallet ${i}: la ubicación es obligatoria.`); return; }
+            sumPal += palQty;
+            palletItems.push({ palQty, palUbic });
+        }
+        if (sumPal !== qty) { showFormError('mi-err', `La suma de pallets (${sumPal}) debe coincidir con la cantidad total (${qty}).`); return; }
+
+        // Para Salida revalidamos stock por ubicación de cada pallet
+        if (tipo === 'Salida') {
+            const stock = calcStock();
+            const palBy = {};
+            palletItems.forEach(p => { palBy[p.palUbic] = (palBy[p.palUbic] || 0) + p.palQty; });
+            for (const [u, n] of Object.entries(palBy)) {
+                const enDoc = movDocItems.filter(it => it.sku === sku && it.lote === lote && it.ubicacion === u).reduce((a, it) => a + it.qty, 0);
+                const locEntry = Object.values(stock).find(s => s.sku === sku && s.lote === lote && s.ubicacion === u && getLoteStatus(s) === 'Aprobado');
+                const disponible = locEntry ? locEntry.cantidad : 0;
+                if (n + enDoc > disponible) {
+                    showFormError('mi-err', `Stock insuficiente en ubicación ${u}: disponible ${disponible} ud., ya en documento ${enDoc}, requerido ${n}.`);
+                    return;
+                }
+            }
+        }
+    }
+
     const itemData = { sku, descripcion: prod?.descripcion || '', tipo: prod?.tipo || '', lote, vence, qty, precio, status: itemStatus, ubicacion: itemUbic };
+
+    const pushItems = () => {
+        if (palletItems) {
+            const palletGroupId = `PG-${Date.now()}-${Math.random().toString(36).slice(2,7)}`;
+            palletItems.forEach((p, idx) => {
+                movDocItems.push({
+                    sku, descripcion: prod?.descripcion || '', tipo: prod?.tipo || '',
+                    lote, vence, qty: p.palQty, precio,
+                    status: itemStatus, ubicacion: p.palUbic,
+                    palletNum: idx + 1, palletTotal: palletItems.length, palletGroupId
+                });
+            });
+        } else {
+            movDocItems.push(itemData);
+        }
+        renderDocItems();
+        resetItemForm();
+    };
 
     // Alerta especial para Falsificado
     if (itemStatus === 'Falsificado') {
@@ -3156,12 +3295,10 @@ function addItemToDoc() {
             '⚠️ Está registrando un producto como <strong>FALSIFICADO</strong>. Esta acción quedará registrada en auditoría e informada al responsable QA. ¿Confirma el registro?',
             'Confirmar — Registrar Falsificado',
             'btn-danger',
-            () => { movDocItems.push(itemData); renderDocItems(); resetItemForm(); logAudit('Alerta Falsificado', 'Movimientos', sku, lote, 'Ítem registrado como FALSIFICADO'); }
+            () => { pushItems(); logAudit('Alerta Falsificado', 'Movimientos', sku, lote, 'Ítem registrado como FALSIFICADO'); }
         );
     } else {
-        movDocItems.push(itemData);
-        renderDocItems();
-        resetItemForm();
+        pushItems();
     }
 }
 
@@ -3180,8 +3317,9 @@ function renderDocItems() {
     if (saveBtn) saveBtn.disabled = false;
     const totalQty = movDocItems.reduce((a, i) => a + i.qty, 0);
     const totalPrecio = movDocItems.reduce((a, i) => a + (i.precio * i.qty), 0);
-    tb.innerHTML = movDocItems.map((item, idx) => `
-        <tr>
+    tb.innerHTML = movDocItems.map((item, idx) => {
+        const palletTag = item.palletTotal ? ` · <span style="color:var(--accent2);font-weight:600">Pallet ${item.palletNum}/${item.palletTotal}</span>` : '';
+        return `<tr>
             <td class="text-mono" style="color:var(--accent2)">${item.sku}</td>
             <td>${item.descripcion||'—'}</td>
             <td class="text-mono" style="font-size:11px">${item.lote}</td>
@@ -3189,17 +3327,19 @@ function renderDocItems() {
             <td style="font-weight:600;color:var(--text)">${item.qty}</td>
             <td>${item.precio > 0 ? '$' + item.precio.toLocaleString('es-CL') : '—'}</td>
             <td>${statusBadgeHTML(item.status || 'Aprobado')}</td>
-            <td style="font-size:11px;color:var(--text2)">${item.ubicacion||'—'}</td>
+            <td style="font-size:11px;color:var(--text2)">${(item.ubicacion||'—') + palletTag}</td>
             <td><button class="btn btn-sm btn-danger-sm" onclick="removeItemFromDoc(${idx})">✕</button></td>
-        </tr>`).join('');
+        </tr>`;
+    }).join('');
     let tot = `Total: <strong>${totalQty}</strong> unidades`;
     if (totalPrecio > 0) tot += ` · Total neto: <strong>$${totalPrecio.toLocaleString('es-CL')}</strong>`;
     totalEl.innerHTML = tot;
 }
 
 function resetItemForm() {
-    _clearFields('mi-sku','mi-desc','mi-vence','mi-qty','mi-precio','mi-ubic');
+    _clearFields('mi-sku','mi-desc','mi-vence','mi-qty','mi-precio','mi-ubic','mi-pallet-qty');
     document.getElementById('mi-lote-wrap').innerHTML = '<input type="text" class="form-input" id="mi-lote" placeholder="Número de lote">';
+    const dist = document.getElementById('mi-pallet-dist'); if (dist) { dist.style.display = 'none'; dist.innerHTML = ''; }
     const info = document.getElementById('mi-sku-info'); if (info) info.style.display = 'none';
     const err = document.getElementById('mi-err'); if (err) err.style.display = 'none';
     // Restore Estatus field visibility and default value for current tipo
@@ -3263,6 +3403,11 @@ function saveDocumento() {
                     documentoId,
                     fechaDocumento: fechaDoc || ''
                 };
+                if (item.palletTotal) {
+                    mov.palletNum = item.palletNum;
+                    mov.palletTotal = item.palletTotal;
+                    mov.palletGroupId = item.palletGroupId;
+                }
                 updates[`usuarios/${uid}/movimientos/${ts0 + i}`] = mov;
             });
             db.ref().update(updates)
