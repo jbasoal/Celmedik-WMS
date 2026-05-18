@@ -2476,6 +2476,14 @@ function calcStock() {
             if (stock[key] && stock[key].status !== 'Retiro de mercado') {
                 stock[key].status = m.status || stock[key].status;
             }
+        } else if (m.tipo === 'Devolución') {
+            // Una devolución suma al stock en su bodega/ubicación con el status registrado
+            if (!stock[key]) stock[key] = { sku:m.sku, lote:m.lote, cantidad:0, vence:m.vence||'', bodega:m.bodega||'', ubicacion:m.ubicacion||'', status: m.status || 'Aprobado' };
+            stock[key].cantidad += parseInt(m.cantidad)||0;
+            // Preservamos el vencimiento si la entrada original lo trae
+            if (m.vence && !stock[key].vence) stock[key].vence = m.vence;
+            // Si la devolución viene con un status distinto al actual, sólo lo aplicamos
+            // si la entrada del stock estaba vacía (nueva creación arriba ya lo seteó).
         }
     });
     // C1: Integrar devoluciones Aprobadas al stock
