@@ -790,6 +790,7 @@
                         </div>
                         <div class="filter-bar">
                             <input type="text" class="form-input" id="fStockSKU" placeholder="SKU..." onkeyup="renderStock()" style="max-width:130px">
+                            <input type="text" class="form-input" id="fStockDesc" placeholder="Descripción..." onkeyup="renderStock()" style="max-width:170px">
                             <input type="text" class="form-input" id="fStockLote" placeholder="Lote..." onkeyup="renderStock()" style="max-width:130px">
                             <input type="text" class="form-input" id="fStockUbic" placeholder="Ubicación..." onkeyup="renderStock()" style="max-width:130px">
                             <select class="form-select" id="fStockStatus" onchange="renderStock()" style="width:auto;min-width:150px">
@@ -856,6 +857,7 @@
                                 <option value="Salida">Salida</option>
                                 <option value="Devolución">Devolución</option>
                                 <option value="Ajuste">Cambio de Status</option>
+                                <option value="CambioUbicacion">Cambio de Ubicación</option>
                             </select>
                             <input type="text" class="form-input" id="fMovSKU" placeholder="SKU..." onkeyup="renderMovimientos()">
                             <input type="text" class="form-input" id="fMovLote" placeholder="Lote..." onkeyup="renderMovimientos()">
@@ -1433,18 +1435,19 @@
                     <option value="Entrada">Entrada</option>
                     <option value="Salida">Salida</option>
                     <option value="Ajuste">Cambio de Status</option>
+                    <option value="CambioUbicacion">Cambio de Ubicación</option>
                     <option value="Devolución">Devolución</option>
                 </select>
             </div>
-            <div class="form-group">
+            <div class="form-group" id="md-numdoc-group">
                 <label class="form-label">N° Documento / Factura</label>
                 <input type="text" class="form-input" id="md-numdoc" placeholder="Ej: FAC-2024-001">
             </div>
         </div>
         <!-- (campo de estado movido al formulario por ítem — mi-status-group) -->
         <div id="md-status-row" style="display:none"><select id="md-status-prod" style="display:none"></select><div id="md-status-info" style="display:none"><div id="md-status-info-text"></div></div></div>
-        <div class="form-row">
-            <div class="form-group">
+        <div class="form-row" id="md-proveedor-row">
+            <div class="form-group" id="md-proveedor-group">
                 <label class="form-label">Proveedor / Destinatario</label>
                 <input type="text" class="form-input" id="md-proveedor" placeholder="Nombre proveedor o destinatario">
             </div>
@@ -1504,7 +1507,7 @@
             </div>
             <div id="mi-pallet-dist" style="display:none;margin-top:4px;margin-bottom:8px;padding:10px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:6px"></div>
             <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:8px">
-                <div class="form-group">
+                <div class="form-group" id="mi-precio-group">
                     <label class="form-label">Precio unit. (opc.)</label>
                     <input type="number" class="form-input" id="mi-precio" min="0" placeholder="0">
                 </div>
@@ -1519,6 +1522,12 @@
                     <select class="form-select" id="mi-status">
                         <option value="">Seleccionar...</option>
                     </select>
+                </div>
+                <div class="form-group" id="mi-ubic-dest-group" style="display:none">
+                    <label class="form-label">Nueva ubicación <span style="color:var(--danger)">*</span></label>
+                    <div id="mi-ubic-dest-wrap">
+                        <input type="text" class="form-input" id="mi-ubic-dest" placeholder="Ej: Estante B-2">
+                    </div>
                 </div>
             </div>
             <div id="mi-sku-info" style="margin-bottom:8px;display:none">
@@ -2484,6 +2493,17 @@ function calcStock() {
             if (m.vence && !stock[key].vence) stock[key].vence = m.vence;
             // Si la devolución viene con un status distinto al actual, sólo lo aplicamos
             // si la entrada del stock estaba vacía (nueva creación arriba ya lo seteó).
+        } else if (m.tipo === 'CambioUbicacion') {
+            // Reubicación interna: resta del origen y suma al destino dentro de la
+            // misma bodega/sku/lote, preservando vencimiento y status del lote.
+            const qty = parseInt(m.cantidad) || 0;
+            const keyOri = `${m.sku}|${m.lote}|${m.bodega||''}|${m.ubicacionOrigen||''}`;
+            const keyDst = `${m.sku}|${m.lote}|${m.bodega||''}|${m.ubicacion||''}`;
+            const baseStatus = (stock[keyOri] && stock[keyOri].status) || m.status || 'Aprobado';
+            const baseVence  = (stock[keyOri] && stock[keyOri].vence)  || m.vence || '';
+            if (stock[keyOri]) stock[keyOri].cantidad -= qty;
+            if (!stock[keyDst]) stock[keyDst] = { sku:m.sku, lote:m.lote, cantidad:0, vence:baseVence, bodega:m.bodega||'', ubicacion:m.ubicacion||'', status: baseStatus };
+            stock[keyDst].cantidad += qty;
         }
     });
     // C1: Integrar devoluciones Aprobadas al stock
@@ -2763,6 +2783,7 @@ function openMovModal() {
             '<option value="Entrada">Entrada</option>' +
             '<option value="Salida">Salida</option>' +
             (canCambioStatus ? '<option value="Ajuste">Cambio de Status</option>' : '') +
+            '<option value="CambioUbicacion">Cambio de Ubicación</option>' +
             '<option value="Devolución">Devolución</option>';
     }
     openModal('movModal');
@@ -2788,13 +2809,15 @@ function onDocBodegaChange() {
         if (prevUbic) document.getElementById('mi-ubic').value = prevUbic; // I6: restaurar texto libre
     }
 
-    // Si en una Salida el usuario cambia la bodega después de elegir un SKU,
-    // refrescar la lista de lotes para que refleje el stock de la nueva bodega.
+    // Si en una Salida o Cambio de Ubicación el usuario cambia la bodega
+    // después de elegir un SKU, refrescar la lista de lotes para que refleje
+    // el stock de la nueva bodega.
     const tipo = document.getElementById('md-tipo')?.value || '';
-    if (tipo === 'Salida') {
+    if (tipo === 'Salida' || tipo === 'CambioUbicacion') {
         const sku = (document.getElementById('mi-sku')?.value || '').trim().toUpperCase();
         if (sku && data.productos[sku]) loadMiLotesDisponibles(sku);
     }
+    if (tipo === 'CambioUbicacion') populateUbicDestino();
 }
 
 function onMdTipoChange() {
@@ -2831,6 +2854,29 @@ function _refreshMiStatusField(tipo) {
     const miUbicGroup   = document.getElementById('mi-ubic-group');
     const miUbicLabel   = document.getElementById('mi-ubic-label');
     if (!miStatusGroup || !miStatus) return;
+
+    // Cabecera: mostrar/ocultar N° Documento y Proveedor según tipo.
+    const numdocGroup    = document.getElementById('md-numdoc-group');
+    const proveedorGroup = document.getElementById('md-proveedor-group');
+    const miPrecioGroup  = document.getElementById('mi-precio-group');
+    const miVenceGroup   = document.getElementById('mi-vence-group');
+    const miPalletGroup  = document.getElementById('mi-pallet-qty-group');
+    const miUbicDestGroup = document.getElementById('mi-ubic-dest-group');
+    const isCambioUbic = (tipo === 'CambioUbicacion');
+    if (numdocGroup)    numdocGroup.style.display    = isCambioUbic ? 'none' : '';
+    if (proveedorGroup) proveedorGroup.style.display = isCambioUbic ? 'none' : '';
+    if (miPrecioGroup)  miPrecioGroup.style.display  = isCambioUbic ? 'none' : '';
+    if (miVenceGroup)   miVenceGroup.style.display   = (isCambioUbic || tipo === 'Salida') ? 'none' : '';
+    if (miPalletGroup)  miPalletGroup.style.display  = isCambioUbic ? 'none' : '';
+    if (miUbicDestGroup) miUbicDestGroup.style.display = isCambioUbic ? 'block' : 'none';
+
+    if (isCambioUbic) {
+        if (miStatusGroup) miStatusGroup.style.display = 'none';
+        if (miUbicGroup)   miUbicGroup.style.display   = 'block';
+        if (miUbicLabel)   miUbicLabel.innerHTML = 'Ubicación origen <span style="color:var(--danger)">*</span>';
+        populateUbicDestino();
+        return;
+    }
 
     if (tipo === 'Entrada') {
         if (isOperadorRole(userPerfil)) {
@@ -2890,6 +2936,26 @@ function _refreshMiStatusField(tipo) {
 // Alias para compatibilidad con el selector de tipo
 function actualizarOpcionesStatus() { _refreshMiStatusField(document.getElementById('md-tipo')?.value || ''); }
 
+// Para Cambio de Ubicación: arma el selector / input de la ubicación destino
+// usando las ubicaciones predefinidas en la bodega (si existen).
+function populateUbicDestino() {
+    const wrap = document.getElementById('mi-ubic-dest-wrap');
+    if (!wrap) return;
+    const bodegaNombre = document.getElementById('md-bodega')?.value || '';
+    const bodega = Object.values(data.bodegas || {}).find(b => b.nombre === bodegaNombre);
+    const prev = (document.getElementById('mi-ubic-dest')?.value || '').trim();
+    if (bodega && Array.isArray(bodega.ubicaciones) && bodega.ubicaciones.length) {
+        let html = '<select class="form-select" id="mi-ubic-dest"><option value="">Seleccionar ubicación...</option>';
+        bodega.ubicaciones.forEach(u => { html += `<option value="${u}">${u}</option>`; });
+        html += '</select>';
+        wrap.innerHTML = html;
+        if (prev) document.getElementById('mi-ubic-dest').value = prev;
+    } else {
+        wrap.innerHTML = '<input type="text" class="form-input" id="mi-ubic-dest" placeholder="Ej: Estante B-2">';
+        if (prev) document.getElementById('mi-ubic-dest').value = prev;
+    }
+}
+
 function onMiSKUChange() {
     const sku = document.getElementById('mi-sku').value.trim().toUpperCase();
     document.getElementById('mi-sku').value = sku;
@@ -2901,7 +2967,7 @@ function onMiSKUChange() {
         document.getElementById('mi-sku-info-text').innerHTML = `<strong style="color:var(--text)">${prod.descripcion}</strong> — ${prod.tipo} · ${prod.fabricante}${prod.registroSanitario ? ` · RS: <span class="rs-number">${prod.registroSanitario}</span>` : ''}`;
         info.style.display = 'block';
         const tipo = document.getElementById('md-tipo').value;
-        if (tipo === 'Salida') loadMiLotesDisponibles(sku);
+        if (tipo === 'Salida' || tipo === 'CambioUbicacion') loadMiLotesDisponibles(sku);
         // Entrada: las opciones de estatus para el Operador dependen del tipo
         // de producto (medicamento vs dispositivo médico sin RS / insumo).
         if (tipo === 'Entrada') _refreshMiStatusField(tipo);
@@ -2932,9 +2998,14 @@ function loadMiLotesDisponibles(sku) {
     }
 
     const stock = calcStock();
-    const lotes = Object.values(stock)
-        .filter(s => s.sku === sku && s.cantidad > 0 && s.bodega === bodegaSel)
-        .sort((a, b) => new Date(a.vence||'9999') - new Date(b.vence||'9999'));
+    const tipoMov = document.getElementById('md-tipo')?.value || '';
+    // Agrupamos las entradas por lote (un lote puede estar en varias ubicaciones).
+    // Para Salida: una "tarjeta" por lote sumando stock total disponible.
+    // Para Cambio de Ubicación: sólo lotes en estado Aprobado y suma stock total.
+    let lotes = Object.values(stock)
+        .filter(s => s.sku === sku && s.cantidad > 0 && s.bodega === bodegaSel);
+    if (tipoMov === 'CambioUbicacion') lotes = lotes.filter(s => getLoteStatus(s) === 'Aprobado');
+    lotes.sort((a, b) => new Date(a.vence||'9999') - new Date(b.vence||'9999'));
 
     if (!lotes.length) {
         wrap.innerHTML = `<div class="alert-banner danger" style="padding:8px 12px"><div class="alert-banner-text">Sin stock disponible para este SKU en la bodega <strong>${bodegaSel}</strong>.</div></div><input type="hidden" id="mi-lote" value=""><input type="hidden" id="mi-lote-status" value="">`;
@@ -3027,7 +3098,8 @@ function loadUbicacionesParaLote(sku, lote) {
     ).sort((a, b) => (a.ubicacion || '').localeCompare(b.ubicacion || ''));
 
     miUbicGroup.style.display = 'block';
-    if (miUbicLabel) miUbicLabel.innerHTML = 'Ubicación del lote <span style="color:var(--danger)">*</span>';
+    const _tipoUL = document.getElementById('md-tipo')?.value || '';
+    if (miUbicLabel) miUbicLabel.innerHTML = (_tipoUL === 'CambioUbicacion' ? 'Ubicación origen' : 'Ubicación del lote') + ' <span style="color:var(--danger)">*</span>';
 
     if (!ubicaciones.length) {
         miUbicWrap.innerHTML = '<input type="text" class="form-input" id="mi-ubic" placeholder="Sin ubicación registrada">';
@@ -3171,8 +3243,47 @@ function addItemToDoc() {
     if (!tipo)  { showFormError('movModal-err', 'Seleccione el tipo de movimiento primero.'); return; }
     if (!sku)   { showFormError('mi-err', 'Ingrese el SKU del producto.'); return; }
     if (!data.productos[sku]) { showFormError('mi-err', `SKU "${sku}" no existe en el maestro de productos.`); return; }
-    if (!lote)  { showFormError('mi-err', tipo === 'Salida' ? 'Seleccione un lote de la lista.' : 'Ingrese el número de lote.'); return; }
+    if (!lote)  { showFormError('mi-err', (tipo === 'Salida' || tipo === 'CambioUbicacion') ? 'Seleccione un lote de la lista.' : 'Ingrese el número de lote.'); return; }
     if (!qty || qty < 1) { showFormError('mi-err', 'La cantidad debe ser mayor a cero.'); return; }
+
+    // ── CAMBIO DE UBICACIÓN ── Validaciones y armado de ítem
+    if (tipo === 'CambioUbicacion') {
+        const bodegaSel = (document.getElementById('md-bodega')?.value || '').trim();
+        if (!bodegaSel) { showFormError('mi-err', 'Seleccione primero la bodega.'); return; }
+        const ubicOrigen = (document.getElementById('mi-ubic')?.value || '').trim();
+        const ubicDest   = (document.getElementById('mi-ubic-dest')?.value || '').trim();
+        if (!ubicOrigen) { showFormError('mi-err', 'Seleccione la ubicación origen del lote.'); return; }
+        if (!ubicDest)   { showFormError('mi-err', 'Indique la nueva ubicación destino.'); return; }
+        if (ubicOrigen === ubicDest) { showFormError('mi-err', 'La ubicación destino debe ser distinta a la origen.'); return; }
+        const stock = calcStock();
+        const origenEntry = Object.values(stock).find(s =>
+            s.sku === sku && s.lote === lote && s.bodega === bodegaSel && (s.ubicacion||'') === ubicOrigen);
+        if (!origenEntry || origenEntry.cantidad <= 0) {
+            showFormError('mi-err', `Sin stock en la ubicación origen ${ubicOrigen} para el lote ${lote}.`); return;
+        }
+        const st = getLoteStatus(origenEntry);
+        if (st !== 'Aprobado') {
+            showFormError('mi-err', `El lote está en estado "${st}". Sólo se pueden reubicar lotes Aprobados.`); return;
+        }
+        const enDoc = movDocItems
+            .filter(i => i.sku === sku && i.lote === lote && (i.ubicacionOrigen||'') === ubicOrigen)
+            .reduce((a, i) => a + i.qty, 0);
+        if (qty + enDoc > origenEntry.cantidad) {
+            showFormError('mi-err', `Stock insuficiente en origen. Disponible: ${origenEntry.cantidad}. Ya en documento: ${enDoc}. Máximo: ${origenEntry.cantidad - enDoc}.`);
+            return;
+        }
+        const prod = data.productos[sku];
+        movDocItems.push({
+            sku, descripcion: prod?.descripcion || '', tipo: prod?.tipo || '',
+            lote, vence: origenEntry.vence || '', qty, precio: 0,
+            status: origenEntry.status || 'Aprobado',
+            ubicacion: ubicDest,
+            ubicacionOrigen: ubicOrigen
+        });
+        renderDocItems();
+        resetItemForm();
+        return;
+    }
 
     if (tipo === 'Entrada') {
         if (!vence) { showFormError('mi-err', 'La fecha de vencimiento es obligatoria para entradas.'); return; }
@@ -3328,6 +3439,9 @@ function renderDocItems() {
     const totalPrecio = movDocItems.reduce((a, i) => a + (i.precio * i.qty), 0);
     tb.innerHTML = movDocItems.map((item, idx) => {
         const palletTag = item.palletTotal ? ` · <span style="color:var(--accent2);font-weight:600">Pallet ${item.palletNum}/${item.palletTotal}</span>` : '';
+        const ubicCell = item.ubicacionOrigen
+            ? `<span style="color:var(--text3)">${item.ubicacionOrigen}</span> → <strong>${item.ubicacion||'—'}</strong>`
+            : (item.ubicacion||'—');
         return `<tr>
             <td class="text-mono" style="color:var(--accent2)">${item.sku}</td>
             <td>${item.descripcion||'—'}</td>
@@ -3336,7 +3450,7 @@ function renderDocItems() {
             <td style="font-weight:600;color:var(--text)">${item.qty}</td>
             <td>${item.precio > 0 ? '$' + item.precio.toLocaleString('es-CL') : '—'}</td>
             <td>${statusBadgeHTML(item.status || 'Aprobado')}</td>
-            <td style="font-size:11px;color:var(--text2)">${(item.ubicacion||'—') + palletTag}</td>
+            <td style="font-size:11px;color:var(--text2)">${ubicCell + palletTag}</td>
             <td><button class="btn btn-sm btn-danger-sm" onclick="removeItemFromDoc(${idx})">✕</button></td>
         </tr>`;
     }).join('');
@@ -3346,7 +3460,7 @@ function renderDocItems() {
 }
 
 function resetItemForm() {
-    _clearFields('mi-sku','mi-desc','mi-vence','mi-qty','mi-precio','mi-ubic','mi-pallet-qty');
+    _clearFields('mi-sku','mi-desc','mi-vence','mi-qty','mi-precio','mi-ubic','mi-pallet-qty','mi-ubic-dest');
     document.getElementById('mi-lote-wrap').innerHTML = '<input type="text" class="form-input" id="mi-lote" placeholder="Número de lote">';
     const dist = document.getElementById('mi-pallet-dist'); if (dist) { dist.style.display = 'none'; dist.innerHTML = ''; }
     const info = document.getElementById('mi-sku-info'); if (info) info.style.display = 'none';
@@ -3378,18 +3492,20 @@ function saveDocumento() {
     const usuario = currentUser.email;
     const totalUnidades = movDocItems.reduce((a, i) => a + i.qty, 0);
 
+    const tipoLabel = tipo === 'CambioUbicacion' ? 'Cambio de Ubicación' : (tipo === 'Ajuste' ? 'Cambio de Status' : tipo);
+    const isCambioUbic = tipo === 'CambioUbicacion';
     const confirmBody = `
-        <strong>${tipo}: ${movDocItems.length} producto(s)</strong><br>
+        <strong>${tipoLabel}: ${movDocItems.length} producto(s)</strong><br>
         <span style="color:var(--text3)">Documento:</span> <strong>${documentoId}</strong><br>
         <span style="color:var(--text3)">Bodega:</span> ${bodega}<br>
-        <span style="color:var(--text3)">Proveedor/Destino:</span> ${proveedor||'—'}<br>
+        ${isCambioUbic ? '' : `<span style="color:var(--text3)">Proveedor/Destino:</span> ${proveedor||'—'}<br>`}
         <span style="color:var(--text3)">Total unidades:</span> <strong>${totalUnidades}</strong>`;
 
     showConfirm(
-        `Confirmar ${tipo}`,
+        `Confirmar ${tipoLabel}`,
         'Revise los datos antes de guardar',
         confirmBody,
-        `Guardar ${tipo}`,
+        `Guardar ${tipoLabel}`,
         tipo === 'Salida' ? 'btn-danger' : 'btn-primary',
         () => {
             _setBtnLoading('btn-save-doc', true); // I1: spinner
@@ -3412,6 +3528,7 @@ function saveDocumento() {
                     documentoId,
                     fechaDocumento: fechaDoc || ''
                 };
+                if (item.ubicacionOrigen) mov.ubicacionOrigen = item.ubicacionOrigen;
                 if (item.palletTotal) {
                     mov.palletNum = item.palletNum;
                     mov.palletTotal = item.palletTotal;
@@ -3470,7 +3587,10 @@ function generatePDF(docData) {
     doc.setFontSize(8); doc.setFont('helvetica', 'normal');
     doc.text('Sistema de Gestión de Almacén Farmacéutico · NT 147 BPA ISP Chile', textStartX, 17);
     doc.setFontSize(11); doc.setFont('helvetica', 'bold');
-    doc.text(`DOCUMENTO DE ${docData.tipo.toUpperCase()}`, pageW - margin, 11, { align: 'right' });
+    const tipoTituloPDF = docData.tipo === 'CambioUbicacion' ? 'CAMBIO DE UBICACIÓN'
+        : docData.tipo === 'Ajuste' ? 'CAMBIO DE STATUS'
+        : (docData.tipo||'').toUpperCase();
+    doc.text(`DOCUMENTO DE ${tipoTituloPDF}`, pageW - margin, 11, { align: 'right' });
     doc.setFontSize(9); doc.setFont('helvetica', 'normal');
     doc.text(docData.documentoId, pageW - margin, 17, { align: 'right' });
 
@@ -3486,8 +3606,11 @@ function generatePDF(docData) {
         doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.text(label, x, yPos);
         doc.setFont('helvetica', 'normal'); doc.text(String(value||'—'), x + (lw||28), yPos);
     };
+    const tipoEtq = docData.tipo === 'CambioUbicacion' ? 'Cambio de Ubicación'
+        : docData.tipo === 'Ajuste' ? 'Cambio de Status'
+        : docData.tipo;
     addInfo('N° Documento:', docData.documentoId, margin, y, 35);
-    addInfo('Tipo:', docData.tipo, col2, y, 15);
+    addInfo('Tipo:', tipoEtq, col2, y, 15);
     y += 6;
     addInfo('Fecha registro:', new Date(docData.fecha).toLocaleString('es-CL'), margin, y, 35);
     addInfo('Fecha documento:', docData.fechaDoc ? fmtDate(docData.fechaDoc) : '—', col2, y, 38);
@@ -3543,7 +3666,10 @@ function generatePDF(docData) {
                 uVenta,
                 item.precio > 0 ? '$' + item.precio.toLocaleString('es-CL') : '—'
             ];
-            return esSalida ? base : base.concat([item.status || 'Aprobado', item.ubicacion || '—']);
+            const ubicTxt = item.ubicacionOrigen
+                ? `${item.ubicacionOrigen} → ${item.ubicacion || '—'}`
+                : (item.ubicacion || '—');
+            return esSalida ? base : base.concat([item.status || 'Aprobado', ubicTxt]);
         }),
         theme: 'striped',
         headStyles: { fillColor: [8, 84, 160], textColor: 255, fontSize: 7, fontStyle: 'bold' },
@@ -3662,7 +3788,7 @@ function regenerarPDF(documentoId) {
         bodega: ref.bodega || '',
         ubic: ref.ubicacion || '',
         obs: ref.observaciones || '',
-        items: movs.map(m => ({ sku: m.sku, descripcion: m.descripcion||'', tipo: m.tipoProducto || (data.productos[m.sku]?.tipo || ''), lote: m.lote, vence: m.vence||'', qty: m.cantidad, precio: m.precio||0, status: m.status||'', ubicacion: m.ubicacion||'' })),
+        items: movs.map(m => ({ sku: m.sku, descripcion: m.descripcion||'', tipo: m.tipoProducto || (data.productos[m.sku]?.tipo || ''), lote: m.lote, vence: m.vence||'', qty: m.cantidad, precio: m.precio||0, status: m.status||'', ubicacion: m.ubicacion||'', ubicacionOrigen: m.ubicacionOrigen||'' })),
         usuario: ref.usuario || '',
         usuarioPerfil: perfilRegen,
         usuarioUid: uidRegen
@@ -3792,7 +3918,11 @@ function renderMovimientos() {
     // Track which documentoIds already have a PDF button rendered to avoid duplicates
     const pdfRendered = new Set();
     tb.innerHTML = rows.map(m => {
-        const tC = m.tipo === 'Entrada' ? 'badge-success' : m.tipo === 'Salida' ? 'badge-danger' : m.tipo === 'Destrucción' ? 'badge-danger' : m.tipo === 'CambioEstado' ? 'badge-gray' : 'badge-warning';
+        const tC = m.tipo === 'Entrada' ? 'badge-success' : m.tipo === 'Salida' ? 'badge-danger' : m.tipo === 'Destrucción' ? 'badge-danger' : m.tipo === 'CambioEstado' ? 'badge-gray' : m.tipo === 'CambioUbicacion' ? 'badge-gray' : 'badge-warning';
+        const tipoLabel = m.tipo === 'CambioUbicacion' ? 'Cambio de Ubicación' : m.tipo;
+        const ubicCell = m.ubicacionOrigen
+            ? `<span style="color:var(--text3)">${m.ubicacionOrigen}</span> → <strong>${m.ubicacion||'—'}</strong>`
+            : (m.ubicacion||'—');
         let pdfCell = '—';
         if (m.documentoId) {
             if (!pdfRendered.has(m.documentoId)) {
@@ -3804,14 +3934,14 @@ function renderMovimientos() {
         }
         return `<tr>
             <td class="text-mono" style="font-size:11px">${fmtDateTime(m.fecha)}</td>
-            <td><span class="badge ${tC}">${m.tipo}</span></td>
+            <td><span class="badge ${tC}">${tipoLabel}</span></td>
             <td class="text-mono" style="color:var(--accent2)">${m.sku}</td>
             <td>${m.descripcion||'—'}</td>
             <td class="text-mono" style="font-size:11px">${m.lote||'—'}</td>
             <td>${m.vence ? fmtDate(m.vence) : '—'}</td>
             <td style="font-weight:600;color:var(--text)">${m.cantidad}</td>
             <td>${m.bodega||'—'}</td>
-            <td>${m.ubicacion||'—'}</td>
+            <td style="font-size:11px">${ubicCell}</td>
             <td>${m.proveedor||'—'}</td>
             <td>${m.referencia||'—'}</td>
             <td>${statusBadgeHTML(m.status||'—')}</td>
@@ -3836,6 +3966,7 @@ function setStockView(mode) {
 
 function renderStock() {
     const fSKU    = (document.getElementById('fStockSKU')?.value||'').toLowerCase();
+    const fDesc   = (document.getElementById('fStockDesc')?.value||'').toLowerCase();
     const fLote   = (document.getElementById('fStockLote')?.value||'').toLowerCase();
     const fUbic   = (document.getElementById('fStockUbic')?.value||'').toLowerCase();
     const fStatus = document.getElementById('fStockStatus')?.value ?? 'Aprobado';
@@ -3853,8 +3984,10 @@ function renderStock() {
         const bMatch = selectedBodega === 'TOTAL' || s.bodega === selectedBodega;
         const st = getLoteStatus(s);
         const statusMatch = fStatus === '' || st === fStatus;
+        const desc = (prods[s.sku]?.descripcion||'').toLowerCase();
         return s.cantidad > 0 && bMatch && statusMatch &&
             s.sku.toLowerCase().includes(fSKU) &&
+            desc.includes(fDesc) &&
             (s.lote||'').toLowerCase().includes(fLote) &&
             (s.ubicacion||'').toLowerCase().includes(fUbic);
     });
@@ -3941,7 +4074,7 @@ function renderStock() {
 }
 
 function clearStockFilters() {
-    _clearFields('fStockSKU','fStockLote','fStockUbic');
+    _clearFields('fStockSKU','fStockDesc','fStockLote','fStockUbic');
     const sort = document.getElementById('fStockSort'); if(sort) sort.value = 'fefo';
     const status = document.getElementById('fStockStatus'); if(status) status.value = 'Aprobado';
     renderStock();
@@ -4983,6 +5116,8 @@ function resetMovModal() {
     const bodegaEl = document.getElementById('md-bodega'); if (bodegaEl) bodegaEl.value = '';
     const ubicWrap = document.getElementById('mi-ubic-wrap');
     if (ubicWrap) ubicWrap.innerHTML = '<input type="text" class="form-input" id="mi-ubic" placeholder="Ej: Estante A-1">';
+    const ubicDestWrap = document.getElementById('mi-ubic-dest-wrap');
+    if (ubicDestWrap) ubicDestWrap.innerHTML = '<input type="text" class="form-input" id="mi-ubic-dest" placeholder="Ej: Estante B-2">';
     const errEl = document.getElementById('movModal-err'); if (errEl) errEl.style.display = 'none';
     // Restaurar botón Guardar (puede haber quedado en estado loading tras guardar el documento previo)
     const saveBtn = document.getElementById('btn-save-doc');
