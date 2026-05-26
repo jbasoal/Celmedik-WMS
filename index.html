@@ -616,6 +616,10 @@
                 <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></span>
                 Movimientos
             </a>
+            <a class="nav-link" data-page="ajusteMov" id="nav-ajuste-mov" style="display:none">
+                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></span>
+                Ajuste Movimiento
+            </a>
             <a class="nav-link" data-page="cuarentena">
                 <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
                 Cuarentena
@@ -870,6 +874,31 @@
                                 <th>Fecha</th><th>Tipo</th><th>SKU</th><th>Descripción</th><th>Lote</th><th>Vence</th><th>Qty</th><th>Bodega</th><th>Ubicación</th><th>Proveedor/Cliente</th><th>Referencia</th><th>Status</th><th>Usuario</th><th>Obs.</th><th>PDF</th>
                             </tr></thead><tbody id="tMovimientos"><tr class="empty-row"><td colspan="15">No hay movimientos registrados</td></tr></tbody></table>
                         </div>
+                    </div>
+                </div>
+
+                <!-- ── AJUSTE MOVIMIENTO (solo perfil Maestro) ── -->
+                <div id="ajusteMov" class="page">
+                    <div class="card">
+                        <div class="card-header">
+                            <div>
+                                <div class="card-title">Ajuste de Movimiento</div>
+                                <div class="card-subtitle">Modificar movimientos previos · Solo perfil Maestro · Afecta stock y queda registrado en auditoría</div>
+                            </div>
+                        </div>
+                        <div class="alert-banner warning" style="margin-bottom:14px">
+                            <div class="alert-banner-icon">⚠</div>
+                            <div>
+                                <div class="alert-banner-title">Operación sensible</div>
+                                <div class="alert-banner-text">Las modificaciones a un movimiento previo se reflejarán inmediatamente en el stock, quedarán registradas en la auditoría y generarán un nuevo PDF con los datos finales.</div>
+                            </div>
+                        </div>
+                        <div class="filter-bar">
+                            <input type="text" class="form-input" id="ajMovRef" placeholder="N° de referencia / documento (ej: FAC-2024-001)" style="flex:1;max-width:360px" onkeydown="if(event.key==='Enter') buscarMovAjuste()">
+                            <button class="btn btn-primary btn-sm" onclick="buscarMovAjuste()">Buscar</button>
+                            <button class="btn btn-ghost btn-sm" onclick="limpiarAjusteMov()">Limpiar</button>
+                        </div>
+                        <div id="ajMovResults"></div>
                     </div>
                 </div>
 
@@ -1994,6 +2023,8 @@ function loadProfile() {
         }
         const navAjustes = document.getElementById('nav-ajustes');
         if (navAjustes) navAjustes.style.display = userPerfil === 'Maestro' ? '' : 'none';
+        const navAjusteMov = document.getElementById('nav-ajuste-mov');
+        if (navAjusteMov) navAjusteMov.style.display = userPerfil === 'Maestro' ? '' : 'none';
         const navAdmin = document.getElementById('nav-admin');
         if (navAdmin) navAdmin.style.display = userPerfil === 'Maestro' ? '' : 'none';
         const navTransporte = document.getElementById('nav-transporte');
@@ -2390,9 +2421,10 @@ function navigateTo(page) {
     if (pg) pg.classList.add('active');
     const lnk = document.querySelector(`.nav-link[data-page="${page}"]`);
     if (lnk) lnk.classList.add('active');
-    const titles = { dashboard:'Dashboard', productos:'Productos Maestro', stock:'Stock Actual', bodegas:'Bodegas', movimientos:'Movimientos', cuarentena:'Cuarentena', devoluciones:'Devoluciones', retiro:'Retiro de Mercado', ajustes:'Ajuste de Inventario', trazabilidad:'Trazabilidad de Lotes', alertas:'Alertas', reportes:'Reportes ISP', auditoria:'Auditoría', dashComercial:'Dashboard Comercial' };
+    const titles = { dashboard:'Dashboard', productos:'Productos Maestro', stock:'Stock Actual', bodegas:'Bodegas', movimientos:'Movimientos', ajusteMov:'Ajuste de Movimiento', cuarentena:'Cuarentena', devoluciones:'Devoluciones', retiro:'Retiro de Mercado', ajustes:'Ajuste de Inventario', trazabilidad:'Trazabilidad de Lotes', alertas:'Alertas', reportes:'Reportes ISP', auditoria:'Auditoría', dashComercial:'Dashboard Comercial' };
     document.getElementById('pageTitle').textContent = titles[page] || page;
     if (page === 'ajustes') { if (userPerfil !== 'Maestro') { navigateTo('dashboard'); return; } renderAjustes(); }
+    if (page === 'ajusteMov') { if (userPerfil !== 'Maestro') { navigateTo('dashboard'); return; } resetAjusteMov(); }
     if (page === 'admin')   { if (userPerfil !== 'Maestro') { navigateTo('dashboard'); return; } renderUsuarios(); loadDriveCfg(); }
     if (page === 'alertas') renderAlertas();
     if (page === 'auditoria') renderAuditoria();
@@ -3793,6 +3825,258 @@ function regenerarPDF(documentoId) {
         usuarioPerfil: perfilRegen,
         usuarioUid: uidRegen
     });
+}
+
+// ══ AJUSTE DE MOVIMIENTO (solo perfil Maestro) ══
+// Permite cargar un movimiento existente por N° de referencia/documento y modificar
+// sus campos. Al guardar: actualiza RTDB (con lo cual el stock se recalcula vía
+// listener), registra en auditoría qué cambió y regenera el PDF con datos finales.
+let _ajMovItems = [];   // [{ key, original, editado }, ...]
+let _ajMovHeader = null;
+
+function _ajmEsc(s) { return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function resetAjusteMov() {
+    _ajMovItems = [];
+    _ajMovHeader = null;
+    const inp = document.getElementById('ajMovRef'); if (inp) inp.value = '';
+    const c = document.getElementById('ajMovResults'); if (c) c.innerHTML = '';
+}
+
+function limpiarAjusteMov() { resetAjusteMov(); }
+
+function buscarMovAjuste() {
+    if (userPerfil !== 'Maestro') { alert('Solo el perfil Maestro puede ajustar movimientos.'); return; }
+    const refRaw = (document.getElementById('ajMovRef')?.value || '').trim();
+    const c = document.getElementById('ajMovResults');
+    if (!c) return;
+    if (!refRaw) {
+        c.innerHTML = '<div class="alert-banner warning" style="margin:8px 0"><div class="alert-banner-icon">⚠</div><div><div class="alert-banner-title">Ingrese un número de referencia</div><div class="alert-banner-text">Escriba el N° de documento o referencia del movimiento a ajustar.</div></div></div>';
+        return;
+    }
+    const refLc = refRaw.toLowerCase();
+    const entries = Object.entries(data.movimientos || {});
+    // 1) match exacto por documentoId, 2) por referencia, 3) contiene
+    let found = entries.filter(([,m]) => (m.documentoId||'') === refRaw);
+    if (!found.length) found = entries.filter(([,m]) => (m.referencia||'') === refRaw);
+    if (!found.length) found = entries.filter(([,m]) => ((m.documentoId||'')+'').toLowerCase().includes(refLc) || ((m.referencia||'')+'').toLowerCase().includes(refLc));
+    if (!found.length) {
+        c.innerHTML = `<div class="alert-banner danger" style="margin:8px 0"><div class="alert-banner-icon">✕</div><div><div class="alert-banner-title">No se encontraron movimientos</div><div class="alert-banner-text">No hay registros con referencia «${_ajmEsc(refRaw)}». Verifique el número y reintente.</div></div></div>`;
+        _ajMovItems = []; _ajMovHeader = null;
+        return;
+    }
+    const docs = Array.from(new Set(found.map(([,m]) => m.documentoId || ''))).filter(Boolean);
+    if (docs.length > 1) {
+        const opts = docs.map(d => `<button class="btn btn-sm" style="margin:3px" onclick="cargarMovAjuste('${d.replace(/'/g,"\\'")}')">${_ajmEsc(d)}</button>`).join('');
+        c.innerHTML = `<div class="alert-banner warning" style="margin:8px 0"><div class="alert-banner-icon">ℹ</div><div><div class="alert-banner-title">Se encontraron ${docs.length} documentos coincidentes</div><div class="alert-banner-text">Seleccione cuál desea ajustar:</div><div style="margin-top:8px">${opts}</div></div></div>`;
+        return;
+    }
+    cargarMovAjuste(docs[0] || (found[0][1].documentoId || ''));
+}
+
+function cargarMovAjuste(documentoId) {
+    if (userPerfil !== 'Maestro') return;
+    const c = document.getElementById('ajMovResults');
+    const entries = Object.entries(data.movimientos || {}).filter(([,m]) => (m.documentoId||'') === documentoId);
+    if (!entries.length) { if (c) c.innerHTML = '<div class="alert-banner danger" style="margin:8px 0"><div class="alert-banner-icon">✕</div><div><div class="alert-banner-title">Documento no encontrado</div><div class="alert-banner-text">No se hallaron registros asociados.</div></div></div>'; return; }
+    _ajMovItems = entries.map(([key, m]) => ({ key, original: { ...m }, editado: { ...m } }));
+    const ref0 = _ajMovItems[0].original;
+    _ajMovHeader = {
+        documentoId: ref0.documentoId,
+        tipo: ref0.tipo,
+        fecha: ref0.fecha,
+        usuario: ref0.usuario,
+        proveedor: ref0.proveedor || '',
+        referencia: ref0.referencia || '',
+        fechaDocumento: ref0.fechaDocumento || '',
+        bodega: ref0.bodega || '',
+        observaciones: ref0.observaciones || ''
+    };
+    renderAjusteMovUI();
+}
+
+function renderAjusteMovUI() {
+    const c = document.getElementById('ajMovResults');
+    if (!c || !_ajMovHeader) return;
+    const h = _ajMovHeader;
+    const tipoLabel = h.tipo === 'CambioUbicacion' ? 'Cambio de Ubicación' : (h.tipo === 'Ajuste' ? 'Cambio de Status' : h.tipo);
+    const bodegas = Object.values(data.bodegas || {}).map(b => b.nombre).filter(Boolean);
+    const bodegaOpts = ['<option value="">—</option>'].concat(bodegas.map(b => `<option value="${_ajmEsc(b)}" ${b===h.bodega?'selected':''}>${_ajmEsc(b)}</option>`)).join('');
+    const statusOpts = ['Aprobado','Cuarentena','Rechazado','Vencido','Retiro de mercado','Falsificado'];
+    const isCambioUbic = h.tipo === 'CambioUbicacion';
+
+    const headerHtml = `
+        <div class="card" style="margin-top:12px;background:var(--bg2)">
+            <div class="card-header"><div><div class="card-title" style="font-size:15px">Documento ${_ajmEsc(h.documentoId||'—')}</div><div class="card-subtitle">${_ajmEsc(tipoLabel||'—')} · Registrado por ${_ajmEsc(h.usuario||'—')} · ${_ajmEsc(fmtDateTime(h.fecha||''))}</div></div></div>
+            <div class="form-row">
+                <div class="form-group"><label class="form-label">N° Referencia / Factura</label><input type="text" class="form-input" id="ajm-h-ref" value="${_ajmEsc(h.referencia||'')}"></div>
+                <div class="form-group"><label class="form-label">Fecha del documento</label><input type="date" class="form-input" id="ajm-h-fechaDoc" value="${_ajmEsc((h.fechaDocumento||'').slice(0,10))}"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label class="form-label">Proveedor / Destinatario</label><input type="text" class="form-input" id="ajm-h-prov" value="${_ajmEsc(h.proveedor||'')}"></div>
+                <div class="form-group"><label class="form-label">Bodega</label><select class="form-select" id="ajm-h-bodega">${bodegaOpts}</select></div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Observaciones del documento</label>
+                <textarea class="form-textarea" id="ajm-h-obs" rows="2">${_ajmEsc(h.observaciones||'')}</textarea>
+            </div>
+        </div>
+    `;
+
+    const itemsHtml = `
+        <div class="card" style="margin-top:12px">
+            <div class="card-header"><div><div class="card-title" style="font-size:14px">Ítems del documento (${_ajMovItems.length})</div><div class="card-subtitle">Modifique los valores y luego presione «Guardar ajustes»</div></div></div>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr>
+                        <th>SKU</th><th>Descripción</th><th>Lote</th><th>Vencimiento</th><th>Cantidad</th><th>Precio unit.</th><th>Estatus</th><th>${isCambioUbic ? 'Ubicación origen → destino' : 'Ubicación'}</th><th>Observaciones</th>
+                    </tr></thead>
+                    <tbody>
+                    ${_ajMovItems.map((it, idx) => {
+                        const o = it.editado;
+                        const stOpts = statusOpts.map(s => `<option value="${s}" ${s===(o.status||'Aprobado')?'selected':''}>${s}</option>`).join('');
+                        const ubicCell = isCambioUbic
+                          ? `<input type="text" class="form-input" style="font-size:12px;width:110px;display:inline-block;margin-right:4px" value="${_ajmEsc(o.ubicacionOrigen||'')}" onchange="updAjMovField(${idx},'ubicacionOrigen',this.value)" placeholder="Origen">
+                             <input type="text" class="form-input" style="font-size:12px;width:110px;display:inline-block" value="${_ajmEsc(o.ubicacion||'')}" onchange="updAjMovField(${idx},'ubicacion',this.value)" placeholder="Destino">`
+                          : `<input type="text" class="form-input" style="font-size:12px;min-width:120px" value="${_ajmEsc(o.ubicacion||'')}" onchange="updAjMovField(${idx},'ubicacion',this.value)">`;
+                        return `<tr>
+                            <td class="text-mono" style="color:var(--accent2)">${_ajmEsc(o.sku||'')}</td>
+                            <td style="font-size:12px">${_ajmEsc(o.descripcion||'—')}</td>
+                            <td><input type="text" class="form-input" style="font-size:12px;min-width:90px" value="${_ajmEsc(o.lote||'')}" onchange="updAjMovField(${idx},'lote',this.value)"></td>
+                            <td><input type="date" class="form-input" style="font-size:12px" value="${_ajmEsc((o.vence||'').slice(0,10))}" onchange="updAjMovField(${idx},'vence',this.value)"></td>
+                            <td><input type="number" class="form-input" style="font-size:12px;width:80px" min="1" value="${_ajmEsc(o.cantidad||0)}" onchange="updAjMovField(${idx},'cantidad',this.value)"></td>
+                            <td><input type="number" class="form-input" style="font-size:12px;width:90px" min="0" step="0.01" value="${_ajmEsc(o.precio||0)}" onchange="updAjMovField(${idx},'precio',this.value)"></td>
+                            <td><select class="form-select" style="font-size:12px" onchange="updAjMovField(${idx},'status',this.value)">${stOpts}</select></td>
+                            <td>${ubicCell}</td>
+                            <td><input type="text" class="form-input" style="font-size:12px;min-width:140px" value="${_ajmEsc(o.observaciones||'')}" onchange="updAjMovField(${idx},'observaciones',this.value)"></td>
+                        </tr>`;
+                    }).join('')}
+                    </tbody>
+                </table>
+            </div>
+            <div class="btn-row" style="margin-top:12px">
+                <button type="button" class="btn btn-ghost" onclick="limpiarAjusteMov()">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btn-save-ajmov" onclick="confirmGuardarAjusteMov()">Guardar ajustes y regenerar PDF</button>
+            </div>
+        </div>
+    `;
+    c.innerHTML = headerHtml + itemsHtml;
+}
+
+function updAjMovField(idx, field, value) {
+    if (!_ajMovItems[idx]) return;
+    if (field === 'cantidad') value = parseInt(value) || 0;
+    else if (field === 'precio') value = parseFloat(value) || 0;
+    _ajMovItems[idx].editado[field] = value;
+}
+
+function _readAjMovHeaderFromForm() {
+    if (!_ajMovHeader) return;
+    _ajMovHeader.referencia     = document.getElementById('ajm-h-ref')?.value || '';
+    _ajMovHeader.fechaDocumento = document.getElementById('ajm-h-fechaDoc')?.value || '';
+    _ajMovHeader.proveedor      = document.getElementById('ajm-h-prov')?.value || '';
+    _ajMovHeader.bodega         = document.getElementById('ajm-h-bodega')?.value || '';
+    _ajMovHeader.observaciones  = document.getElementById('ajm-h-obs')?.value || '';
+}
+
+function _resumeCambiosAjMov() {
+    const out = [];
+    const h = _ajMovHeader || {};
+    const ref0 = _ajMovItems[0]?.original || {};
+    const headerFields = [
+        ['referencia','Referencia'],
+        ['fechaDocumento','Fecha doc.'],
+        ['proveedor','Proveedor/Destino'],
+        ['bodega','Bodega'],
+        ['observaciones','Observaciones']
+    ];
+    headerFields.forEach(([k, label]) => {
+        const before = (ref0[k]||'') + '';
+        const after  = (h[k]||'') + '';
+        if (before !== after) out.push(`${label}: «${before||'—'}» → «${after||'—'}»`);
+    });
+    _ajMovItems.forEach(it => {
+        ['lote','vence','cantidad','precio','status','ubicacion','ubicacionOrigen','observaciones'].forEach(k => {
+            const before = (it.original[k] ?? '') + '';
+            const after  = (it.editado[k] ?? '') + '';
+            if (before !== after) out.push(`SKU ${it.editado.sku} lote ${it.editado.lote||'—'} · ${k}: «${before||'—'}» → «${after||'—'}»`);
+        });
+    });
+    return out;
+}
+
+function confirmGuardarAjusteMov() {
+    if (userPerfil !== 'Maestro') { alert('Solo el perfil Maestro puede ajustar movimientos.'); return; }
+    if (!_ajMovItems.length || !_ajMovHeader) { alert('No hay un movimiento cargado.'); return; }
+    _readAjMovHeaderFromForm();
+    for (const it of _ajMovItems) {
+        const q = parseInt(it.editado.cantidad) || 0;
+        if (q <= 0) { alert(`La cantidad debe ser mayor a 0 (SKU ${it.editado.sku}).`); return; }
+        if (!it.editado.lote) { alert(`El lote es obligatorio (SKU ${it.editado.sku}).`); return; }
+    }
+    if (!_ajMovHeader.bodega) { alert('Debe indicar la bodega.'); return; }
+    const cambios = _resumeCambiosAjMov();
+    if (!cambios.length) { alert('No hay cambios para guardar.'); return; }
+    showConfirm(
+        'Confirmar ajuste de movimiento',
+        `Documento ${_ajMovHeader.documentoId}`,
+        `<div>Se aplicarán <strong>${cambios.length}</strong> cambio(s) sobre los registros del documento.</div>
+         <div style="margin-top:6px;max-height:200px;overflow:auto;font-size:12px;color:var(--text2);background:var(--bg2);padding:8px;border-radius:6px">
+            ${cambios.map(c => `• ${_ajmEsc(c)}`).join('<br>')}
+         </div>
+         <div style="margin-top:8px;font-size:12px;color:var(--text2)">El stock se recalculará automáticamente y se generará un nuevo PDF.</div>`,
+        'Guardar ajustes',
+        'btn-primary',
+        () => guardarAjusteMov()
+    );
+}
+
+function guardarAjusteMov() {
+    const uid = rootUid || currentUser.uid;
+    const h = _ajMovHeader;
+    const cambios = _resumeCambiosAjMov();
+    const updates = {};
+    _ajMovItems.forEach(it => {
+        const o = it.editado;
+        const merged = {
+            ...it.original,
+            lote: o.lote,
+            vence: o.vence || '',
+            cantidad: parseInt(o.cantidad) || 0,
+            precio: parseFloat(o.precio) || 0,
+            status: o.status || 'Aprobado',
+            ubicacion: o.ubicacion || '',
+            observaciones: o.observaciones || '',
+            proveedor: h.proveedor || '',
+            referencia: h.referencia || '',
+            fechaDocumento: h.fechaDocumento || '',
+            bodega: h.bodega || ''
+        };
+        if (it.original.tipo === 'CambioUbicacion') merged.ubicacionOrigen = o.ubicacionOrigen || '';
+        merged.ajustadoEn = new Date().toISOString();
+        merged.ajustadoPor = currentUser.email;
+        updates[`usuarios/${uid}/movimientos/${it.key}`] = merged;
+    });
+    _setBtnLoading('btn-save-ajmov', true);
+    db.ref().update(updates)
+        .then(() => {
+            // Auditoría: resumen general + una entrada por cada cambio (recortada si es grande)
+            logAudit('Ajuste Movimiento', 'Movimientos', `${_ajMovItems.length} ítems`, h.documentoId, `Cambios: ${cambios.length}`);
+            cambios.slice(0, 50).forEach(detalle => {
+                logAudit('Ajuste Movimiento (detalle)', 'Movimientos', '', h.documentoId, detalle);
+            });
+            _setBtnLoading('btn-save-ajmov', false, 'Guardar ajustes y regenerar PDF');
+            // Sincronizar memoria con valores guardados (para próximas modificaciones sin recargar)
+            _ajMovItems.forEach(it => { it.original = { ...updates[`usuarios/${uid}/movimientos/${it.key}`] }; });
+            // Regenerar PDF con los datos finales
+            try { regenerarPDF(h.documentoId); } catch(e) { console.warn('No se pudo regenerar PDF:', e); }
+            const c = document.getElementById('ajMovResults');
+            if (c) c.insertAdjacentHTML('afterbegin', '<div class="alert-banner success" style="margin:8px 0"><div class="alert-banner-icon">✓</div><div><div class="alert-banner-title">Ajuste aplicado</div><div class="alert-banner-text">Los cambios fueron guardados, el stock se recalcula automáticamente y se generó un nuevo PDF con la información final.</div></div></div>');
+        })
+        .catch(err => {
+            _setBtnLoading('btn-save-ajmov', false, 'Guardar ajustes y regenerar PDF');
+            alert('Error al guardar: ' + err.message);
+        });
 }
 
 // ══ INTEGRACIÓN GOOGLE DRIVE (via Apps Script Web App) ══
