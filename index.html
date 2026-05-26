@@ -900,6 +900,29 @@
                         </div>
                         <div id="ajMovResults"></div>
                     </div>
+
+                    <!-- Historial persistente de ajustes de movimiento -->
+                    <div class="card" style="margin-top:14px">
+                        <div class="card-header">
+                            <div>
+                                <div class="card-title">Historial de Ajustes de Movimiento</div>
+                                <div class="card-subtitle">Registro inmutable de cada ajuste realizado · trazabilidad NT 147</div>
+                            </div>
+                        </div>
+                        <div class="filter-bar">
+                            <input type="text" class="form-input" id="fAjMovHistRef" placeholder="Filtrar por referencia / documento..." onkeyup="renderAjustesMovHistorial()" style="max-width:280px">
+                            <input type="text" class="form-input" id="fAjMovHistUsr" placeholder="Filtrar por usuario..." onkeyup="renderAjustesMovHistorial()" style="max-width:220px">
+                            <button class="btn btn-ghost btn-sm" onclick="document.getElementById('fAjMovHistRef').value='';document.getElementById('fAjMovHistUsr').value='';renderAjustesMovHistorial()">Limpiar</button>
+                        </div>
+                        <div class="table-wrap">
+                            <table>
+                                <thead><tr>
+                                    <th>Fecha</th><th>Documento</th><th>Referencia</th><th>Tipo mov.</th><th>Bodega</th><th>Ítems</th><th>Cambios</th><th>Usuario</th><th>Detalle</th><th>PDF</th>
+                                </tr></thead>
+                                <tbody id="tAjMovHist"><tr class="empty-row"><td colspan="10">Sin ajustes registrados</td></tr></tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- ── CUARENTENA ── -->
@@ -1971,7 +1994,7 @@ function getStockFiltrado() {
     Object.entries(stock).forEach(([k, s]) => { if (s.bodega === bFija) out[k] = s; });
     return out;
 }
-let data = { productos:{}, bodegas:{}, movimientos:{}, cuarentena:{}, devoluciones:{}, auditoria:{} };
+let data = { productos:{}, bodegas:{}, movimientos:{}, cuarentena:{}, devoluciones:{}, auditoria:{}, ajustesMovimiento:{} };
 let selectedBodega = 'TOTAL';
 let movDocItems = [];
 
@@ -2424,7 +2447,7 @@ function navigateTo(page) {
     const titles = { dashboard:'Dashboard', productos:'Productos Maestro', stock:'Stock Actual', bodegas:'Bodegas', movimientos:'Movimientos', ajusteMov:'Ajuste de Movimiento', cuarentena:'Cuarentena', devoluciones:'Devoluciones', retiro:'Retiro de Mercado', ajustes:'Ajuste de Inventario', trazabilidad:'Trazabilidad de Lotes', alertas:'Alertas', reportes:'Reportes ISP', auditoria:'Auditoría', dashComercial:'Dashboard Comercial' };
     document.getElementById('pageTitle').textContent = titles[page] || page;
     if (page === 'ajustes') { if (userPerfil !== 'Maestro') { navigateTo('dashboard'); return; } renderAjustes(); }
-    if (page === 'ajusteMov') { if (userPerfil !== 'Maestro') { navigateTo('dashboard'); return; } resetAjusteMov(); }
+    if (page === 'ajusteMov') { if (userPerfil !== 'Maestro') { navigateTo('dashboard'); return; } resetAjusteMov(); renderAjustesMovHistorial(); }
     if (page === 'admin')   { if (userPerfil !== 'Maestro') { navigateTo('dashboard'); return; } renderUsuarios(); loadDriveCfg(); }
     if (page === 'alertas') renderAlertas();
     if (page === 'auditoria') renderAuditoria();
@@ -2439,12 +2462,13 @@ function attachListeners() {
     db.ref(`usuarios/${uid}/movimientos`).on('value', s => { data.movimientos = s.val()||{}; _invalidateStockCache(); _invalidateBodegaFijaLoteCache(); renderMovimientos(); renderStock(); updateStats(); });
     db.ref(`usuarios/${uid}/cuarentena`).on('value', s => { data.cuarentena = s.val()||{}; renderCuarentena(); updateStats(); });
     db.ref(`usuarios/${uid}/devoluciones`).on('value', s => { data.devoluciones = s.val()||{}; _invalidateStockCache(); _invalidateBodegaFijaLoteCache(); renderDevoluciones(); });
+    db.ref(`usuarios/${uid}/ajustesMovimiento`).on('value', s => { data.ajustesMovimiento = s.val()||{}; renderAjustesMovHistorial(); });
 }
 
 function detachListeners() {
     if (!currentUser) return;
     const uid = rootUid || currentUser.uid;
-    ['productos','bodegas','movimientos','cuarentena','devoluciones'].forEach(k => db.ref(`usuarios/${uid}/${k}`).off());
+    ['productos','bodegas','movimientos','cuarentena','devoluciones','ajustesMovimiento'].forEach(k => db.ref(`usuarios/${uid}/${k}`).off());
 }
 
 // ══ AUDIT LOG ══
@@ -4031,10 +4055,96 @@ function confirmGuardarAjusteMov() {
     );
 }
 
+function renderAjustesMovHistorial() {
+    const tb = document.getElementById('tAjMovHist');
+    if (!tb) return;
+    const fRef = (document.getElementById('fAjMovHistRef')?.value || '').toLowerCase();
+    const fUsr = (document.getElementById('fAjMovHistUsr')?.value || '').toLowerCase();
+    let rows = Object.entries(data.ajustesMovimiento || {}).map(([id, a]) => ({ id, ...a }));
+    if (fRef) rows = rows.filter(r => ((r.referencia||'')+' '+(r.documentoId||'')).toLowerCase().includes(fRef));
+    if (fUsr) rows = rows.filter(r => (r.usuario||'').toLowerCase().includes(fUsr));
+    rows.sort((a,b) => new Date(b.fecha) - new Date(a.fecha));
+    if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="10">Sin ajustes registrados</td></tr>'; return; }
+    tb.innerHTML = rows.map(r => {
+        const tipoLabel = r.tipoMovimiento === 'CambioUbicacion' ? 'Cambio de Ubicación' : (r.tipoMovimiento === 'Ajuste' ? 'Cambio de Status' : (r.tipoMovimiento||'—'));
+        return `<tr>
+            <td class="text-mono" style="font-size:11px">${_ajmEsc(fmtDateTime(r.fecha||''))}</td>
+            <td class="text-mono" style="font-size:11px">${_ajmEsc(r.documentoId||'—')}</td>
+            <td>${_ajmEsc(r.referencia||'—')}</td>
+            <td><span class="badge badge-blue" style="font-size:10px">${_ajmEsc(tipoLabel)}</span></td>
+            <td style="font-size:12px">${_ajmEsc(r.bodega||'—')}</td>
+            <td style="font-weight:600">${r.totalItems||0}</td>
+            <td style="font-weight:600;color:var(--accent2)">${r.totalCambios||0}</td>
+            <td style="font-size:11px;color:var(--text2)">${_ajmEsc(r.usuario||'—')}</td>
+            <td><button class="btn btn-sm btn-icon" style="font-size:10px" onclick="verDetalleAjusteMov('${r.id}')">Ver</button></td>
+            <td>${r.documentoId ? `<button class="btn btn-sm btn-icon" style="font-size:10px" onclick="regenerarPDF('${r.documentoId.replace(/'/g,"\\'")}')">PDF</button>` : '—'}</td>
+        </tr>`;
+    }).join('');
+}
+
+function verDetalleAjusteMov(id) {
+    const r = (data.ajustesMovimiento || {})[id];
+    if (!r) { alert('Registro de ajuste no encontrado.'); return; }
+    const hdr = r.cambiosHeader || {};
+    const items = r.cambiosItems || [];
+    const headerHtml = Object.keys(hdr).length
+        ? '<div style="font-weight:600;margin:6px 0 4px;font-size:12px">Cabecera</div>' +
+          Object.entries(hdr).map(([k,v]) => `<div style="font-size:12px;color:var(--text2)">• ${_ajmEsc(k)}: «${_ajmEsc(v.before||'—')}» → «${_ajmEsc(v.after||'—')}»</div>`).join('')
+        : '';
+    const itemsHtml = items.length
+        ? '<div style="font-weight:600;margin:10px 0 4px;font-size:12px">Ítems modificados</div>' +
+          items.map(it => `<div style="font-size:12px;color:var(--text2);margin-bottom:4px">
+              <strong style="color:var(--accent2)">${_ajmEsc(it.sku||'—')}</strong> · Lote ${_ajmEsc(it.lote||'—')}<br>
+              ${Object.entries(it.cambios||{}).map(([k,v]) => `&nbsp;&nbsp;◦ ${_ajmEsc(k)}: «${_ajmEsc((v.before??'')+'')}» → «${_ajmEsc((v.after??'')+'')}»`).join('<br>')}
+            </div>`).join('')
+        : '<div style="font-size:12px;color:var(--text3);margin-top:8px">Sin cambios de detalle registrados.</div>';
+    const body = `
+        <div style="font-size:12px">
+            <div><strong>Documento:</strong> ${_ajmEsc(r.documentoId||'—')}</div>
+            <div><strong>Referencia:</strong> ${_ajmEsc(r.referencia||'—')}</div>
+            <div><strong>Fecha:</strong> ${_ajmEsc(fmtDateTime(r.fecha||''))}</div>
+            <div><strong>Usuario:</strong> ${_ajmEsc(r.usuario||'—')} ${r.usuarioPerfil?`(${_ajmEsc(r.usuarioPerfil)})`:''}</div>
+            <div><strong>Total ítems:</strong> ${r.totalItems||0} · <strong>Cambios:</strong> ${r.totalCambios||0}</div>
+        </div>
+        <div style="max-height:340px;overflow:auto;background:var(--bg2);padding:10px;border-radius:6px;margin-top:8px">
+            ${headerHtml}
+            ${itemsHtml}
+        </div>
+    `;
+    showConfirm(
+        `Detalle del ajuste`,
+        `Documento ${r.documentoId||'—'}`,
+        body,
+        'Cerrar',
+        'btn-ghost',
+        () => {}
+    );
+}
+
+function _detalleCambiosPorItem() {
+    // Devuelve un arreglo con un objeto por ítem detallando before/after
+    return _ajMovItems.map(it => {
+        const o = it.editado, b = it.original;
+        const fields = ['lote','vence','cantidad','precio','status','ubicacion','ubicacionOrigen','observaciones'];
+        const diffs = {};
+        fields.forEach(k => {
+            const before = (b[k] ?? '');
+            const after  = (o[k] ?? '');
+            if ((before+'') !== (after+'')) diffs[k] = { before, after };
+        });
+        return { key: it.key, sku: o.sku||'', lote: o.lote||'', cambios: diffs };
+    }).filter(x => Object.keys(x.cambios).length > 0);
+}
+
 function guardarAjusteMov() {
     const uid = rootUid || currentUser.uid;
     const h = _ajMovHeader;
     const cambios = _resumeCambiosAjMov();
+    const detalle = _detalleCambiosPorItem();
+    const ref0 = _ajMovItems[0]?.original || {};
+    const fechaAjuste = new Date().toISOString();
+    const ajusteId = db.ref(`usuarios/${uid}/ajustesMovimiento`).push().key;
+
     const updates = {};
     _ajMovItems.forEach(it => {
         const o = it.editado;
@@ -4053,17 +4163,41 @@ function guardarAjusteMov() {
             bodega: h.bodega || ''
         };
         if (it.original.tipo === 'CambioUbicacion') merged.ubicacionOrigen = o.ubicacionOrigen || '';
-        merged.ajustadoEn = new Date().toISOString();
+        merged.ajustadoEn = fechaAjuste;
         merged.ajustadoPor = currentUser.email;
+        merged.ajusteId = ajusteId;
         updates[`usuarios/${uid}/movimientos/${it.key}`] = merged;
     });
+
+    // Registro persistente del ajuste (historial de Ajustes de Movimiento)
+    const cambiosHeader = {};
+    ['referencia','fechaDocumento','proveedor','bodega','observaciones'].forEach(k => {
+        const before = (ref0[k]||'') + '';
+        const after  = (h[k]||'') + '';
+        if (before !== after) cambiosHeader[k] = { before, after };
+    });
+    updates[`usuarios/${uid}/ajustesMovimiento/${ajusteId}`] = {
+        fecha: fechaAjuste,
+        usuario: currentUser.email,
+        usuarioPerfil: userPerfil || '',
+        documentoId: h.documentoId || '',
+        referencia: h.referencia || (ref0.referencia || ''),
+        tipoMovimiento: ref0.tipo || '',
+        bodega: h.bodega || '',
+        totalItems: _ajMovItems.length,
+        totalCambios: cambios.length,
+        cambiosHeader,
+        cambiosItems: detalle,
+        resumen: cambios.slice(0, 30)
+    };
+
     _setBtnLoading('btn-save-ajmov', true);
     db.ref().update(updates)
         .then(() => {
             // Auditoría: resumen general + una entrada por cada cambio (recortada si es grande)
-            logAudit('Ajuste Movimiento', 'Movimientos', `${_ajMovItems.length} ítems`, h.documentoId, `Cambios: ${cambios.length}`);
-            cambios.slice(0, 50).forEach(detalle => {
-                logAudit('Ajuste Movimiento (detalle)', 'Movimientos', '', h.documentoId, detalle);
+            logAudit('Ajuste Movimiento', 'Movimientos', `${_ajMovItems.length} ítems`, h.documentoId, `Ref: ${h.referencia||'—'} · Cambios: ${cambios.length} · ajusteId=${ajusteId}`);
+            cambios.slice(0, 50).forEach(d => {
+                logAudit('Ajuste Movimiento (detalle)', 'Movimientos', '', h.documentoId, d);
             });
             _setBtnLoading('btn-save-ajmov', false, 'Guardar ajustes y regenerar PDF');
             // Sincronizar memoria con valores guardados (para próximas modificaciones sin recargar)
@@ -4071,7 +4205,8 @@ function guardarAjusteMov() {
             // Regenerar PDF con los datos finales
             try { regenerarPDF(h.documentoId); } catch(e) { console.warn('No se pudo regenerar PDF:', e); }
             const c = document.getElementById('ajMovResults');
-            if (c) c.insertAdjacentHTML('afterbegin', '<div class="alert-banner success" style="margin:8px 0"><div class="alert-banner-icon">✓</div><div><div class="alert-banner-title">Ajuste aplicado</div><div class="alert-banner-text">Los cambios fueron guardados, el stock se recalcula automáticamente y se generó un nuevo PDF con la información final.</div></div></div>');
+            if (c) c.insertAdjacentHTML('afterbegin', '<div class="alert-banner success" style="margin:8px 0"><div class="alert-banner-icon">✓</div><div><div class="alert-banner-title">Ajuste aplicado</div><div class="alert-banner-text">Los cambios fueron guardados, el stock se recalcula automáticamente, quedó registrado en el historial de ajustes y en auditoría, y se generó un nuevo PDF con la información final.</div></div></div>');
+            // El listener de ajustesMovimiento refrescará el historial automáticamente
         })
         .catch(err => {
             _setBtnLoading('btn-save-ajmov', false, 'Guardar ajustes y regenerar PDF');
