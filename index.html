@@ -2005,12 +2005,60 @@ let selectedBodega = 'TOTAL';
 let movDocItems = [];
 
 // ══ AUTH ══
+// Política de sesión:
+// - Persistencia NONE: el token vive sólo en memoria, no en localStorage.
+//   Cada recarga o nueva pestaña vuelve a la pantalla de login.
+// - Idle timeout 5 min con aviso a los 4:30 (ver _initIdleTracker).
+const SESSION_PERSISTENCE = firebase.auth.Auth.Persistence.NONE;
+let _sessionEndReason = '';
+
 document.addEventListener('DOMContentLoaded', () => {
     setupNav();
-    auth.onAuthStateChanged(u => {
-        if (u) { currentUser = u; loadProfile(); }
-        else { currentUser = null; detachListeners(); showScreen('login'); }
-    });
+    // Garantiza que la pantalla de login esté visible y oculta la app desde el
+    // primer paint, incluso si el SDK tarda en resolver la persistencia.
+    showScreen('login');
+    auth.setPersistence(SESSION_PERSISTENCE)
+        .then(() => { if (auth.currentUser) return auth.signOut(); })
+        .catch(()=>{})
+        .finally(() => {
+            auth.onAuthStateChanged(u => {
+                if (u) { currentUser = u; loadProfile(); _initIdleTracker(); }
+                else {
+                    _stopIdleTracker();
+                    currentUser = null;
+                    detachListeners();
+                    _resetAppMemoryState();
+                    showScreen('login');
+                    // Si la sesión expiró por inactividad u otro motivo, mostrarlo
+                    if (_sessionEndReason) {
+                        setLoginStatus('error', _sessionEndReason);
+                        _sessionEndReason = '';
+                    }
+                }
+            });
+        });
+});
+
+// Vuelve la app a un estado "limpio" para no exponer datos a otro usuario
+// que acceda al mismo navegador después de un logout.
+function _resetAppMemoryState() {
+    try {
+        data = { productos:{}, bodegas:{}, movimientos:{}, cuarentena:{}, devoluciones:{}, auditoria:{}, ajustesMovimiento:{} };
+        movDocItems = [];
+        userPerfil = null; rootUid = null;
+        _stockCache = null;
+        _ajMovItems = []; _ajMovHeader = null;
+        // Limpia campos del login para que el siguiente usuario no vea el correo previo
+        const e = document.getElementById('loginEmail'); if (e) e.value = '';
+        const p = document.getElementById('loginPassword'); if (p) p.value = '';
+        document.body.classList.remove('perfil-visualizador','perfil-operador','perfil-operador-bodega','perfil-farmaceutico','perfil-maestro');
+    } catch(_) {}
+}
+
+// Si la página se sirve desde el caché (bfcache) tras volver con el botón
+// "atrás" del navegador, forzar a re-evaluar la sesión.
+window.addEventListener('pageshow', e => {
+    if (e.persisted) { try { auth.signOut(); } catch(_) {} }
 });
 
 function loadProfile() {
@@ -2062,6 +2110,11 @@ function loadProfile() {
         showScreen('app');
         attachListeners();
         _initResponsive(); // D1
+        // Auditoría de acceso (no bloqueante)
+        try {
+            const ua = (navigator.userAgent || '').slice(0, 100);
+            logAudit('Inicio sesión', 'Auth', '', '', `Acceso exitoso · ${ua}`);
+        } catch(_) {}
     });
 }
 
@@ -2088,13 +2141,24 @@ function showScreen(which) {
     document.getElementById('appScreen').classList.toggle('active', which === 'app');
 }
 
+let _failedLoginAttempts = 0;
 function handleLogin(e) {
     e.preventDefault();
     const email = document.getElementById('loginEmail').value;
     const pass = document.getElementById('loginPassword').value;
     setLoginStatus('', '');
-    auth.signInWithEmailAndPassword(email, pass)
-        .catch(err => setLoginStatus('error', translateError(err.code)));
+    // Asegurar persistencia NONE incluso si setPersistence anterior falló
+    auth.setPersistence(SESSION_PERSISTENCE)
+        .catch(()=>{})
+        .then(() => auth.signInWithEmailAndPassword(email, pass))
+        .then(() => { _failedLoginAttempts = 0; })
+        .catch(err => {
+            _failedLoginAttempts++;
+            const extra = _failedLoginAttempts >= 3 ? ` (intentos fallidos: ${_failedLoginAttempts})` : '';
+            setLoginStatus('error', (translateError(err.code) || 'Error de autenticación') + extra);
+            // Limpia la contraseña ingresada para evitar reintentos accidentales
+            const pwEl = document.getElementById('loginPassword'); if (pwEl) pwEl.value = '';
+        });
 }
 
 function handleRegister() {
@@ -2178,7 +2242,71 @@ function handleRegisterAdmin() {
         .finally(() => { if (btn) btn.disabled = false; });
 }
 
-function handleLogout() { detachListeners(); auth.signOut(); }
+function handleLogout(reason) {
+    try { logAudit('Cierre sesión', 'Auth', '', '', reason || 'Cierre manual'); } catch(_) {}
+    _stopIdleTracker();
+    detachListeners();
+    if (reason) _sessionEndReason = reason;
+    auth.signOut();
+}
+
+// ══ IDLE TIMEOUT ══
+// La sesión expira tras 5 minutos sin actividad. A los 4:30 se muestra un
+// modal de aviso con botón «Continuar conectado» que reinicia el contador.
+const IDLE_LIMIT_MS    = 5 * 60 * 1000;
+const IDLE_WARNING_MS  = 30 * 1000;
+let _idleTimer = null, _idleWarnTimer = null, _idleListenersAttached = false;
+
+function _idleActivityHandler() { _resetIdleTimer(); }
+
+function _resetIdleTimer() {
+    if (!currentUser) return;
+    if (_idleTimer)     clearTimeout(_idleTimer);
+    if (_idleWarnTimer) clearTimeout(_idleWarnTimer);
+    // Si el aviso estaba mostrándose y el usuario movió el mouse, ciérralo
+    const cm = document.getElementById('confirmModal');
+    if (cm && cm.classList.contains('active') && cm.dataset.idleWarn === '1') {
+        cm.dataset.idleWarn = '';
+        try { closeModal('confirmModal'); } catch(_) {}
+    }
+    _idleWarnTimer = setTimeout(_showIdleWarning, IDLE_LIMIT_MS - IDLE_WARNING_MS);
+    _idleTimer     = setTimeout(() => handleLogout('Sesión cerrada por inactividad (5 minutos sin actividad).'), IDLE_LIMIT_MS);
+}
+
+function _showIdleWarning() {
+    if (!currentUser) return;
+    showConfirm(
+        'Sesión por expirar',
+        'Inactividad detectada',
+        '<div>Su sesión se cerrará en <strong>30 segundos</strong> por inactividad.<br>Pulse «Continuar conectado» para extender la sesión.</div>',
+        'Continuar conectado',
+        'btn-primary',
+        () => { _resetIdleTimer(); }
+    );
+    const cm = document.getElementById('confirmModal');
+    if (cm) cm.dataset.idleWarn = '1';
+}
+
+function _initIdleTracker() {
+    if (_idleListenersAttached) { _resetIdleTimer(); return; }
+    ['mousemove','mousedown','keydown','scroll','touchstart','click'].forEach(ev => {
+        document.addEventListener(ev, _idleActivityHandler, { passive: true });
+    });
+    _idleListenersAttached = true;
+    _resetIdleTimer();
+}
+
+function _stopIdleTracker() {
+    if (_idleTimer)     clearTimeout(_idleTimer);
+    if (_idleWarnTimer) clearTimeout(_idleWarnTimer);
+    _idleTimer = null; _idleWarnTimer = null;
+    // Cierra el aviso si quedó abierto
+    const cm = document.getElementById('confirmModal');
+    if (cm && cm.dataset.idleWarn === '1') {
+        cm.dataset.idleWarn = '';
+        try { closeModal('confirmModal'); } catch(_) {}
+    }
+}
 
 // ══ LISTADO Y VINCULACIÓN DE USUARIOS ══
 function _setUsrMsg(type, txt) {
