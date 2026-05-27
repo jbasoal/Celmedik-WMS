@@ -385,6 +385,11 @@
             align-items: center; justify-content: center; padding: 20px;
         }
         .modal.active { display: flex; animation: fadeIn 0.15s ease; }
+        /* El modal de confirmación debe quedar SIEMPRE encima de cualquier
+           otro modal (Movimiento, Ajuste, Destrucción, etc.) porque suele
+           abrirse mientras esos están activos. Antes quedaba oculto detrás
+           de los modales declarados más abajo en el DOM. */
+        #confirmModal { z-index: 1100; }
         .modal-box {
             background: var(--surface); border: 1px solid var(--border);
             border-radius: 10px; padding: 28px; max-width: 640px; width: 100%;
