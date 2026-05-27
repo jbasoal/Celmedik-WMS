@@ -3353,7 +3353,12 @@ function addItemToDoc() {
         if (!vence) { showFormError('mi-err', 'La fecha de vencimiento es obligatoria para entradas.'); return; }
         const vD = new Date(vence + 'T00:00:00'); const hoy = new Date(); hoy.setHours(0,0,0,0);
         if (vD < hoy) { showFormError('mi-err', 'La fecha de vencimiento no puede ser pasada para una entrada.'); return; }
-        if (!miUbic) { showFormError('mi-err', 'La ubicación es obligatoria para entradas.'); return; }
+        // Con Cantidad de Pallet > 1, la ubicación se asigna por pallet (validado más
+        // abajo). El campo único «mi-ubic» se oculta en ese caso, por lo que no debe
+        // exigirse aquí; de lo contrario se rechaza el ingreso aunque cada pallet
+        // tenga su ubicación asignada.
+        const _palCount = parseInt(document.getElementById('mi-pallet-qty')?.value) || 1;
+        if (_palCount <= 1 && !miUbic) { showFormError('mi-err', 'La ubicación es obligatoria para entradas.'); return; }
     }
 
     // Estatus: obligatorio para Entrada y Ajuste
