@@ -2192,8 +2192,13 @@ function handleRegisterAdmin() {
 
     if (!email || !pass || !perfil) { setMsg('error', 'Complete todos los campos.'); return; }
     if (pass.length < 6) { setMsg('error', 'La contraseña debe tener al menos 6 caracteres.'); return; }
-    const perfilesValidos = ['Maestro', 'Farmacéutico', 'Operador', 'Operador Los Angeles', 'Operario Santiago', 'Visualizador'];
-    if (!perfilesValidos.includes(perfil)) { setMsg('error', 'Seleccione un perfil válido.'); return; }
+    const perfilesValidos = ['Farmacéutico', 'Operador', 'Operador Los Angeles', 'Operario Santiago', 'Visualizador', 'Transportista'];
+    if (!perfilesValidos.includes(perfil)) {
+        setMsg('error', perfil === 'Maestro'
+            ? 'Por seguridad, no se permite crear un Maestro directamente. Cree el usuario con perfil Operador/Farmacéutico y luego promuévalo desde el panel de Usuarios con «Cambiar perfil → Maestro».'
+            : 'Seleccione un perfil válido.');
+        return;
+    }
 
     if (btn) btn.disabled = true;
     setMsg('', '');
@@ -2345,7 +2350,7 @@ function renderUsuarios() {
             })
             .sort((a, b) => (a[1].email || a[0]).localeCompare(b[1].email || b[0]));
         if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="5">Sin usuarios</td></tr>'; return; }
-        const perfilOpts = (sel) => ['Farmacéutico','Operador','Operador Los Angeles','Operario Santiago','Visualizador']
+        const perfilOpts = (sel) => ['Farmacéutico','Operador','Operador Los Angeles','Operario Santiago','Visualizador','Maestro']
             .map(p => `<option value="${p}"${sel===p?' selected':''}>${p}</option>`).join('');
         tb.innerHTML = rows.map(([uid, u]) => {
             const esPropio   = uid === miUid;
@@ -2399,7 +2404,12 @@ function asignarPerfilYVincular(uid) {
     const sel = document.getElementById('perfilSel_' + uid);
     if (!sel) return;
     const perfil = sel.value;
-    if (!['Farmacéutico','Operador','Operador Los Angeles','Operario Santiago','Visualizador'].includes(perfil)) { _setUsrMsg('error','Seleccione un perfil válido.'); return; }
+    if (!['Farmacéutico','Operador','Operador Los Angeles','Operario Santiago','Visualizador'].includes(perfil)) {
+        _setUsrMsg('error', perfil === 'Maestro'
+            ? 'Para crear un Maestro: primero asígnelo como Operador/Farmacéutico y luego promuévalo desde la tabla con «Cambiar perfil → Maestro».'
+            : 'Seleccione un perfil válido.');
+        return;
+    }
     if (!confirm(`¿Asignar perfil «${perfil}» y vincular este usuario a su cuenta Maestro?\n\nPodrá ver los datos según los permisos del perfil asignado.`)) return;
     db.ref(`usuarios/${uid}`).update({ perfil: perfil, maestroUid: currentUser.uid })
         .then(() => {
@@ -2415,12 +2425,20 @@ function cambiarPerfil(uid) {
     const sel = document.getElementById('perfilSel_' + uid);
     if (!sel) return;
     const perfil = sel.value;
-    if (!['Farmacéutico','Operador','Operador Los Angeles','Operario Santiago','Visualizador'].includes(perfil)) { _setUsrMsg('error','Seleccione un perfil válido.'); return; }
-    if (!confirm(`¿Cambiar el perfil de este usuario a «${perfil}»?`)) return;
+    if (!['Farmacéutico','Operador','Operador Los Angeles','Operario Santiago','Visualizador','Maestro'].includes(perfil)) { _setUsrMsg('error','Seleccione un perfil válido.'); return; }
+    // Doble confirmación para promoción a Maestro: la operación es difícil de revertir
+    // y otorga acceso administrativo completo a la organización.
+    if (perfil === 'Maestro') {
+        if (!confirm('⚠ Va a otorgar el perfil MAESTRO a este usuario.\n\nEl usuario tendrá acceso administrativo completo: podrá crear y eliminar otros usuarios, editar movimientos, ver y modificar toda la información de la bodega.\n\n¿Está seguro de continuar?')) return;
+        const correo = prompt('Para confirmar, escriba la palabra MAESTRO (en mayúsculas):');
+        if (correo !== 'MAESTRO') { _setUsrMsg('error', 'Confirmación cancelada. No se otorgó el perfil Maestro.'); return; }
+    } else {
+        if (!confirm(`¿Cambiar el perfil de este usuario a «${perfil}»?`)) return;
+    }
     db.ref(`usuarios/${uid}/perfil`).set(perfil)
         .then(() => {
             _setUsrMsg('success', `✓ Perfil actualizado a «${perfil}».`);
-            logAudit('Modificar', 'Usuarios', uid, '', `perfil=${perfil}`);
+            logAudit('Modificar perfil', 'Usuarios', uid, '', `perfil=${perfil}` + (perfil === 'Maestro' ? ' · PROMOCIÓN A MAESTRO' : ''));
             renderUsuarios();
         })
         .catch(err => _setUsrMsg('error', 'Error: ' + err.message));
