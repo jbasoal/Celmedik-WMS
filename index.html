@@ -1556,7 +1556,7 @@
             <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">Cantidad <span style="color:var(--danger)">*</span></label>
-                    <input type="number" class="form-input" id="mi-qty" min="1" placeholder="0" oninput="_updPalletSum()">
+                    <input type="number" class="form-input" id="mi-qty" min="1" placeholder="0" oninput="_autoFillPalletsForSku(); _updPalletSum()">
                 </div>
                 <div class="form-group" id="mi-pallet-qty-group">
                     <label class="form-label">Cantidad de Pallet</label>
@@ -3166,6 +3166,59 @@ function populateUbicDestino() {
     }
 }
 
+// Tamaño de pallet por SKU (unidades/pallet). Si el SKU está en este mapa,
+// al ingresar la cantidad se calcula automáticamente la cantidad de pallets
+// y se prellena la distribución por ubicación (saldo en el último pallet).
+// Los campos generados siguen siendo editables manualmente.
+const PALLET_SIZE_BY_SKU = {
+    'A-001': 26, 'A-002': 26, 'A-003': 26, 'A-004': 26, 'A-005': 26,
+    'A-006': 26, 'A-007': 26, 'A-008': 26, 'A-009': 26, 'A-010': 26,
+    'B-001': 120
+};
+function _palletSizeForSku(sku) {
+    return PALLET_SIZE_BY_SKU[(sku||'').trim().toUpperCase()] || null;
+}
+
+// Calcula y prellena la distribución por pallet cuando el SKU está mapeado.
+// Conserva las ubicaciones previamente cargadas si la cantidad cambia y se
+// re-renderiza la grilla. Sólo aplica para Entrada/Salida.
+function _autoFillPalletsForSku() {
+    const sku = (document.getElementById('mi-sku')?.value || '').trim().toUpperCase();
+    const palletSize = _palletSizeForSku(sku);
+    if (!palletSize) return;
+    const tipo = document.getElementById('md-tipo')?.value || '';
+    if (tipo !== 'Entrada' && tipo !== 'Salida') return;
+    const qty = parseInt(document.getElementById('mi-qty')?.value) || 0;
+    if (qty <= 0) return;
+    const palletCount = Math.ceil(qty / palletSize);
+    const palletQtyEl = document.getElementById('mi-pallet-qty');
+    if (!palletQtyEl) return;
+    const prevCount = parseInt(palletQtyEl.value) || 1;
+    // Snapshot ubicaciones previas para preservarlas en el re-render
+    const ubicSnap = [];
+    for (let i = 1; i <= prevCount; i++) {
+        const el = document.getElementById(`mi-pal-ubic-${i}`);
+        if (el) ubicSnap[i] = el.value;
+    }
+    palletQtyEl.value = palletCount;
+    onMiPalletQtyChange();
+    // Distribuir cantidades: pallets completos + saldo al último
+    for (let i = 1; i < palletCount; i++) {
+        const inp = document.getElementById(`mi-pal-qty-${i}`);
+        if (inp) inp.value = palletSize;
+    }
+    const last = document.getElementById(`mi-pal-qty-${palletCount}`);
+    if (last) last.value = qty - (palletCount - 1) * palletSize;
+    // Restaurar ubicaciones que ya estaban
+    for (let i = 1; i <= palletCount; i++) {
+        if (ubicSnap[i]) {
+            const el = document.getElementById(`mi-pal-ubic-${i}`);
+            if (el) el.value = ubicSnap[i];
+        }
+    }
+    _updPalletSum();
+}
+
 function onMiSKUChange() {
     const sku = document.getElementById('mi-sku').value.trim().toUpperCase();
     document.getElementById('mi-sku').value = sku;
@@ -3189,6 +3242,9 @@ function onMiSKUChange() {
         if (descEl) descEl.value = '';
         info.style.display = 'none';
     }
+    // Si el SKU tiene tamaño de pallet definido y ya hay cantidad ingresada,
+    // calcular automáticamente la distribución por pallets.
+    _autoFillPalletsForSku();
 }
 
 function loadMiLotesDisponibles(sku) {
