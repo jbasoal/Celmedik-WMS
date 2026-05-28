@@ -790,7 +790,7 @@
                         <div class="card-header">
                             <div>
                                 <div class="card-title">Stock Actual</div>
-                                <div class="card-subtitle" id="stockSortSubtitle">Ordenado por FEFO — Vencimiento más próximo primero</div>
+                                <div class="card-subtitle" id="stockSortSubtitle">Ordenado por SKU — A a Z</div>
                             </div>
                         </div>
                         <div class="filter-bar" id="bodegaBtns">
@@ -811,8 +811,8 @@
                                 <option value="Falsificado">⛔ Falsificado</option>
                             </select>
                             <select class="form-select" id="fStockSort" onchange="renderStock()" style="width:auto;min-width:170px">
-                                <option value="fefo">Ordenar: FEFO</option>
                                 <option value="sku">Ordenar: SKU A-Z</option>
+                                <option value="fefo">Ordenar: FEFO</option>
                                 <option value="desc">Ordenar: Descripción A-Z</option>
                             </select>
                             <button class="btn btn-ghost btn-sm" onclick="clearStockFilters()">Limpiar</button>
@@ -821,6 +821,10 @@
                             <span class="filter-section-label">Vista:</span>
                             <button class="btn btn-sm" id="btnViewLote" onclick="setStockView('lote')" style="background:var(--accent);color:white;border-color:var(--accent)">Por Lote (FEFO)</button>
                             <button class="btn btn-sm btn-ghost" id="btnViewSKU" onclick="setStockView('sku')">Total por SKU</button>
+                            <span class="filter-section-label" style="margin-left:12px">Categoría:</span>
+                            <button class="btn btn-sm btn-ghost" id="btnCatMed" onclick="toggleStockCat('medicamento')">Medicamentos</button>
+                            <button class="btn btn-sm btn-ghost" id="btnCatConc" onclick="toggleStockCat('concentrado')">Concentrados</button>
+                            <button class="btn btn-sm btn-ghost" id="btnCatDisp" onclick="toggleStockCat('dispmed')">Disp. Med.</button>
                         </div>
                         <div class="table-wrap">
                             <table>
@@ -4681,6 +4685,37 @@ function renderMovimientos() {
 // ══ STOCK ══
 let stockViewMode = 'lote';
 
+// Filtros de categoría del stock (toggles independientes). Si ninguno está
+// activo se muestran todos los productos. Particionan el catálogo sin solape:
+//   concentrado → SKU en CONCENTRADO_SKUS (prioridad)
+//   medicamento → tipo "Medicamento" en el maestro y NO concentrado
+//   dispmed     → todo lo demás (el resto de los productos)
+const CONCENTRADO_SKUS = new Set(Object.keys(PALLET_SIZE_BY_SKU));
+let stockCatFilters = { medicamento: false, concentrado: false, dispmed: false };
+
+function _skuCategoria(sku, prods) {
+    if (CONCENTRADO_SKUS.has((sku||'').trim().toUpperCase())) return 'concentrado';
+    return (prods[sku]?.tipo || '') === 'Medicamento' ? 'medicamento' : 'dispmed';
+}
+
+function _refreshStockCatButtons() {
+    [['medicamento','btnCatMed'],['concentrado','btnCatConc'],['dispmed','btnCatDisp']].forEach(([k, id]) => {
+        const b = document.getElementById(id);
+        if (!b) return;
+        const on = stockCatFilters[k];
+        b.style.background  = on ? 'var(--accent2)' : '';
+        b.style.color       = on ? 'white' : '';
+        b.style.borderColor = on ? 'var(--accent2)' : '';
+        b.className = on ? 'btn btn-sm' : 'btn btn-sm btn-ghost';
+    });
+}
+
+function toggleStockCat(cat) {
+    stockCatFilters[cat] = !stockCatFilters[cat];
+    _refreshStockCatButtons();
+    renderStock();
+}
+
 function setStockView(mode) {
     stockViewMode = mode;
     const btnLote = document.getElementById('btnViewLote');
@@ -4717,6 +4752,11 @@ function renderStock() {
             (s.lote||'').toLowerCase().includes(fLote) &&
             (s.ubicacion||'').toLowerCase().includes(fUbic);
     });
+
+    // Filtro por categoría (toggles): si hay al menos uno activo, sólo se
+    // muestran las categorías seleccionadas. Aplica a vista por lote y por SKU.
+    const _anyCat = stockCatFilters.medicamento || stockCatFilters.concentrado || stockCatFilters.dispmed;
+    if (_anyCat) rows = rows.filter(s => stockCatFilters[_skuCategoria(s.sku, prods)]);
 
     // ── VISTA TOTAL POR SKU ──
     if (stockViewMode === 'sku') {
@@ -4801,8 +4841,10 @@ function renderStock() {
 
 function clearStockFilters() {
     _clearFields('fStockSKU','fStockDesc','fStockLote','fStockUbic');
-    const sort = document.getElementById('fStockSort'); if(sort) sort.value = 'fefo';
+    const sort = document.getElementById('fStockSort'); if(sort) sort.value = 'sku';
     const status = document.getElementById('fStockStatus'); if(status) status.value = 'Aprobado';
+    stockCatFilters = { medicamento: false, concentrado: false, dispmed: false };
+    _refreshStockCatButtons();
     renderStock();
 }
 
