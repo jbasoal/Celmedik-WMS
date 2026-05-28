@@ -942,13 +942,12 @@
                 <div id="cuarentena" class="page">
                     <div class="card">
                         <div class="card-header">
-                            <div><div class="card-title">Gestión de Cuarentena</div><div class="card-subtitle">Lotes bloqueados pendientes de liberación QA — NT 147</div></div>
-                            <button class="btn btn-primary btn-sm need-write" onclick="openModal('cuarModal')">+ Ingresar a cuarentena</button>
+                            <div><div class="card-title">Gestión de Cuarentena</div><div class="card-subtitle">Lotes en estado Cuarentena (ingresados por movimientos de Entrada) — pendientes de liberación QA · NT 147</div></div>
                         </div>
                         <div class="table-wrap">
                             <table><thead><tr>
-                                <th>Fecha ingreso</th><th>SKU</th><th>Descripción</th><th>Lote</th><th>Qty</th><th>Motivo</th><th>Responsable</th><th>Obs.</th><th>Status</th><th>Acciones</th>
-                            </tr></thead><tbody id="tCuarentena"><tr class="empty-row"><td colspan="10">No hay lotes en cuarentena</td></tr></tbody></table>
+                                <th>SKU</th><th>Descripción</th><th>Lote</th><th>Qty</th><th>Bodega</th><th>Ubicación</th><th>Vencimiento</th><th>Status</th><th>Acciones</th>
+                            </tr></thead><tbody id="tCuarentena"><tr class="empty-row"><td colspan="9">No hay lotes en cuarentena</td></tr></tbody></table>
                         </div>
                     </div>
                 </div>
@@ -1820,6 +1819,52 @@
     </div>
 </div>
 
+<!-- CAMBIO DE ESTATUS DESDE CUARENTENA -->
+<div id="cambioEstatusCuarModal" class="modal">
+    <div class="modal-box" style="max-width:480px">
+        <div class="modal-header">
+            <div><div class="modal-title">Cambiar estatus de lote en cuarentena</div><div class="modal-subtitle">Liberar (Aprobado) o Rechazar el lote — NT 147</div></div>
+            <button class="modal-close" onclick="closeModal('cambioEstatusCuarModal')">✕</button>
+        </div>
+        <div id="cec-err" class="form-error-banner"></div>
+        <div id="cec-info" style="margin-bottom:12px;padding:8px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;font-size:13px"></div>
+        <div class="form-group">
+            <label class="form-label">Nuevo estatus <span style="color:var(--danger)">*</span></label>
+            <select class="form-select" id="cec-status" onchange="_cecToggleMotivo()">
+                <option value="">Seleccionar...</option>
+                <option value="Aprobado">✓ Aprobado (liberar)</option>
+                <option value="Rechazado">✕ Rechazado</option>
+            </select>
+        </div>
+        <div class="form-group" id="cec-motivo-group" style="display:none">
+            <label class="form-label">Motivo del rechazo <span style="color:var(--danger)">*</span></label>
+            <select class="form-select" id="cec-motivo">
+                <option value="">Seleccionar...</option>
+                <option value="Contaminación">Contaminación</option>
+                <option value="Vencido">Vencido</option>
+                <option value="Daño físico">Daño físico</option>
+                <option value="Alerta ISP">Alerta ISP</option>
+                <option value="Temperatura inadecuada">Temperatura inadecuada</option>
+                <option value="Falsificado">Falsificado</option>
+                <option value="Retiro de mercado">Retiro de mercado</option>
+                <option value="Otro">Otro</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Responsable <span style="color:var(--danger)">*</span></label>
+            <input type="text" class="form-input" id="cec-resp" placeholder="Nombre del responsable">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Observaciones</label>
+            <textarea class="form-textarea" id="cec-obs" placeholder="Detalle adicional..."></textarea>
+        </div>
+        <div class="btn-row">
+            <button type="button" class="btn btn-ghost" onclick="closeModal('cambioEstatusCuarModal')">Cancelar</button>
+            <button type="button" class="btn btn-primary" onclick="confirmarCambioEstatusCuar()">Confirmar cambio</button>
+        </div>
+    </div>
+</div>
+
 <!-- DEVOLUCIÓN -->
 <div id="devModal" class="modal">
     <div class="modal-box">
@@ -2625,7 +2670,7 @@ function attachListeners() {
     const uid = rootUid || currentUser.uid;
     db.ref(`usuarios/${uid}/productos`).on('value', s => { data.productos = s.val()||{}; renderProductos(); updateStats(); renderStock(); });
     db.ref(`usuarios/${uid}/bodegas`).on('value', s => { data.bodegas = s.val()||{}; renderBodegas(); renderBodegaBtns(); updateBodegaSelect(); updateStats(); });
-    db.ref(`usuarios/${uid}/movimientos`).on('value', s => { data.movimientos = s.val()||{}; _invalidateStockCache(); _invalidateBodegaFijaLoteCache(); renderMovimientos(); renderStock(); updateStats(); });
+    db.ref(`usuarios/${uid}/movimientos`).on('value', s => { data.movimientos = s.val()||{}; _invalidateStockCache(); _invalidateBodegaFijaLoteCache(); renderMovimientos(); renderStock(); renderCuarentena(); updateStats(); });
     db.ref(`usuarios/${uid}/cuarentena`).on('value', s => { data.cuarentena = s.val()||{}; renderCuarentena(); updateStats(); });
     db.ref(`usuarios/${uid}/devoluciones`).on('value', s => { data.devoluciones = s.val()||{}; _invalidateStockCache(); _invalidateBodegaFijaLoteCache(); renderDevoluciones(); });
     db.ref(`usuarios/${uid}/ajustesMovimiento`).on('value', s => { data.ajustesMovimiento = s.val()||{}; renderAjustesMovHistorial(); });
@@ -2658,12 +2703,13 @@ function updateStats() {
         Object.values(data.movimientos||{}).forEach(m => { if ((m.bodega||'') === bFija) skusEnBodega.add(m.sku); });
         prods = skusEnBodega.size;
         movs  = Object.values(data.movimientos||{}).filter(m => (m.bodega||'') === bFija).length;
-        cuarCount = Object.values(data.cuarentena||{}).filter(q => q.status === 'Pendiente' && _matchBodegaFijaLote(q.sku, q.lote)).length;
     } else {
         prods = Object.keys(data.productos||{}).length;
         movs  = Object.keys(data.movimientos||{}).length;
-        cuarCount = Object.values(data.cuarentena||{}).filter(q => q.status === 'Pendiente').length;
     }
+    // Lotes en cuarentena = lotes con estado Cuarentena en el stock (stockMap ya viene
+    // filtrado por bodega fija cuando aplica).
+    cuarCount = Object.values(stockMap).filter(s => (parseInt(s.cantidad)||0) > 0 && getLoteStatus(s) === 'Cuarentena').length;
     const alertCount = calcAlertas().length;
 
     document.getElementById('st-productos').textContent = prods;
@@ -4915,28 +4961,124 @@ function saveCuarentena(e) {
         .catch(err => alert('Error: ' + err.message));
 }
 
+// ¿Es una categoría en la que el Operario (de su bodega) también puede cambiar
+// el estatus? Solo Concentrados y Dispositivos Médicos. Medicamentos,
+// Psicotrópicos e Insumos quedan reservados a Farmacéutico/Maestro.
+function _cuarPermisivoOperario(sku) {
+    if (CONCENTRADO_SKUS.has((sku||'').trim().toUpperCase())) return true;
+    return (data.productos[sku]?.tipo || '') === 'Dispositivo Médico';
+}
+
+// Determina si el perfil actual puede cambiar el estatus de un lote en cuarentena.
+function _puedeCambiarCuarentena(sku, bodega) {
+    if (userPerfil === 'Maestro' || userPerfil === 'Farmacéutico') return true;
+    if (isOperadorRole(userPerfil)) {
+        if (!_cuarPermisivoOperario(sku)) return false;
+        const bFija = bodegaFijaActual();
+        if (bFija && (bodega||'') !== bFija) return false; // solo su bodega
+        return true;
+    }
+    return false;
+}
+
 function renderCuarentena() {
     const tb = document.getElementById('tCuarentena');
+    if (!tb) return;
     const bFija = bodegaFijaActual();
-    let rows = Object.entries(data.cuarentena||{});
-    if (bFija) rows = rows.filter(([,q]) => _matchBodegaFijaLote(q.sku, q.lote));
-    rows = rows.sort((a, b) => new Date(b[1].fechaIngreso) - new Date(a[1].fechaIngreso));
-    if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="10">No hay lotes en cuarentena</td></tr>'; return; }
-    tb.innerHTML = rows.map(([id, q]) => `
-        <tr>
-            <td class="text-mono" style="font-size:11px">${fmtDate(q.fechaIngreso)}</td>
-            <td class="text-mono" style="color:var(--accent2)">${q.sku}</td>
-            <td>${q.descripcion||'—'}</td>
-            <td class="text-mono" style="font-size:11px">${q.lote}</td>
-            <td style="font-weight:600;color:var(--text)">${q.cantidad}</td>
-            <td>${q.motivo}</td>
-            <td>${q.responsable||'—'}</td>
-            <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.observaciones||'—'}</td>
-            <td><span class="badge ${q.status==='Liberado'?'badge-success':q.status==='Destruido'?'badge-danger':'badge-warning'}">${q.status}</span></td>
-            <td style="display:flex;gap:4px;flex-wrap:wrap">
-                ${(q.status==='Pendiente' && (userPerfil==='Maestro'||userPerfil==='Farmacéutico'))?`<button class="btn btn-sm btn-success-sm" onclick="liberarCuarentena('${id}')">✓ Liberar</button><button class="btn btn-sm btn-danger-sm" onclick="abrirRechazoCuarentena('${id}')">✕ Rechazar</button><button class="btn btn-sm btn-danger-sm" onclick="abrirDestruccionCuarentena('${id}')" style="background:rgba(107,47,190,0.1);color:var(--purple);border-color:rgba(107,47,190,0.3)">⚠ Destruir</button>`:''}
-            </td>
-        </tr>`).join('');
+    const stock = calcStock();
+    const prods = data.productos || {};
+    let entries = Object.values(stock).filter(s => (parseInt(s.cantidad)||0) > 0 && getLoteStatus(s) === 'Cuarentena');
+    if (bFija) entries = entries.filter(s => (s.bodega||'') === bFija);
+    // Agrupar por SKU + Lote + Bodega (sumando ubicaciones)
+    const groups = {};
+    entries.forEach(s => {
+        const k = `${s.sku}|${s.lote}|${s.bodega||''}`;
+        if (!groups[k]) groups[k] = { key:k, sku:s.sku, lote:s.lote, bodega:s.bodega||'', vence:s.vence||'', cantidad:0, ubicaciones:[] };
+        groups[k].cantidad += parseInt(s.cantidad)||0;
+        if (s.vence && (!groups[k].vence || s.vence < groups[k].vence)) groups[k].vence = s.vence;
+        groups[k].ubicaciones.push({ ubic: s.ubicacion||'—', qty: parseInt(s.cantidad)||0 });
+    });
+    const rows = Object.values(groups).sort((a, b) => a.sku.localeCompare(b.sku));
+    if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="9">No hay lotes en cuarentena</td></tr>'; return; }
+    tb.innerHTML = rows.map(g => {
+        const ubicCell = g.ubicaciones.slice().sort((a, b) => a.ubic.localeCompare(b.ubic)).map(u => `${u.ubic} (${u.qty})`).join(', ');
+        const accion = _puedeCambiarCuarentena(g.sku, g.bodega)
+            ? `<button class="btn btn-sm btn-primary" onclick="abrirCambioEstatusCuar('${encodeURIComponent(g.key)}')">Cambiar estatus</button>`
+            : `<span class="text-muted" style="font-size:11px">Sin permiso</span>`;
+        return `<tr>
+            <td class="text-mono" style="color:var(--accent2)">${g.sku}</td>
+            <td>${prods[g.sku]?.descripcion||'—'}</td>
+            <td class="text-mono" style="font-size:11px">${g.lote}</td>
+            <td style="font-weight:600;color:var(--text)">${g.cantidad}</td>
+            <td>${g.bodega||'—'}</td>
+            <td style="font-size:12px">${ubicCell||'—'}</td>
+            <td>${g.vence?fmtDate(g.vence):'—'}</td>
+            <td><span class="badge badge-warning">Cuarentena</span></td>
+            <td>${accion}</td>
+        </tr>`;
+    }).join('');
+}
+
+let _cuarChangeKey = null;
+function abrirCambioEstatusCuar(keyEnc) {
+    const key = decodeURIComponent(keyEnc);
+    const [sku, lote, bodega] = key.split('|');
+    if (!_puedeCambiarCuarentena(sku, bodega)) { alert('Su perfil no puede cambiar el estatus de este producto.'); return; }
+    _cuarChangeKey = key;
+    const stock = calcStock();
+    const grupo = Object.values(stock).filter(s => s.sku===sku && s.lote===lote && (s.bodega||'')===(bodega||'') && getLoteStatus(s)==='Cuarentena' && (parseInt(s.cantidad)||0)>0);
+    const total = grupo.reduce((a, s) => a + (parseInt(s.cantidad)||0), 0);
+    document.getElementById('cec-info').innerHTML = `SKU <strong>${sku}</strong> · Lote <strong>${lote}</strong> · Bodega <strong>${bodega||'—'}</strong> · <strong>${total}</strong> ud.`;
+    document.getElementById('cec-status').value = '';
+    document.getElementById('cec-motivo').value = '';
+    document.getElementById('cec-resp').value = '';
+    document.getElementById('cec-obs').value = '';
+    document.getElementById('cec-err').style.display = 'none';
+    _cecToggleMotivo();
+    openModal('cambioEstatusCuarModal');
+}
+
+function _cecToggleMotivo() {
+    const grp = document.getElementById('cec-motivo-group');
+    if (grp) grp.style.display = (document.getElementById('cec-status')?.value === 'Rechazado') ? '' : 'none';
+}
+
+function confirmarCambioEstatusCuar() {
+    const key = _cuarChangeKey; if (!key) return;
+    const [sku, lote, bodega] = key.split('|');
+    const nuevo  = document.getElementById('cec-status').value;
+    const motivo = document.getElementById('cec-motivo').value;
+    const resp   = document.getElementById('cec-resp').value.trim();
+    const obs    = document.getElementById('cec-obs').value.trim();
+    if (nuevo !== 'Aprobado' && nuevo !== 'Rechazado') { showFormError('cec-err', 'Seleccione el nuevo estatus.'); return; }
+    if (nuevo === 'Rechazado' && !motivo) { showFormError('cec-err', 'Seleccione el motivo del rechazo.'); return; }
+    if (!resp) { showFormError('cec-err', 'Ingrese el responsable.'); return; }
+    if (!_puedeCambiarCuarentena(sku, bodega)) { showFormError('cec-err', 'Su perfil no puede cambiar el estatus de este producto.'); return; }
+    const uid = rootUid || currentUser.uid;
+    const ahora = new Date().toISOString();
+    const stock = calcStock();
+    const grupo = Object.values(stock).filter(s => s.sku===sku && s.lote===lote && (s.bodega||'')===(bodega||'') && getLoteStatus(s)==='Cuarentena' && (parseInt(s.cantidad)||0)>0);
+    if (!grupo.length) { showFormError('cec-err', 'El lote ya no está en cuarentena.'); return; }
+    const detalle = nuevo === 'Rechazado'
+        ? `Rechazado desde cuarentena. Motivo: ${motivo}.${obs?' '+obs:''}`
+        : `Liberado de cuarentena → Aprobado.${obs?' '+obs:''}`;
+    const updates = {};
+    const ts0 = Date.now();
+    grupo.forEach((s, i) => {
+        updates[`usuarios/${uid}/movimientos/${ts0 + i}`] = {
+            tipo: 'CambioEstado', sku, lote,
+            descripcion: data.productos[sku]?.descripcion || '',
+            cantidad: parseInt(s.cantidad)||0, vence: s.vence || '',
+            status: nuevo, statusAnterior: 'Cuarentena',
+            bodega: s.bodega || '', ubicacion: s.ubicacion || '',
+            proveedor: resp, referencia: '',
+            observaciones: detalle,
+            fecha: ahora, usuario: currentUser.email
+        };
+    });
+    db.ref().update(updates)
+        .then(() => { logAudit('CambioEstado', 'Cuarentena', sku, lote, `Cuarentena → ${nuevo} · Resp: ${resp}`); closeModal('cambioEstatusCuarModal'); })
+        .catch(err => showFormError('cec-err', 'Error: ' + err.message));
 }
 
 function liberarCuarentena(id) {
