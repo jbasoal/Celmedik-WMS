@@ -137,6 +137,10 @@
         .form-select { cursor: pointer; appearance: auto; }
         .form-select option { background: var(--bg3); color: var(--text); }
         .form-textarea { resize: vertical; min-height: 72px; }
+        /* Quitar flechas (spinners) de inputs numéricos: solo ingreso por teclado */
+        .no-spinner::-webkit-outer-spin-button,
+        .no-spinner::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        .no-spinner { -moz-appearance: textfield; appearance: textfield; }
 
         /* ══════════════════════════════════════
            BUTTONS
@@ -1502,7 +1506,8 @@
             </div>
             <div class="form-group" id="md-numdoc-group">
                 <label class="form-label">N° Documento / Factura</label>
-                <input type="text" class="form-input" id="md-numdoc" placeholder="Ej: FAC-2024-001">
+                <input type="text" class="form-input" id="md-numdoc" placeholder="Ej: FAC-2024-001" oninput="_checkNumDocDup()" onblur="_checkNumDocDup()">
+                <div id="md-numdoc-warn" style="display:none;margin-top:6px;font-size:12px;font-weight:600;color:var(--warning,#B25E00);background:rgba(217,119,6,.12);border:1px solid rgba(217,119,6,.35);border-radius:6px;padding:6px 10px"></div>
             </div>
         </div>
         <!-- (campo de estado movido al formulario por ítem — mi-status-group) -->
@@ -1565,18 +1570,18 @@
             <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">Cantidad <span style="color:var(--danger)">*</span></label>
-                    <input type="number" class="form-input" id="mi-qty" min="1" placeholder="0" oninput="_autoFillPalletsForSku(); _updPalletSum()">
+                    <input type="number" class="form-input no-spinner" id="mi-qty" min="1" placeholder="0" onwheel="this.blur()" oninput="_autoFillPalletsForSku(); _updPalletSum()">
                 </div>
                 <div class="form-group" id="mi-pallet-qty-group">
                     <label class="form-label">Cantidad de Pallet</label>
-                    <input type="number" class="form-input" id="mi-pallet-qty" min="1" placeholder="1" oninput="onMiPalletQtyChange()">
+                    <input type="number" class="form-input no-spinner" id="mi-pallet-qty" min="1" placeholder="1" onwheel="this.blur()" oninput="onMiPalletQtyChange()">
                 </div>
             </div>
             <div id="mi-pallet-dist" style="display:none;margin-top:4px;margin-bottom:8px;padding:10px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:6px"></div>
             <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:8px">
                 <div class="form-group" id="mi-precio-group">
                     <label class="form-label">Precio unit. (opc.)</label>
-                    <input type="number" class="form-input" id="mi-precio" min="0" placeholder="0">
+                    <input type="number" class="form-input no-spinner" id="mi-precio" min="0" placeholder="0" onwheel="this.blur()">
                 </div>
                 <div class="form-group" id="mi-ubic-group" style="display:none">
                     <label class="form-label" id="mi-ubic-label">Ubicación</label>
@@ -3084,6 +3089,12 @@ function _refreshMiStatusField(tipo) {
     if (proveedorGroup) proveedorGroup.style.display = isCambioUbic ? 'none' : '';
     const despachoRow = document.getElementById('md-despacho-row');
     if (despachoRow) despachoRow.style.display = (tipo === 'Salida') ? '' : 'none';
+    // Fecha de despacho por defecto = hoy al elegir Salida (si está vacía)
+    if (tipo === 'Salida') {
+        const fdEl = document.getElementById('md-fecha-despacho');
+        if (fdEl && !fdEl.value) fdEl.value = new Date().toISOString().split('T')[0];
+    }
+    if (typeof _checkNumDocDup === 'function') _checkNumDocDup();
     if (miPrecioGroup)  miPrecioGroup.style.display  = isCambioUbic ? 'none' : '';
     if (miVenceGroup)   miVenceGroup.style.display   = (isCambioUbic || tipo === 'Salida') ? 'none' : '';
     if (miPalletGroup)  miPalletGroup.style.display  = isCambioUbic ? 'none' : '';
@@ -3750,6 +3761,35 @@ function resetItemForm() {
     _refreshMiStatusField(tipo);
 }
 
+// Busca movimientos previos que ya usaron este N° de documento (como referencia
+// o documentoId). Devuelve un resumen o null si no hay coincidencias.
+function _findDocDuplicado(numDoc) {
+    const n = (numDoc || '').trim().toLowerCase();
+    if (!n) return null;
+    const matches = Object.values(data.movimientos || {}).filter(m => {
+        const ref = (m.referencia || '').trim().toLowerCase();
+        const did = (m.documentoId || '').trim().toLowerCase();
+        return (ref && ref === n) || (did && did === n);
+    });
+    if (!matches.length) return null;
+    const tipos = Array.from(new Set(matches.map(m => m.tipo).filter(Boolean))).join(', ');
+    const fechas = matches.map(m => m.fecha).filter(Boolean).sort();
+    return { count: matches.length, tipos, ultima: fechas.length ? fechas[fechas.length - 1] : '' };
+}
+
+// Aviso en vivo bajo el campo N° Documento (solo Entrada/Salida).
+function _checkNumDocDup() {
+    const warnEl = document.getElementById('md-numdoc-warn');
+    if (!warnEl) return;
+    const tipo = document.getElementById('md-tipo')?.value || '';
+    const numDoc = document.getElementById('md-numdoc')?.value || '';
+    const dup = (tipo === 'Entrada' || tipo === 'Salida') ? _findDocDuplicado(numDoc) : null;
+    if (!dup) { warnEl.style.display = 'none'; warnEl.textContent = ''; return; }
+    const ultima = dup.ultima ? ` (último: ${fmtDate(dup.ultima.split('T')[0])})` : '';
+    warnEl.textContent = `⚠ El N° «${numDoc.trim()}» ya se usó en ${dup.count} movimiento(s) previo(s) [${dup.tipos}]${ultima}. Verifique que no esté duplicando.`;
+    warnEl.style.display = 'block';
+}
+
 function saveDocumento() {
     if (userPerfil === 'Visualizador') { alert('Su perfil es de solo lectura.'); return; }
     const tipo = document.getElementById('md-tipo').value;
@@ -3776,7 +3816,13 @@ function saveDocumento() {
 
     const tipoLabel = tipo === 'CambioUbicacion' ? 'Cambio de Ubicación' : (tipo === 'Ajuste' ? 'Cambio de Status' : tipo);
     const isCambioUbic = tipo === 'CambioUbicacion';
-    const confirmBody = `
+    const dupDoc = (tipo === 'Entrada' || tipo === 'Salida') ? _findDocDuplicado(numDoc) : null;
+    const dupBanner = dupDoc ? `
+        <div style="margin-bottom:10px;padding:8px 12px;border-radius:6px;background:rgba(217,119,6,.12);border:1px solid rgba(217,119,6,.4);color:#B25E00;font-weight:600">
+            ⚠ El N° «${documentoId}» ya se usó en ${dupDoc.count} movimiento(s) previo(s) [${dupDoc.tipos}]${dupDoc.ultima ? ` · último ${fmtDate(dupDoc.ultima.split('T')[0])}` : ''}.<br>
+            <span style="font-weight:500">Confirme solo si no se trata de un ingreso/salida duplicado.</span>
+        </div>` : '';
+    const confirmBody = dupBanner + `
         <strong>${tipoLabel}: ${movDocItems.length} producto(s)</strong><br>
         <span style="color:var(--text3)">Documento:</span> <strong>${documentoId}</strong><br>
         <span style="color:var(--text3)">Bodega:</span> ${bodega}<br>
@@ -5886,6 +5932,7 @@ function resetMovModal() {
     if (fechaEl) fechaEl.value = new Date().toISOString().split('T')[0];
     const fdEl = document.getElementById('md-fecha-despacho'); if (fdEl) fdEl.value = '';
     const fdRow = document.getElementById('md-despacho-row'); if (fdRow) fdRow.style.display = 'none';
+    const ndWarn = document.getElementById('md-numdoc-warn'); if (ndWarn) { ndWarn.style.display = 'none'; ndWarn.textContent = ''; }
     const bodegaEl = document.getElementById('md-bodega'); if (bodegaEl) bodegaEl.value = '';
     const ubicWrap = document.getElementById('mi-ubic-wrap');
     if (ubicWrap) ubicWrap.innerHTML = '<input type="text" class="form-input" id="mi-ubic" placeholder="Ej: Estante A-1">';
