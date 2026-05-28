@@ -3830,13 +3830,18 @@ function saveDocumento() {
                     _setBtnLoading('btn-save-doc', false, 'Finalizar y Guardar');
                     closeModal('movModal');
                     generatePDF(docData);
+                    // PDF adicional con detalle por ubicación (solo Salidas de Biodial
+                    // con SKUs palletizados A-001..A-010 o B-001).
+                    if (_requiereDetalleUbicacion(docData)) generatePDF(docData, { porUbicacion: true });
                 })
                 .catch(err => { _setBtnLoading('btn-save-doc', false, 'Finalizar y Guardar'); showFormError('movModal-err', 'Error al guardar: ' + err.message); });
         }
     );
 }
 
-function generatePDF(docData) {
+function generatePDF(docData, opts) {
+    opts = opts || {};
+    const porUbicacion = !!opts.porUbicacion; // PDF adicional con detalle por ubicación
     if (typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF) {
         alert('No se pudo cargar la librería PDF. Verifique su conexión a internet.');
         return;
@@ -3873,7 +3878,7 @@ function generatePDF(docData) {
         : (docData.tipo||'').toUpperCase();
     doc.text(`DOCUMENTO DE ${tipoTituloPDF}`, pageW - margin, 11, { align: 'right' });
     doc.setFontSize(9); doc.setFont('helvetica', 'normal');
-    doc.text(docData.documentoId, pageW - margin, 17, { align: 'right' });
+    doc.text(porUbicacion ? `${docData.documentoId} · DETALLE POR UBICACIÓN` : docData.documentoId, pageW - margin, 17, { align: 'right' });
 
     // Línea divisoria bajo el encabezado.
     doc.setDrawColor(180, 180, 180);
@@ -3915,13 +3920,60 @@ function generatePDF(docData) {
     // Tabla de productos
     y += 12;
     doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(29, 45, 62);
-    doc.text('DETALLE DE PRODUCTOS', margin, y);
+    doc.text(porUbicacion ? 'DETALLE DE PRODUCTOS POR UBICACIÓN' : 'DETALLE DE PRODUCTOS', margin, y);
     y += 2;
 
     const esSalida = docData.tipo === 'Salida';
+
+    // ── Variante "por ubicación" (PDF adicional para Salidas de Biodial) ──
+    // No se consolida por SKU+lote: se desglosa la cantidad por cada ubicación
+    // (cada pallet/posición es una línea), sumando duplicados de igual ubicación.
+    if (porUbicacion) {
+        const agg = {};
+        docData.items.forEach(it => {
+            const u = it.ubicacion || '—';
+            const k = `${it.sku}|${it.lote}|${u}`;
+            if (!agg[k]) agg[k] = { ...it, ubicacion: u, qty: 0 };
+            agg[k].qty += parseInt(it.qty) || 0;
+        });
+        const itemsUbic = Object.values(agg).sort((a, b) =>
+            a.sku.localeCompare(b.sku) || (a.lote||'').localeCompare(b.lote||'') || (a.ubicacion||'').localeCompare(b.ubicacion||''));
+        const headUbic = ['SKU', 'Descripción', 'Lote', 'Vencimiento', 'Ubicación', 'Cant.', 'U. Venta'];
+        doc.autoTable({
+            startY: y,
+            head: [headUbic],
+            body: itemsUbic.map(item => {
+                const uVenta = (data.productos && data.productos[item.sku] && data.productos[item.sku].unidadVenta) || '—';
+                return [
+                    item.sku,
+                    item.descripcion || '—',
+                    item.lote,
+                    item.vence ? fmtDate(item.vence) : '—',
+                    item.ubicacion || '—',
+                    String(item.qty),
+                    uVenta
+                ];
+            }),
+            theme: 'striped',
+            headStyles: { fillColor: [8, 84, 160], textColor: 255, fontSize: 7, fontStyle: 'bold' },
+            bodyStyles: { fontSize: 7, textColor: [29, 45, 62] },
+            alternateRowStyles: { fillColor: [245, 245, 245] },
+            columnStyles: {
+                0: { cellWidth: 20, fontStyle: 'bold' },
+                1: { cellWidth: 50 },
+                2: { cellWidth: 24 },
+                3: { cellWidth: 22 },
+                4: { cellWidth: 34, fontStyle: 'bold' },
+                5: { cellWidth: 16, halign: 'center' },
+                6: { cellWidth: 18, halign: 'center' }
+            },
+            margin: { left: margin, right: margin }
+        });
+        var itemsTabla = itemsUbic; // para el total al pie
+    } else {
     // En Salidas se consolidan los ítems por SKU+lote sumando cantidades,
     // y se omiten las columnas Estatus y Ubicación.
-    let itemsTabla = docData.items;
+    var itemsTabla = docData.items;
     if (esSalida) {
         const agg = {};
         docData.items.forEach(it => {
@@ -3982,6 +4034,7 @@ function generatePDF(docData) {
         },
         margin: { left: margin, right: margin }
     });
+    }
 
     y = doc.lastAutoTable.finalY + 8;
     const totalQty = itemsTabla.reduce((a, i) => a + (parseInt(i.qty)||0), 0);
@@ -4039,7 +4092,8 @@ function generatePDF(docData) {
         .replace(/[^a-zA-Z0-9._-]/g, '_') // sanitizar
         .slice(0, 24);
     const fechaSlug = new Date().toISOString().split('T')[0];
-    const filename = `${docData.tipo}_${docData.documentoId}_${userSlug}_${fechaSlug}.pdf`;
+    const sufijo = porUbicacion ? '_DETALLE_UBICACION' : '';
+    const filename = `${docData.tipo}_${docData.documentoId}_${userSlug}_${fechaSlug}${sufijo}.pdf`;
     doc.save(filename);
 
     // Subida automática a Google Drive: solo para Salidas y perfiles autorizados
@@ -4055,6 +4109,16 @@ function generatePDF(docData) {
     }
 }
 
+// ¿La salida debe generar el PDF adicional con detalle por ubicación?
+// Condición: tipo Salida + Bodega Celmedik Biodial + al menos un SKU objetivo
+// (A-001..A-010 o B-001 — los que usan distribución por pallet/ubicación).
+function _requiereDetalleUbicacion(docData) {
+    if (!docData || docData.tipo !== 'Salida') return false;
+    const bodega = (docData.bodega || '').toLowerCase();
+    if (!bodega.includes('biodial')) return false;
+    return (docData.items || []).some(it => _palletSizeForSku(it.sku));
+}
+
 function regenerarPDF(documentoId) {
     const movs = Object.values(data.movimientos || {}).filter(m => m.documentoId === documentoId);
     if (!movs.length) { alert('No se encontraron movimientos para este documento.'); return; }
@@ -4062,7 +4126,7 @@ function regenerarPDF(documentoId) {
     // Solo mostramos perfil/uid si quien regenera coincide con el usuario original del movimiento
     const perfilRegen = (ref.usuario && ref.usuario === currentUser.email) ? (userPerfil || '') : '';
     const uidRegen    = (ref.usuario && ref.usuario === currentUser.email) ? currentUser.uid : '';
-    generatePDF({
+    const docData = {
         documentoId,
         tipo: ref.tipo,
         numDoc: ref.referencia,
@@ -4077,7 +4141,10 @@ function regenerarPDF(documentoId) {
         usuario: ref.usuario || '',
         usuarioPerfil: perfilRegen,
         usuarioUid: uidRegen
-    });
+    };
+    generatePDF(docData);
+    // PDF adicional con detalle por ubicación (Salidas de Biodial con SKUs A-*/B-001)
+    if (_requiereDetalleUbicacion(docData)) generatePDF(docData, { porUbicacion: true });
 }
 
 // ══ AJUSTE DE MOVIMIENTO (solo perfil Maestro) ══
