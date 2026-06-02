@@ -4379,19 +4379,19 @@ function renderAjusteMovUI() {
                         const o = it.editado;
                         const stOpts = statusOpts.map(s => `<option value="${s}" ${s===(o.status||'Aprobado')?'selected':''}>${s}</option>`).join('');
                         const ubicCell = isCambioUbic
-                          ? `<input type="text" class="form-input" style="font-size:12px;width:110px;display:inline-block;margin-right:4px" value="${_ajmEsc(o.ubicacionOrigen||'')}" onchange="updAjMovField(${idx},'ubicacionOrigen',this.value)" placeholder="Origen">
-                             <input type="text" class="form-input" style="font-size:12px;width:110px;display:inline-block" value="${_ajmEsc(o.ubicacion||'')}" onchange="updAjMovField(${idx},'ubicacion',this.value)" placeholder="Destino">`
-                          : `<input type="text" class="form-input" style="font-size:12px;min-width:120px" value="${_ajmEsc(o.ubicacion||'')}" onchange="updAjMovField(${idx},'ubicacion',this.value)">`;
+                          ? `<input type="text" id="ajm-i-${idx}-ubicacionOrigen" class="form-input" style="font-size:12px;width:110px;display:inline-block;margin-right:4px" value="${_ajmEsc(o.ubicacionOrigen||'')}" oninput="updAjMovField(${idx},'ubicacionOrigen',this.value)" placeholder="Origen">
+                             <input type="text" id="ajm-i-${idx}-ubicacion" class="form-input" style="font-size:12px;width:110px;display:inline-block" value="${_ajmEsc(o.ubicacion||'')}" oninput="updAjMovField(${idx},'ubicacion',this.value)" placeholder="Destino">`
+                          : `<input type="text" id="ajm-i-${idx}-ubicacion" class="form-input" style="font-size:12px;min-width:120px" value="${_ajmEsc(o.ubicacion||'')}" oninput="updAjMovField(${idx},'ubicacion',this.value)">`;
                         return `<tr>
                             <td class="text-mono" style="color:var(--accent2)">${_ajmEsc(o.sku||'')}</td>
                             <td style="font-size:12px">${_ajmEsc(o.descripcion||'—')}</td>
-                            <td><input type="text" class="form-input" style="font-size:12px;min-width:90px" value="${_ajmEsc(o.lote||'')}" onchange="updAjMovField(${idx},'lote',this.value)"></td>
-                            <td><input type="date" class="form-input" style="font-size:12px" value="${_ajmEsc((o.vence||'').slice(0,10))}" onchange="updAjMovField(${idx},'vence',this.value)"></td>
-                            <td><input type="number" class="form-input" style="font-size:12px;width:80px" min="1" value="${_ajmEsc(o.cantidad||0)}" onchange="updAjMovField(${idx},'cantidad',this.value)"></td>
-                            <td><input type="number" class="form-input" style="font-size:12px;width:90px" min="0" step="0.01" value="${_ajmEsc(o.precio||0)}" onchange="updAjMovField(${idx},'precio',this.value)"></td>
-                            <td><select class="form-select" style="font-size:12px" onchange="updAjMovField(${idx},'status',this.value)">${stOpts}</select></td>
+                            <td><input type="text" id="ajm-i-${idx}-lote" class="form-input" style="font-size:12px;min-width:90px" value="${_ajmEsc(o.lote||'')}" oninput="updAjMovField(${idx},'lote',this.value)"></td>
+                            <td><input type="date" id="ajm-i-${idx}-vence" class="form-input" style="font-size:12px" value="${_ajmEsc((o.vence||'').slice(0,10))}" oninput="updAjMovField(${idx},'vence',this.value)"></td>
+                            <td><input type="number" id="ajm-i-${idx}-cantidad" class="form-input" style="font-size:12px;width:80px" min="1" value="${_ajmEsc(o.cantidad||0)}" oninput="updAjMovField(${idx},'cantidad',this.value)"></td>
+                            <td><input type="number" id="ajm-i-${idx}-precio" class="form-input" style="font-size:12px;width:90px" min="0" step="0.01" value="${_ajmEsc(o.precio||0)}" oninput="updAjMovField(${idx},'precio',this.value)"></td>
+                            <td><select id="ajm-i-${idx}-status" class="form-select" style="font-size:12px" onchange="updAjMovField(${idx},'status',this.value)">${stOpts}</select></td>
                             <td>${ubicCell}</td>
-                            <td><input type="text" class="form-input" style="font-size:12px;min-width:140px" value="${_ajmEsc(o.observaciones||'')}" onchange="updAjMovField(${idx},'observaciones',this.value)"></td>
+                            <td><input type="text" id="ajm-i-${idx}-observaciones" class="form-input" style="font-size:12px;min-width:140px" value="${_ajmEsc(o.observaciones||'')}" oninput="updAjMovField(${idx},'observaciones',this.value)"></td>
                         </tr>`;
                     }).join('')}
                     </tbody>
@@ -4426,6 +4426,36 @@ function _readAjMovHeaderFromForm() {
     }
 }
 
+// Lee los valores actuales de cada input del detalle directamente desde el DOM.
+// Necesario porque onchange/oninput pueden no haber actualizado el modelo si el
+// usuario presiona Guardar sin perder el foco del campo.
+function _readAjMovItemsFromForm() {
+    if (!_ajMovItems || !_ajMovItems.length) return;
+    _ajMovItems.forEach((it, idx) => {
+        const read = (field) => document.getElementById(`ajm-i-${idx}-${field}`)?.value;
+        const lote        = read('lote');        if (lote        !== undefined) it.editado.lote        = lote;
+        const vence       = read('vence');       if (vence       !== undefined) it.editado.vence       = vence;
+        const cantidad    = read('cantidad');    if (cantidad    !== undefined) it.editado.cantidad    = parseInt(cantidad) || 0;
+        const precio      = read('precio');      if (precio      !== undefined) it.editado.precio      = parseFloat(precio) || 0;
+        const status      = read('status');      if (status      !== undefined) it.editado.status      = status;
+        const ubicacion   = read('ubicacion');   if (ubicacion   !== undefined) it.editado.ubicacion   = ubicacion;
+        const ubicacionOrigen = read('ubicacionOrigen'); if (ubicacionOrigen !== undefined) it.editado.ubicacionOrigen = ubicacionOrigen;
+        const observaciones   = read('observaciones');   if (observaciones   !== undefined) it.editado.observaciones   = observaciones;
+    });
+}
+
+// Normaliza el valor de un campo para comparar antes/después. Las fechas se
+// recortan a YYYY-MM-DD para evitar falsos positivos por formato ISO vs date.
+function _ajmNormalizeField(k, v) {
+    if (v === null || v === undefined) return '';
+    if (k === 'vence' || k === 'fechaDocumento' || k === 'fechaDespacho') {
+        return ((v || '') + '').slice(0, 10);
+    }
+    if (k === 'cantidad') return String(parseInt(v) || 0);
+    if (k === 'precio')   return String(parseFloat(v) || 0);
+    return (v + '');
+}
+
 function _resumeCambiosAjMov() {
     const out = [];
     const h = _ajMovHeader || {};
@@ -4439,15 +4469,20 @@ function _resumeCambiosAjMov() {
         ['observaciones','Observaciones']
     ];
     headerFields.forEach(([k, label]) => {
-        const before = (ref0[k]||'') + '';
-        const after  = (h[k]||'') + '';
+        const before = _ajmNormalizeField(k, ref0[k]);
+        const after  = _ajmNormalizeField(k, h[k]);
         if (before !== after) out.push(`${label}: «${before||'—'}» → «${after||'—'}»`);
     });
+    const fieldLabels = {
+        lote: 'Lote', vence: 'Vencimiento', cantidad: 'Cantidad',
+        precio: 'Precio', status: 'Estatus', ubicacion: 'Ubicación',
+        ubicacionOrigen: 'Ubicación origen', observaciones: 'Observaciones'
+    };
     _ajMovItems.forEach(it => {
         ['lote','vence','cantidad','precio','status','ubicacion','ubicacionOrigen','observaciones'].forEach(k => {
-            const before = (it.original[k] ?? '') + '';
-            const after  = (it.editado[k] ?? '') + '';
-            if (before !== after) out.push(`SKU ${it.editado.sku} lote ${it.editado.lote||'—'} · ${k}: «${before||'—'}» → «${after||'—'}»`);
+            const before = _ajmNormalizeField(k, it.original[k]);
+            const after  = _ajmNormalizeField(k, it.editado[k]);
+            if (before !== after) out.push(`SKU ${it.editado.sku} lote ${it.editado.lote||'—'} · ${fieldLabels[k]||k}: «${before||'—'}» → «${after||'—'}»`);
         });
     });
     return out;
@@ -4457,6 +4492,7 @@ function confirmGuardarAjusteMov() {
     if (userPerfil !== 'Maestro') { alert('Solo el perfil Maestro puede ajustar movimientos.'); return; }
     if (!_ajMovItems.length || !_ajMovHeader) { alert('No hay un movimiento cargado.'); return; }
     _readAjMovHeaderFromForm();
+    _readAjMovItemsFromForm();
     for (const it of _ajMovItems) {
         const q = parseInt(it.editado.cantidad) || 0;
         if (q <= 0) { alert(`La cantidad debe ser mayor a 0 (SKU ${it.editado.sku}).`); return; }
@@ -4511,15 +4547,23 @@ function verDetalleAjusteMov(id) {
     if (!r) { alert('Registro de ajuste no encontrado.'); return; }
     const hdr = r.cambiosHeader || {};
     const items = r.cambiosItems || [];
+    const labels = {
+        lote: 'Lote', vence: 'Vencimiento', cantidad: 'Cantidad',
+        precio: 'Precio', status: 'Estatus', ubicacion: 'Ubicación',
+        ubicacionOrigen: 'Ubicación origen', observaciones: 'Observaciones',
+        referencia: 'Referencia', fechaDocumento: 'Fecha documento',
+        fechaDespacho: 'Fecha despacho', proveedor: 'Proveedor/Destino',
+        bodega: 'Bodega'
+    };
     const headerHtml = Object.keys(hdr).length
         ? '<div style="font-weight:600;margin:6px 0 4px;font-size:12px">Cabecera</div>' +
-          Object.entries(hdr).map(([k,v]) => `<div style="font-size:12px;color:var(--text2)">• ${_ajmEsc(k)}: «${_ajmEsc(v.before||'—')}» → «${_ajmEsc(v.after||'—')}»</div>`).join('')
+          Object.entries(hdr).map(([k,v]) => `<div style="font-size:12px;color:var(--text2)">• ${_ajmEsc(labels[k]||k)}: «${_ajmEsc(v.before||'—')}» → «${_ajmEsc(v.after||'—')}»</div>`).join('')
         : '';
     const itemsHtml = items.length
         ? '<div style="font-weight:600;margin:10px 0 4px;font-size:12px">Ítems modificados</div>' +
           items.map(it => `<div style="font-size:12px;color:var(--text2);margin-bottom:4px">
               <strong style="color:var(--accent2)">${_ajmEsc(it.sku||'—')}</strong> · Lote ${_ajmEsc(it.lote||'—')}<br>
-              ${Object.entries(it.cambios||{}).map(([k,v]) => `&nbsp;&nbsp;◦ ${_ajmEsc(k)}: «${_ajmEsc((v.before??'')+'')}» → «${_ajmEsc((v.after??'')+'')}»`).join('<br>')}
+              ${Object.entries(it.cambios||{}).map(([k,v]) => `&nbsp;&nbsp;◦ ${_ajmEsc(labels[k]||k)}: «${_ajmEsc((v.before??'')+'')}» → «${_ajmEsc((v.after??'')+'')}»`).join('<br>')}
             </div>`).join('')
         : '<div style="font-size:12px;color:var(--text3);margin-top:8px">Sin cambios de detalle registrados.</div>';
     const body = `
@@ -4552,9 +4596,9 @@ function _detalleCambiosPorItem() {
         const fields = ['lote','vence','cantidad','precio','status','ubicacion','ubicacionOrigen','observaciones'];
         const diffs = {};
         fields.forEach(k => {
-            const before = (b[k] ?? '');
-            const after  = (o[k] ?? '');
-            if ((before+'') !== (after+'')) diffs[k] = { before, after };
+            const before = _ajmNormalizeField(k, b[k]);
+            const after  = _ajmNormalizeField(k, o[k]);
+            if (before !== after) diffs[k] = { before, after };
         });
         return { key: it.key, sku: o.sku||'', lote: o.lote||'', cambios: diffs };
     }).filter(x => Object.keys(x.cambios).length > 0);
