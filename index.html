@@ -2283,10 +2283,12 @@ function handleRegisterAdmin() {
     if (btn) btn.disabled = true;
     setMsg('', '');
 
-    // Usar app secundaria para no cerrar la sesión del Maestro
+    // Usar app secundaria SOLO para crear la cuenta en Auth (asi no se cierra
+    // la sesión del Maestro). El registro en RTDB debe escribirse con la app
+    // primaria (sesión del Maestro), porque la regla .validate de maestroUid
+    // exige que el writer sea Maestro y que newData.val() === auth.uid.
     const secApp = _getSecondaryApp();
     const secAuth = secApp.auth();
-    const secDb = secApp.database();
     const maestroOwnerUid = rootUid || currentUser.uid;
     let nuevoUsuario = null;
 
@@ -2301,9 +2303,10 @@ function handleRegisterAdmin() {
             };
             // Si el perfil no es Maestro, guardar el UID del Maestro dueño de los datos
             if (perfil !== 'Maestro') userData.maestroUid = maestroOwnerUid;
-            // Escribir con la app secundaria (autenticada como el nuevo usuario) para cumplir reglas RTDB.
-            // Importante: si este write falla, NO debemos dejar la cuenta Auth huérfana.
-            return secDb.ref(`usuarios/${cred.user.uid}`).update(userData);
+            // Escribir con la app PRIMARIA (Maestro) para cumplir las reglas
+            // RTDB. Si este write falla, revertir la creación en Auth para no
+            // dejar cuentas huérfanas.
+            return db.ref(`usuarios/${cred.user.uid}`).update(userData);
         })
         .then(() => secAuth.signOut())
         .then(() => {
