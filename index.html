@@ -1425,7 +1425,7 @@
                 </div>
                 <div class="form-group">
                     <label class="form-label">Stock mínimo</label>
-                    <input type="number" class="form-input" id="p-min" placeholder="Ej: 10" min="0" value="0">
+                    <input type="number" class="form-input" id="p-min" placeholder="Ej: 10" min="0" step="any" value="0">
                 </div>
             </div>
             <div class="form-group">
@@ -1569,7 +1569,7 @@
             <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">Cantidad <span style="color:var(--danger)">*</span></label>
-                    <input type="number" class="form-input no-spinner" id="mi-qty" min="1" placeholder="0" onwheel="this.blur()" oninput="_autoFillPalletsForSku(); _updPalletSum()">
+                    <input type="number" class="form-input no-spinner" id="mi-qty" min="0.001" step="any" placeholder="0" onwheel="this.blur()" oninput="_autoFillPalletsForSku(); _updPalletSum()">
                 </div>
                 <div class="form-group" id="mi-pallet-qty-group">
                     <label class="form-label">Cantidad de Pallet</label>
@@ -1652,7 +1652,7 @@
             <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">Cantidad afectada <span style="color:var(--danger)">*</span></label>
-                    <input type="number" class="form-input" id="q-qty" min="1" required>
+                    <input type="number" class="form-input" id="q-qty" min="0.001" step="any" required>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Responsable QA</label>
@@ -1734,7 +1734,7 @@
         <div class="form-row">
             <div class="form-group">
                 <label class="form-label">Cantidad a destruir <span style="color:var(--danger)">*</span></label>
-                <input type="number" class="form-input" id="dest-qty" min="1" required>
+                <input type="number" class="form-input" id="dest-qty" min="0.001" step="any" required>
             </div>
             <div class="form-group">
                 <label class="form-label">Motivo de rechazo <span style="color:var(--danger)">*</span></label>
@@ -1912,7 +1912,7 @@
             <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">Cantidad <span style="color:var(--danger)">*</span></label>
-                    <input type="number" class="form-input" id="d-qty" min="1" required>
+                    <input type="number" class="form-input" id="d-qty" min="0.001" step="any" required>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Motivo <span style="color:var(--danger)">*</span></label>
@@ -2002,7 +2002,7 @@
             </div>
             <div class="form-group">
                 <label class="form-label">Cantidad <span style="color:var(--danger)">*</span></label>
-                <input type="number" class="form-input" id="aj-qty" min="1" placeholder="0">
+                <input type="number" class="form-input" id="aj-qty" min="0.001" step="any" placeholder="0">
             </div>
         </div>
         <div class="form-group">
@@ -2733,7 +2733,7 @@ function updateStats() {
     }
     // Lotes en cuarentena = lotes con estado Cuarentena en el stock (stockMap ya viene
     // filtrado por bodega fija cuando aplica).
-    cuarCount = Object.values(stockMap).filter(s => (parseInt(s.cantidad)||0) > 0 && getLoteStatus(s) === 'Cuarentena').length;
+    cuarCount = Object.values(stockMap).filter(s => (parseFloat(s.cantidad)||0) > 0 && getLoteStatus(s) === 'Cuarentena').length;
     const alertCount = calcAlertas().length;
 
     document.getElementById('st-productos').textContent = prods;
@@ -2761,17 +2761,17 @@ function calcStock() {
         const key = `${m.sku}|${m.lote}|${m.bodega||''}|${m.ubicacion||''}`;
         if (m.tipo === 'Entrada') {
             if (!stock[key]) stock[key] = { sku:m.sku, lote:m.lote, cantidad:0, vence:m.vence, bodega:m.bodega||'', ubicacion:m.ubicacion||'', status:'Aprobado' };
-            stock[key].cantidad += parseInt(m.cantidad)||0;
+            stock[key].cantidad += parseFloat(m.cantidad)||0;
             stock[key].status = m.status || 'Aprobado';
         } else if (m.tipo === 'Salida' || m.tipo === 'Destrucción') {
-            if (stock[key]) stock[key].cantidad -= parseInt(m.cantidad)||0;
+            if (stock[key]) stock[key].cantidad -= parseFloat(m.cantidad)||0;
         } else if (m.tipo === 'Ajuste') {
             if (!stock[key]) stock[key] = { sku:m.sku, lote:m.lote, cantidad:0, vence:m.vence, bodega:m.bodega||'', ubicacion:m.ubicacion||'', status:'Aprobado' };
-            stock[key].cantidad += parseInt(m.cantidad)||0;
+            stock[key].cantidad += parseFloat(m.cantidad)||0;
             stock[key].status = m.status || 'Aprobado';
         } else if (m.tipo === 'AjusteInventario') {
             if (!stock[key]) stock[key] = { sku:m.sku, lote:m.lote, cantidad:0, vence:m.vence, bodega:m.bodega||'', ubicacion:m.ubicacion||'', status:'Aprobado' };
-            stock[key].cantidad += parseInt(m.cantidad)||0;
+            stock[key].cantidad += parseFloat(m.cantidad)||0;
         } else if (m.tipo === 'CambioEstado') {
             // I5: Retiro de mercado es persistente — no puede ser sobreescrito por CambioEstado
             if (stock[key] && stock[key].status !== 'Retiro de mercado') {
@@ -2780,7 +2780,7 @@ function calcStock() {
         } else if (m.tipo === 'Devolución') {
             // Una devolución suma al stock en su bodega/ubicación con el status registrado
             if (!stock[key]) stock[key] = { sku:m.sku, lote:m.lote, cantidad:0, vence:m.vence||'', bodega:m.bodega||'', ubicacion:m.ubicacion||'', status: m.status || 'Aprobado' };
-            stock[key].cantidad += parseInt(m.cantidad)||0;
+            stock[key].cantidad += parseFloat(m.cantidad)||0;
             // Preservamos el vencimiento si la entrada original lo trae
             if (m.vence && !stock[key].vence) stock[key].vence = m.vence;
             // Si la devolución viene con un status distinto al actual, sólo lo aplicamos
@@ -2788,7 +2788,7 @@ function calcStock() {
         } else if (m.tipo === 'CambioUbicacion') {
             // Reubicación interna: resta del origen y suma al destino dentro de la
             // misma bodega/sku/lote, preservando vencimiento y status del lote.
-            const qty = parseInt(m.cantidad) || 0;
+            const qty = parseFloat(m.cantidad) || 0;
             const keyOri = `${m.sku}|${m.lote}|${m.bodega||''}|${m.ubicacionOrigen||''}`;
             const keyDst = `${m.sku}|${m.lote}|${m.bodega||''}|${m.ubicacion||''}`;
             const baseStatus = (stock[keyOri] && stock[keyOri].status) || m.status || 'Aprobado';
@@ -2804,7 +2804,7 @@ function calcStock() {
         const matchKey = Object.keys(stock).find(k => { const [s,l] = k.split('|'); return s === d.sku && l === d.lote; });
         const key = matchKey || `${d.sku}|${d.lote}||`;
         if (!stock[key]) stock[key] = { sku:d.sku, lote:d.lote, cantidad:0, vence:'', bodega:'', ubicacion:'', status:'Aprobado' };
-        stock[key].cantidad += parseInt(d.cantidad)||0;
+        stock[key].cantidad += parseFloat(d.cantidad)||0;
     });
     _stockCache = stock; // D4: guardar en caché
     return stock;
@@ -2927,7 +2927,7 @@ function saveProducto(e) {
         presentacion: document.getElementById('p-pres').value.trim(),
         unidadVenta: document.getElementById('p-udv').value.trim(),
         almacenamiento: document.getElementById('p-almac').value,
-        stockMin: parseInt(document.getElementById('p-min').value)||0,
+        stockMin: parseFloat(document.getElementById('p-min').value)||0,
         principioActivo: document.getElementById('p-principio').value.trim(),
         fecha: new Date().toISOString()
     };
@@ -3278,7 +3278,7 @@ function _autoFillPalletsForSku() {
     if (!palletSize) return;
     const tipo = document.getElementById('md-tipo')?.value || '';
     if (tipo !== 'Entrada' && tipo !== 'Salida') return;
-    const qty = parseInt(document.getElementById('mi-qty')?.value) || 0;
+    const qty = parseFloat(document.getElementById('mi-qty')?.value) || 0;
     if (qty <= 0) return;
     const palletCount = Math.ceil(qty / palletSize);
     const palletQtyEl = document.getElementById('mi-pallet-qty');
@@ -3537,7 +3537,7 @@ function onMiPalletQtyChange() {
     if (tipo === 'Salida' && sku && lote && bodegaNombre) {
         const stock = calcStock();
         ubicOptions = Object.values(stock)
-            .filter(s => s.sku === sku && s.lote === lote && s.bodega === bodegaNombre && (parseInt(s.cantidad)||0) > 0 && getLoteStatus(s) === 'Aprobado')
+            .filter(s => s.sku === sku && s.lote === lote && s.bodega === bodegaNombre && (parseFloat(s.cantidad)||0) > 0 && getLoteStatus(s) === 'Aprobado')
             .sort((a, b) => (a.ubicacion||'').localeCompare(b.ubicacion||''))
             .map(s => ({ value: s.ubicacion || '', label: `${s.ubicacion || '—'} (${s.cantidad} ud.)` }));
     } else if (bodega && Array.isArray(bodega.ubicaciones) && bodega.ubicaciones.length) {
@@ -3556,7 +3556,7 @@ function onMiPalletQtyChange() {
         }
         html += `<div style="display:grid;grid-template-columns:60px 1fr 2fr;gap:8px;align-items:center;margin-bottom:6px">
             <span style="font-weight:600;color:var(--text2);text-align:center">${i}</span>
-            <input type="number" class="form-input" id="mi-pal-qty-${i}" min="1" placeholder="0" style="font-size:12px" oninput="_updPalletSum()">
+            <input type="number" class="form-input" id="mi-pal-qty-${i}" min="0.001" step="any" placeholder="0" style="font-size:12px" oninput="_updPalletSum()">
             ${ubicCtrl}
         </div>`;
     }
@@ -3574,12 +3574,12 @@ function _updPalletSum() {
     if (palletCount <= 1) return;
     let sum = 0;
     for (let i = 1; i <= palletCount; i++) {
-        sum += parseInt(document.getElementById(`mi-pal-qty-${i}`)?.value) || 0;
+        sum += parseFloat(document.getElementById(`mi-pal-qty-${i}`)?.value) || 0;
     }
-    const totalQty = parseInt(document.getElementById('mi-qty')?.value) || 0;
+    const totalQty = parseFloat(document.getElementById('mi-qty')?.value) || 0;
     const sumEl = document.getElementById('mi-pal-sum');
     if (sumEl) {
-        const ok = totalQty > 0 && sum === totalQty;
+        const ok = totalQty > 0 && Math.abs(sum - totalQty) < 0.0001;
         const color = ok ? 'var(--success)' : (sum > totalQty ? 'var(--danger)' : 'var(--text3)');
         sumEl.style.color = color;
         sumEl.innerHTML = `Suma pallets: <strong>${sum}</strong> / Cantidad total: <strong>${totalQty}</strong>${ok ? ' ✓' : ''}`;
@@ -3591,7 +3591,7 @@ function addItemToDoc() {
     const loteEl = document.getElementById('mi-lote');
     const lote   = loteEl ? loteEl.value.trim() : '';
     const vence  = document.getElementById('mi-vence')?.value || '';
-    const qty    = parseInt(document.getElementById('mi-qty').value) || 0;
+    const qty    = parseFloat(document.getElementById('mi-qty').value) || 0;
     const precio = parseFloat(document.getElementById('mi-precio').value) || 0;
     const tipo   = document.getElementById('md-tipo').value;
     const miUbic = (document.getElementById('mi-ubic')?.value || '').trim();
@@ -3600,7 +3600,7 @@ function addItemToDoc() {
     if (!sku)   { showFormError('mi-err', 'Ingrese el SKU del producto.'); return; }
     if (!data.productos[sku]) { showFormError('mi-err', `SKU "${sku}" no existe en el maestro de productos.`); return; }
     if (!lote)  { showFormError('mi-err', (tipo === 'Salida' || tipo === 'CambioUbicacion') ? 'Seleccione un lote de la lista.' : 'Ingrese el número de lote.'); return; }
-    if (!qty || qty < 1) { showFormError('mi-err', 'La cantidad debe ser mayor a cero.'); return; }
+    if (!qty || qty <= 0) { showFormError('mi-err', 'La cantidad debe ser mayor a cero.'); return; }
 
     // ── CAMBIO DE UBICACIÓN ── Validaciones y armado de ítem
     if (tipo === 'CambioUbicacion') {
@@ -3722,14 +3722,14 @@ function addItemToDoc() {
         palletItems = [];
         let sumPal = 0;
         for (let i = 1; i <= palletCount; i++) {
-            const palQty  = parseInt(document.getElementById(`mi-pal-qty-${i}`)?.value) || 0;
+            const palQty  = parseFloat(document.getElementById(`mi-pal-qty-${i}`)?.value) || 0;
             const palUbic = (document.getElementById(`mi-pal-ubic-${i}`)?.value || '').trim();
-            if (!palQty || palQty < 1) { showFormError('mi-err', `Pallet ${i}: ingrese la cantidad de unidades.`); return; }
+            if (!palQty || palQty <= 0) { showFormError('mi-err', `Pallet ${i}: ingrese la cantidad de unidades.`); return; }
             if ((tipo === 'Entrada' || tipo === 'Devolución') && !palUbic) { showFormError('mi-err', `Pallet ${i}: la ubicación es obligatoria.`); return; }
             sumPal += palQty;
             palletItems.push({ palQty, palUbic });
         }
-        if (sumPal !== qty) { showFormError('mi-err', `La suma de pallets (${sumPal}) debe coincidir con la cantidad total (${qty}).`); return; }
+        if (Math.abs(sumPal - qty) > 0.0001) { showFormError('mi-err', `La suma de pallets (${sumPal}) debe coincidir con la cantidad total (${qty}).`); return; }
 
         // Para Salida revalidamos stock por ubicación de cada pallet
         if (tipo === 'Salida') {
@@ -4054,7 +4054,7 @@ function generatePDF(docData, opts) {
             const u = it.ubicacion || '—';
             const k = `${it.sku}|${it.lote}|${u}`;
             if (!agg[k]) agg[k] = { ...it, ubicacion: u, qty: 0 };
-            agg[k].qty += parseInt(it.qty) || 0;
+            agg[k].qty += parseFloat(it.qty) || 0;
         });
         const itemsUbic = Object.values(agg).sort((a, b) =>
             a.sku.localeCompare(b.sku) || (a.lote||'').localeCompare(b.lote||'') || (a.ubicacion||'').localeCompare(b.ubicacion||''));
@@ -4099,7 +4099,7 @@ function generatePDF(docData, opts) {
         docData.items.forEach(it => {
             const k = `${it.sku}|${it.lote}`;
             if (!agg[k]) agg[k] = { ...it, qty: 0 };
-            agg[k].qty += parseInt(it.qty) || 0;
+            agg[k].qty += parseFloat(it.qty) || 0;
         });
         itemsTabla = Object.values(agg);
     }
@@ -4157,8 +4157,8 @@ function generatePDF(docData, opts) {
     }
 
     y = doc.lastAutoTable.finalY + 8;
-    const totalQty = itemsTabla.reduce((a, i) => a + (parseInt(i.qty)||0), 0);
-    const totalPrecio = itemsTabla.reduce((a, i) => a + ((i.precio||0) * (parseInt(i.qty)||0)), 0);
+    const totalQty = itemsTabla.reduce((a, i) => a + (parseFloat(i.qty)||0), 0);
+    const totalPrecio = itemsTabla.reduce((a, i) => a + ((i.precio||0) * (parseFloat(i.qty)||0)), 0);
     doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(29, 45, 62);
     doc.text(`Total unidades: ${totalQty}`, pageW - margin, y, { align: 'right' });
     if (totalPrecio > 0) { y += 5; doc.text(`Total neto: $${totalPrecio.toLocaleString('es-CL')}`, pageW - margin, y, { align: 'right' }); }
@@ -4390,7 +4390,7 @@ function renderAjusteMovUI() {
                             <td style="font-size:12px">${_ajmEsc(o.descripcion||'—')}</td>
                             <td><input type="text" id="ajm-i-${idx}-lote" class="form-input" style="font-size:12px;min-width:90px" value="${_ajmEsc(o.lote||'')}" oninput="updAjMovField(${idx},'lote',this.value)"></td>
                             <td><input type="date" id="ajm-i-${idx}-vence" class="form-input" style="font-size:12px" value="${_ajmEsc((o.vence||'').slice(0,10))}" oninput="updAjMovField(${idx},'vence',this.value)"></td>
-                            <td><input type="number" id="ajm-i-${idx}-cantidad" class="form-input" style="font-size:12px;width:80px" min="1" value="${_ajmEsc(o.cantidad||0)}" oninput="updAjMovField(${idx},'cantidad',this.value)"></td>
+                            <td><input type="number" id="ajm-i-${idx}-cantidad" class="form-input" style="font-size:12px;width:80px" min="0.001" step="any" value="${_ajmEsc(o.cantidad||0)}" oninput="updAjMovField(${idx},'cantidad',this.value)"></td>
                             <td><input type="number" id="ajm-i-${idx}-precio" class="form-input" style="font-size:12px;width:90px" min="0" step="0.01" value="${_ajmEsc(o.precio||0)}" oninput="updAjMovField(${idx},'precio',this.value)"></td>
                             <td><select id="ajm-i-${idx}-status" class="form-select" style="font-size:12px" onchange="updAjMovField(${idx},'status',this.value)">${stOpts}</select></td>
                             <td>${ubicCell}</td>
@@ -4412,7 +4412,7 @@ function renderAjusteMovUI() {
 
 function updAjMovField(idx, field, value) {
     if (!_ajMovItems[idx]) return;
-    if (field === 'cantidad') value = parseInt(value) || 0;
+    if (field === 'cantidad') value = parseFloat(value) || 0;
     else if (field === 'precio') value = parseFloat(value) || 0;
     _ajMovItems[idx].editado[field] = value;
 }
@@ -4438,7 +4438,7 @@ function _readAjMovItemsFromForm() {
         const read = (field) => document.getElementById(`ajm-i-${idx}-${field}`)?.value;
         const lote        = read('lote');        if (lote        !== undefined) it.editado.lote        = lote;
         const vence       = read('vence');       if (vence       !== undefined) it.editado.vence       = vence;
-        const cantidad    = read('cantidad');    if (cantidad    !== undefined) it.editado.cantidad    = parseInt(cantidad) || 0;
+        const cantidad    = read('cantidad');    if (cantidad    !== undefined) it.editado.cantidad    = parseFloat(cantidad) || 0;
         const precio      = read('precio');      if (precio      !== undefined) it.editado.precio      = parseFloat(precio) || 0;
         const status      = read('status');      if (status      !== undefined) it.editado.status      = status;
         const ubicacion   = read('ubicacion');   if (ubicacion   !== undefined) it.editado.ubicacion   = ubicacion;
@@ -4454,7 +4454,7 @@ function _ajmNormalizeField(k, v) {
     if (k === 'vence' || k === 'fechaDocumento' || k === 'fechaDespacho') {
         return ((v || '') + '').slice(0, 10);
     }
-    if (k === 'cantidad') return String(parseInt(v) || 0);
+    if (k === 'cantidad') return String(parseFloat(v) || 0);
     if (k === 'precio')   return String(parseFloat(v) || 0);
     return (v + '');
 }
@@ -4497,7 +4497,7 @@ function confirmGuardarAjusteMov() {
     _readAjMovHeaderFromForm();
     _readAjMovItemsFromForm();
     for (const it of _ajMovItems) {
-        const q = parseInt(it.editado.cantidad) || 0;
+        const q = parseFloat(it.editado.cantidad) || 0;
         if (q <= 0) { alert(`La cantidad debe ser mayor a 0 (SKU ${it.editado.sku}).`); return; }
         if (!it.editado.lote) { alert(`El lote es obligatorio (SKU ${it.editado.sku}).`); return; }
     }
@@ -4623,7 +4623,7 @@ function guardarAjusteMov() {
             ...it.original,
             lote: o.lote,
             vence: o.vence || '',
-            cantidad: parseInt(o.cantidad) || 0,
+            cantidad: parseFloat(o.cantidad) || 0,
             precio: parseFloat(o.precio) || 0,
             status: o.status || 'Aprobado',
             ubicacion: o.ubicacion || '',
@@ -4699,7 +4699,7 @@ function abrirAnularSalida() {
     const docId = _ajMovHeader.documentoId || '';
     const yaAnul = Object.values(data.movimientos || {}).some(m => m.tipo === 'AjusteInventario' && (m.anulacionDe || '') === docId);
     const totalLineas = _ajMovItems.length;
-    const totalQty = _ajMovItems.reduce((a, it) => a + (parseInt(it.original.cantidad) || 0), 0);
+    const totalQty = _ajMovItems.reduce((a, it) => a + (parseFloat(it.original.cantidad) || 0), 0);
     const warn = yaAnul
         ? `<br><span style="color:var(--warning);font-weight:600">⚠ Este documento ya tiene una anulación previa registrada. Si confirmas, se generarán ajustes adicionales (riesgo de duplicación de stock).</span>`
         : '';
@@ -4724,7 +4724,7 @@ function confirmarAnularSalida() {
     let n = 0;
     _ajMovItems.forEach((it) => {
         const o = it.original; // usar valores originales de la salida, no los editados
-        const qty = parseInt(o.cantidad) || 0;
+        const qty = parseFloat(o.cantidad) || 0;
         if (qty <= 0) return;
         updates[`usuarios/${uid}/movimientos/${ts0 + n}`] = {
             tipo: 'AjusteInventario', ajusteTipo: 'Positivo',
@@ -4990,7 +4990,7 @@ function renderStock() {
         if (subtitleEl) subtitleEl.textContent = 'Stock total consolidado por SKU';
         const skuRows = Object.values(rows.reduce((acc, s) => {
             if (!acc[s.sku]) acc[s.sku] = { sku: s.sku, total: 0, lotes: 0 };
-            acc[s.sku].total += parseInt(s.cantidad)||0;
+            acc[s.sku].total += parseFloat(s.cantidad)||0;
             acc[s.sku].lotes += 1;
             return acc;
         }, {})).sort((a, b) => a.sku.localeCompare(b.sku));
@@ -5023,7 +5023,7 @@ function renderStock() {
         } else if (s.vence && (!grouped[k].vence || s.vence < grouped[k].vence)) {
             grouped[k].vence = s.vence;
         }
-        const qty = parseInt(s.cantidad) || 0;
+        const qty = parseFloat(s.cantidad) || 0;
         grouped[k].cantidad += qty;
         if (qty > 0) grouped[k].ubicaciones.push({ ubic: s.ubicacion || '—', qty });
     });
@@ -5081,7 +5081,7 @@ function saveCuarentena(e) {
     const sku = document.getElementById('q-sku').value.trim().toUpperCase();
     const q = {
         sku, lote: document.getElementById('q-lote').value.trim(),
-        cantidad: parseInt(document.getElementById('q-qty').value),
+        cantidad: parseFloat(document.getElementById('q-qty').value),
         motivo: document.getElementById('q-motivo').value,
         responsable: document.getElementById('q-resp').value.trim(),
         observaciones: document.getElementById('q-obs').value.trim(),
@@ -5121,16 +5121,16 @@ function renderCuarentena() {
     const bFija = bodegaFijaActual();
     const stock = calcStock();
     const prods = data.productos || {};
-    let entries = Object.values(stock).filter(s => (parseInt(s.cantidad)||0) > 0 && getLoteStatus(s) === 'Cuarentena');
+    let entries = Object.values(stock).filter(s => (parseFloat(s.cantidad)||0) > 0 && getLoteStatus(s) === 'Cuarentena');
     if (bFija) entries = entries.filter(s => (s.bodega||'') === bFija);
     // Agrupar por SKU + Lote + Bodega (sumando ubicaciones)
     const groups = {};
     entries.forEach(s => {
         const k = `${s.sku}|${s.lote}|${s.bodega||''}`;
         if (!groups[k]) groups[k] = { key:k, sku:s.sku, lote:s.lote, bodega:s.bodega||'', vence:s.vence||'', cantidad:0, ubicaciones:[] };
-        groups[k].cantidad += parseInt(s.cantidad)||0;
+        groups[k].cantidad += parseFloat(s.cantidad)||0;
         if (s.vence && (!groups[k].vence || s.vence < groups[k].vence)) groups[k].vence = s.vence;
-        groups[k].ubicaciones.push({ ubic: s.ubicacion||'—', qty: parseInt(s.cantidad)||0 });
+        groups[k].ubicaciones.push({ ubic: s.ubicacion||'—', qty: parseFloat(s.cantidad)||0 });
     });
     const rows = Object.values(groups).sort((a, b) => a.sku.localeCompare(b.sku));
     if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="9">No hay lotes en cuarentena</td></tr>'; return; }
@@ -5160,8 +5160,8 @@ function abrirCambioEstatusCuar(keyEnc) {
     if (!_puedeCambiarCuarentena(sku, bodega)) { alert('Su perfil no puede cambiar el estatus de este producto.'); return; }
     _cuarChangeKey = key;
     const stock = calcStock();
-    const grupo = Object.values(stock).filter(s => s.sku===sku && s.lote===lote && (s.bodega||'')===(bodega||'') && getLoteStatus(s)==='Cuarentena' && (parseInt(s.cantidad)||0)>0);
-    const total = grupo.reduce((a, s) => a + (parseInt(s.cantidad)||0), 0);
+    const grupo = Object.values(stock).filter(s => s.sku===sku && s.lote===lote && (s.bodega||'')===(bodega||'') && getLoteStatus(s)==='Cuarentena' && (parseFloat(s.cantidad)||0)>0);
+    const total = grupo.reduce((a, s) => a + (parseFloat(s.cantidad)||0), 0);
     document.getElementById('cec-info').innerHTML = `SKU <strong>${sku}</strong> · Lote <strong>${lote}</strong> · Bodega <strong>${bodega||'—'}</strong> · <strong>${total}</strong> ud.`;
     document.getElementById('cec-status').value = '';
     document.getElementById('cec-motivo').value = '';
@@ -5191,7 +5191,7 @@ function confirmarCambioEstatusCuar() {
     const uid = rootUid || currentUser.uid;
     const ahora = new Date().toISOString();
     const stock = calcStock();
-    const grupo = Object.values(stock).filter(s => s.sku===sku && s.lote===lote && (s.bodega||'')===(bodega||'') && getLoteStatus(s)==='Cuarentena' && (parseInt(s.cantidad)||0)>0);
+    const grupo = Object.values(stock).filter(s => s.sku===sku && s.lote===lote && (s.bodega||'')===(bodega||'') && getLoteStatus(s)==='Cuarentena' && (parseFloat(s.cantidad)||0)>0);
     if (!grupo.length) { showFormError('cec-err', 'El lote ya no está en cuarentena.'); return; }
     const detalle = nuevo === 'Rechazado'
         ? `Rechazado desde cuarentena. Motivo: ${motivo}.${obs?' '+obs:''}`
@@ -5202,7 +5202,7 @@ function confirmarCambioEstatusCuar() {
         updates[`usuarios/${uid}/movimientos/${ts0 + i}`] = {
             tipo: 'CambioEstado', sku, lote,
             descripcion: data.productos[sku]?.descripcion || '',
-            cantidad: parseInt(s.cantidad)||0, vence: s.vence || '',
+            cantidad: parseFloat(s.cantidad)||0, vence: s.vence || '',
             status: nuevo, statusAnterior: 'Cuarentena',
             bodega: s.bodega || '', ubicacion: s.ubicacion || '',
             proveedor: resp, referencia: '',
@@ -5322,7 +5322,7 @@ function saveDestruccion() {
     const sku      = document.getElementById('dest-sku').value.trim();
     const lote     = document.getElementById('dest-lote').value.trim();
     const estado   = document.getElementById('dest-estado').value.trim();
-    const qty      = parseInt(document.getElementById('dest-qty').value) || 0;
+    const qty      = parseFloat(document.getElementById('dest-qty').value) || 0;
     const motivo   = document.getElementById('dest-motivo').value;
     const empresa  = document.getElementById('dest-empresa').value.trim();
     const acta     = document.getElementById('dest-acta').value.trim();
@@ -5331,7 +5331,7 @@ function saveDestruccion() {
     const obs      = document.getElementById('dest-obs').value.trim();
     const cuarId   = document.getElementById('dest-sku').dataset.cuarId || '';
 
-    if (!qty || qty < 1) { showFormError('dest-err', 'La cantidad a destruir debe ser mayor a cero.'); return; }
+    if (!qty || qty <= 0) { showFormError('dest-err', 'La cantidad a destruir debe ser mayor a cero.'); return; }
     if (!motivo) { showFormError('dest-err', 'Seleccione el motivo de rechazo.'); return; }
     if (!empresa) { showFormError('dest-err', 'Ingrese la empresa destructora.'); return; }
     if (!acta) { showFormError('dest-err', 'Ingrese el número de acta de destrucción.'); return; }
@@ -5339,7 +5339,7 @@ function saveDestruccion() {
     if (!resp) { showFormError('dest-err', 'Ingrese el responsable QA que autoriza.'); return; }
     if (!obs) { showFormError('dest-err', 'Las observaciones son obligatorias.'); return; }
 
-    const maxQty = parseInt(document.getElementById('dest-qty').max) || Infinity;
+    const maxQty = parseFloat(document.getElementById('dest-qty').max) || Infinity;
     if (qty > maxQty) { showFormError('dest-err', `Cantidad excede el stock disponible (${maxQty} unidades).`); return; }
 
     const uid = rootUid || currentUser.uid;
@@ -5523,7 +5523,7 @@ function saveDevolucion(e) {
     const sku = document.getElementById('d-sku').value.trim().toUpperCase();
     const dev = {
         sku, lote: document.getElementById('d-lote').value.trim(),
-        cantidad: parseInt(document.getElementById('d-qty').value),
+        cantidad: parseFloat(document.getElementById('d-qty').value),
         motivo: document.getElementById('d-motivo').value,
         status: document.getElementById('d-status').value,
         observaciones: document.getElementById('d-obs').value.trim(),
@@ -5548,7 +5548,7 @@ function renderAjustes() {
     if (!ajustes.length) { tb.innerHTML = '<tr><td colspan="10" class="text-center text-muted" style="padding:24px">Sin ajustes registrados</td></tr>'; return; }
     tb.innerHTML = ajustes.map(([,m]) => {
         const esPos = m.ajusteTipo === 'Positivo';
-        const qty = Math.abs(parseInt(m.cantidad)||0);
+        const qty = Math.abs(parseFloat(m.cantidad)||0);
         return `<tr>
             <td style="font-size:11px">${fmtDateTime(m.fecha)}</td>
             <td class="text-mono" style="color:var(--accent2);font-weight:600">${m.sku}</td>
@@ -5650,9 +5650,9 @@ function _refreshAjusteLotes() {
     const stock = calcStock();
     const lotesMap = {};
     Object.values(stock).forEach(s => {
-        if (s.sku !== sku || s.bodega !== bodega || (parseInt(s.cantidad)||0) <= 0) return;
+        if (s.sku !== sku || s.bodega !== bodega || (parseFloat(s.cantidad)||0) <= 0) return;
         if (!lotesMap[s.lote]) lotesMap[s.lote] = { lote: s.lote, vence: s.vence || '', qty: 0 };
-        lotesMap[s.lote].qty += parseInt(s.cantidad) || 0;
+        lotesMap[s.lote].qty += parseFloat(s.cantidad) || 0;
         if (s.vence && (!lotesMap[s.lote].vence || s.vence < lotesMap[s.lote].vence)) lotesMap[s.lote].vence = s.vence;
     });
     const lotes = Object.values(lotesMap).sort((a, b) => {
@@ -5691,7 +5691,7 @@ function _refreshAjusteUbicaciones() {
     // 1) Si hay SKU+Lote+Bodega con stock: ofrecer esas ubicaciones
     if (sku && bodega && lote && lote !== '__nuevo__') {
         const stock = calcStock();
-        const ubics = Object.values(stock).filter(s => s.sku === sku && s.lote === lote && s.bodega === bodega && (parseInt(s.cantidad)||0) > 0);
+        const ubics = Object.values(stock).filter(s => s.sku === sku && s.lote === lote && s.bodega === bodega && (parseFloat(s.cantidad)||0) > 0);
         if (ubics.length) {
             ubics.sort((a, b) => (a.ubicacion||'').localeCompare(b.ubicacion||''));
             let html = '<select class="form-select" id="aj-ubic" onchange="onAjUbicChange()">';
@@ -5744,20 +5744,20 @@ function saveAjuste() {
     const bodega    = document.getElementById('aj-bodega')?.value || '';
     const ubic      = (document.getElementById('aj-ubic')?.value||'').trim();
     const ajusteTipo = document.getElementById('aj-tipo')?.value || 'Positivo';
-    const qty       = parseInt(document.getElementById('aj-qty')?.value)||0;
+    const qty       = parseFloat(document.getElementById('aj-qty')?.value)||0;
     const obs       = (document.getElementById('aj-obs')?.value||'').trim();
 
     if (!sku)                    { showFormError('ajusteModal-err','Ingrese el SKU.'); return; }
     if (!data.productos[sku])    { showFormError('ajusteModal-err',`SKU "${sku}" no existe en el maestro.`); return; }
     if (!lote)                   { showFormError('ajusteModal-err','Ingrese el lote.'); return; }
     if (!bodega)                 { showFormError('ajusteModal-err','Seleccione la bodega.'); return; }
-    if (!qty || qty < 1)         { showFormError('ajusteModal-err','La cantidad debe ser mayor a cero.'); return; }
+    if (!qty || qty <= 0)        { showFormError('ajusteModal-err','La cantidad debe ser mayor a cero.'); return; }
     if (!obs)                    { showFormError('ajusteModal-err','Ingrese el motivo del ajuste.'); return; }
     if (ajusteTipo === 'Negativo') {
         const stockActual = calcStock();
         const stockDisponible = Object.values(stockActual)
             .filter(s => s.sku === sku && s.lote === lote)
-            .reduce((a, s) => a + (parseInt(s.cantidad)||0), 0);
+            .reduce((a, s) => a + (parseFloat(s.cantidad)||0), 0);
         if (qty > stockDisponible) { showFormError('ajusteModal-err', `Stock insuficiente. Disponible para lote ${lote}: ${stockDisponible} unidades.`); return; }
     }
 
@@ -5843,7 +5843,7 @@ function ejecutarRetiro() {
 
     const entradas = movs.filter(m => m.tipo === 'Entrada');
     const salidas = movs.filter(m => m.tipo === 'Salida');
-    const stockActual = entradas.reduce((a, m) => a + (parseInt(m.cantidad)||0), 0) - salidas.reduce((a, m) => a + (parseInt(m.cantidad)||0), 0);
+    const stockActual = entradas.reduce((a, m) => a + (parseFloat(m.cantidad)||0), 0) - salidas.reduce((a, m) => a + (parseFloat(m.cantidad)||0), 0);
 
     c.innerHTML = `
         <div class="alert-banner danger" style="margin-bottom:16px">
@@ -5911,7 +5911,7 @@ function verTrazabilidadLote(sku, lote) {
                 clase = 'salida';
             } else if (m.tipo === 'AjusteInventario') {
                 const esPos = m.ajusteTipo === 'Positivo';
-                desc = `Ajuste de Inventario: <strong style="color:${esPos?'var(--success)':'var(--danger)'}">${esPos?'+':'−'}${Math.abs(parseInt(m.cantidad)||0)} ud.</strong> (${m.ajusteTipo||'—'})`;
+                desc = `Ajuste de Inventario: <strong style="color:${esPos?'var(--success)':'var(--danger)'}">${esPos?'+':'−'}${Math.abs(parseFloat(m.cantidad)||0)} ud.</strong> (${m.ajusteTipo||'—'})`;
                 meta = `Motivo: ${m.observaciones||'—'} | Bodega: ${m.bodega||'—'} / ${m.ubicacion||'—'}`;
                 clase = 'ajuste';
             } else {
@@ -6318,11 +6318,11 @@ function dcVarHTML(val, ant) {
 
 function renderDCKPIs(salidas, salidasAnt) {
     const totalMovs   = salidas.length;
-    const totalUnid   = salidas.reduce((a, m) => a + (parseInt(m.cantidad) || 0), 0);
+    const totalUnid   = salidas.reduce((a, m) => a + (parseFloat(m.cantidad) || 0), 0);
     const totalProds  = new Set(salidas.map(m => m.sku)).size;
     const totalCl     = new Set(salidas.filter(m => typeof m.proveedor === 'string' && m.proveedor.trim()).map(m => m.proveedor.trim().toUpperCase())).size;
     const antMovs     = salidasAnt.length;
-    const antUnid     = salidasAnt.reduce((a, m) => a + (parseInt(m.cantidad) || 0), 0);
+    const antUnid     = salidasAnt.reduce((a, m) => a + (parseFloat(m.cantidad) || 0), 0);
     const antProds    = new Set(salidasAnt.map(m => m.sku)).size;
     const antCl       = new Set(salidasAnt.filter(m => typeof m.proveedor === 'string' && m.proveedor.trim()).map(m => m.proveedor.trim().toUpperCase())).size;
 
@@ -6345,7 +6345,7 @@ function _dcAggProds(salidas) {
     const map = {};
     salidas.forEach(m => {
         if (!map[m.sku]) map[m.sku] = { sku: m.sku, unidades: 0, movs: 0, ultimo: '' };
-        map[m.sku].unidades += parseInt(m.cantidad) || 0;
+        map[m.sku].unidades += parseFloat(m.cantidad) || 0;
         map[m.sku].movs++;
         if (!map[m.sku].ultimo || m.fecha > map[m.sku].ultimo) map[m.sku].ultimo = m.fecha;
     });
@@ -6405,7 +6405,7 @@ function _dcAggClients(salidas) {
     salidas.forEach(m => {
         const cl = (m.proveedor || '').trim().toUpperCase() || '(Sin cliente)';
         if (!map[cl]) map[cl] = { cliente: cl, unidades: 0, despachos: 0, prods: new Set(), ultimo: '' };
-        map[cl].unidades += parseInt(m.cantidad) || 0;
+        map[cl].unidades += parseFloat(m.cantidad) || 0;
         map[cl].despachos++;
         map[cl].prods.add(m.sku);
         if (!map[cl].ultimo || m.fecha > map[cl].ultimo) map[cl].ultimo = m.fecha;
@@ -6468,7 +6468,7 @@ function renderDCEvolucion(salidas, desdeDate, hastaDate) {
         const d = new Date(desdeDate); d.setHours(0, 0, 0, 0);
         const fin = new Date(hastaDate); fin.setHours(0, 0, 0, 0);
         while (d <= fin) { map[d.toISOString().slice(0, 10)] = 0; d.setDate(d.getDate() + 1); }
-        salidas.forEach(m => { const k = m.fecha.slice(0, 10); if (k in map) map[k] += parseInt(m.cantidad) || 0; });
+        salidas.forEach(m => { const k = m.fecha.slice(0, 10); if (k in map) map[k] += parseFloat(m.cantidad) || 0; });
     } else {
         const d = new Date(desdeDate.getFullYear(), desdeDate.getMonth(), 1);
         const fin = new Date(hastaDate.getFullYear(), hastaDate.getMonth() + 1, 0);
@@ -6476,7 +6476,7 @@ function renderDCEvolucion(salidas, desdeDate, hastaDate) {
             map[`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`] = 0;
             d.setMonth(d.getMonth() + 1);
         }
-        salidas.forEach(m => { const k = m.fecha.slice(0, 7); if (k in map) map[k] += parseInt(m.cantidad) || 0; });
+        salidas.forEach(m => { const k = m.fecha.slice(0, 7); if (k in map) map[k] += parseFloat(m.cantidad) || 0; });
     }
 
     const labels = Object.keys(map).sort();
