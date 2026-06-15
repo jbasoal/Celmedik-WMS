@@ -1886,6 +1886,27 @@
     </div>
 </div>
 
+<!-- ANULAR ENTRADA (genera AjusteInventario negativos) -->
+<div id="anularEntradaModal" class="modal">
+    <div class="modal-box" style="max-width:500px">
+        <div class="modal-header">
+            <div><div class="modal-title">Anular entrada</div><div class="modal-subtitle">Genera ajustes negativos que descuentan el stock ingresado — la entrada original queda en el log</div></div>
+            <button class="modal-close" onclick="closeModal('anularEntradaModal')">✕</button>
+        </div>
+        <div id="anular-ent-err" class="form-error-banner"></div>
+        <div id="anular-ent-info" style="margin-bottom:12px;padding:8px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;font-size:13px"></div>
+        <div class="form-group">
+            <label class="form-label">Motivo de la anulación <span style="color:var(--danger)">*</span></label>
+            <textarea class="form-textarea" id="anular-ent-motivo" placeholder="Ej: error de ingreso de datos al registrar la entrada" rows="3"></textarea>
+        </div>
+        <div class="alert-banner warning" style="margin:8px 0;padding:8px 12px"><div class="alert-banner-text">Se creará un <strong>Ajuste de Inventario negativo</strong> por cada línea (mismo SKU, lote, bodega, ubicación y cantidad). La entrada original permanece en Movimientos para trazabilidad. Verifique que haya stock suficiente para descontar.</div></div>
+        <div class="btn-row">
+            <button type="button" class="btn btn-ghost" onclick="closeModal('anularEntradaModal')">Cancelar</button>
+            <button type="button" class="btn" style="background:var(--danger);color:white;border-color:var(--danger)" onclick="confirmarAnularEntrada()">Anular y generar ajustes</button>
+        </div>
+    </div>
+</div>
+
 <!-- DEVOLUCIÓN -->
 <div id="devModal" class="modal">
     <div class="modal-box">
@@ -4403,6 +4424,7 @@ function renderAjusteMovUI() {
             <div class="btn-row" style="margin-top:12px">
                 <button type="button" class="btn btn-ghost" onclick="limpiarAjusteMov()">Cancelar</button>
                 ${isSalida ? `<button type="button" class="btn" style="background:var(--danger);color:white;border-color:var(--danger)" onclick="abrirAnularSalida()">Anular salida</button>` : ''}
+                ${h.tipo === 'Entrada' ? `<button type="button" class="btn" style="background:var(--danger);color:white;border-color:var(--danger)" onclick="abrirAnularEntrada()">Anular entrada</button>` : ''}
                 <button type="button" class="btn btn-primary" id="btn-save-ajmov" onclick="confirmGuardarAjusteMov()">Guardar ajustes y regenerar PDF</button>
             </div>
         </div>
@@ -4749,6 +4771,71 @@ function confirmarAnularSalida() {
             if (c) c.insertAdjacentHTML('afterbegin', `<div class="alert-banner success" style="margin:8px 0"><div class="alert-banner-icon">✓</div><div><div class="alert-banner-title">Salida ${docId} anulada</div><div class="alert-banner-text">Se generaron ${n} ajuste(s) positivo(s) en Ajuste de Inventario. La salida original permanece en Movimientos para trazabilidad.</div></div></div>`);
         })
         .catch(err => showFormError('anular-err', 'Error: ' + err.message));
+}
+
+// ══ ANULACIÓN DE ENTRADA ══
+// Genera un AjusteInventario negativo por cada línea de la entrada cargada en
+// el editor de Ajuste de Movimiento. La entrada original permanece intacta para
+// trazabilidad. Solo Maestro. Aparece en el módulo Ajuste de Inventario.
+function abrirAnularEntrada() {
+    if (userPerfil !== 'Maestro') { alert('Solo el perfil Maestro puede anular entradas.'); return; }
+    if (!_ajMovHeader || _ajMovHeader.tipo !== 'Entrada' || !_ajMovItems.length) {
+        alert('Cargue primero una entrada válida en el buscador.');
+        return;
+    }
+    const docId = _ajMovHeader.documentoId || '';
+    const yaAnul = Object.values(data.movimientos || {}).some(m => m.tipo === 'AjusteInventario' && (m.anulacionDe || '') === docId);
+    const totalLineas = _ajMovItems.length;
+    const totalQty = _ajMovItems.reduce((a, it) => a + (parseFloat(it.original.cantidad) || 0), 0);
+    const warn = yaAnul
+        ? `<br><span style="color:var(--warning);font-weight:600">⚠ Este documento ya tiene una anulación previa registrada. Si confirmas, se generarán ajustes adicionales (riesgo de duplicación de descuento).</span>`
+        : '';
+    document.getElementById('anular-ent-info').innerHTML = `Documento <strong>${docId}</strong> · <strong>${totalLineas}</strong> línea(s) · Total <strong>${totalQty}</strong> ud.${warn}`;
+    document.getElementById('anular-ent-motivo').value = '';
+    const err = document.getElementById('anular-ent-err'); if (err) err.style.display = 'none';
+    openModal('anularEntradaModal');
+}
+
+function confirmarAnularEntrada() {
+    if (userPerfil !== 'Maestro') { showFormError('anular-ent-err', 'Solo el perfil Maestro puede anular entradas.'); return; }
+    if (!_ajMovHeader || _ajMovHeader.tipo !== 'Entrada' || !_ajMovItems.length) {
+        showFormError('anular-ent-err', 'No hay una entrada cargada.'); return;
+    }
+    const motivo = (document.getElementById('anular-ent-motivo')?.value || '').trim();
+    if (!motivo) { showFormError('anular-ent-err', 'Ingrese el motivo de la anulación.'); return; }
+    const docId = _ajMovHeader.documentoId || '';
+    const uid = rootUid || currentUser.uid;
+    const ahora = new Date().toISOString();
+    const updates = {};
+    const ts0 = Date.now();
+    let n = 0;
+    _ajMovItems.forEach((it) => {
+        const o = it.original; // usar valores originales de la entrada, no los editados
+        const qty = parseFloat(o.cantidad) || 0;
+        if (qty <= 0) return;
+        updates[`usuarios/${uid}/movimientos/${ts0 + n}`] = {
+            tipo: 'AjusteInventario', ajusteTipo: 'Negativo',
+            sku: o.sku, lote: o.lote, vence: o.vence || '',
+            descripcion: o.descripcion || (data.productos[o.sku]?.descripcion || ''),
+            cantidad: qty,
+            bodega: o.bodega || '', ubicacion: o.ubicacion || '',
+            observaciones: `Anulación entrada N° ${docId} — ${motivo}`,
+            fecha: ahora, usuario: currentUser.email,
+            status: 'Aprobado',
+            anulacionDe: docId,
+            anulacionLineaKey: it.key
+        };
+        n++;
+    });
+    if (!n) { showFormError('anular-ent-err', 'La entrada no tiene líneas con cantidad > 0 para anular.'); return; }
+    db.ref().update(updates)
+        .then(() => {
+            logAudit('Anular Entrada', 'Movimientos', `${n} líneas`, docId, `Ajustes negativos generados · Motivo: ${motivo}`);
+            closeModal('anularEntradaModal');
+            const c = document.getElementById('ajMovResults');
+            if (c) c.insertAdjacentHTML('afterbegin', `<div class="alert-banner success" style="margin:8px 0"><div class="alert-banner-icon">✓</div><div><div class="alert-banner-title">Entrada ${docId} anulada</div><div class="alert-banner-text">Se generaron ${n} ajuste(s) negativo(s) en Ajuste de Inventario. La entrada original permanece en Movimientos para trazabilidad.</div></div></div>`);
+        })
+        .catch(err => showFormError('anular-ent-err', 'Error: ' + err.message));
 }
 
 // ══ INTEGRACIÓN GOOGLE DRIVE (via Apps Script Web App) ══
