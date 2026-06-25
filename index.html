@@ -625,6 +625,10 @@
                 <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></span>
                 Movimientos
             </a>
+            <a class="nav-link" data-page="ordenTransporte" id="nav-orden-transporte" style="display:none">
+                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></span>
+                Orden de Transporte
+            </a>
             <a class="nav-link" data-page="ajusteMov" id="nav-ajuste-mov" style="display:none">
                 <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></span>
                 Ajuste Movimiento
@@ -886,6 +890,34 @@
                             <table><thead><tr>
                                 <th>Fecha</th><th>Tipo</th><th>SKU</th><th>Descripción</th><th>Lote</th><th>Vence</th><th>Qty</th><th>Bodega</th><th>Ubicación</th><th>Proveedor/Cliente</th><th>Referencia</th><th>Status</th><th>Usuario</th><th>Obs.</th><th>PDF</th>
                             </tr></thead><tbody id="tMovimientos"><tr class="empty-row"><td colspan="15">No hay movimientos registrados</td></tr></tbody></table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── ORDEN DE TRANSPORTE (solo Bodega Celmedik Los Angeles) ── -->
+                <div id="ordenTransporte" class="page">
+                    <div class="card">
+                        <div class="card-header">
+                            <div>
+                                <div class="card-title">Órdenes de Transporte</div>
+                                <div class="card-subtitle">Requerimiento de transporte a empresa externa · Bodega Celmedik Los Angeles · No afecta el inventario</div>
+                            </div>
+                            <button class="btn btn-primary btn-sm need-write" onclick="openOTModal()">+ Nueva Orden de Transporte</button>
+                        </div>
+                        <div class="filter-bar">
+                            <input type="text" class="form-input" id="fOTNum" placeholder="N° Orden / Factura..." oninput="renderOTHistorial()" style="max-width:240px">
+                            <input type="text" class="form-input" id="fOTEmpresa" placeholder="Empresa transporte..." oninput="renderOTHistorial()" style="max-width:200px">
+                            <input type="date" class="form-input" id="fOTDesde" onchange="renderOTHistorial()" style="width:auto" title="Desde">
+                            <input type="date" class="form-input" id="fOTHasta" onchange="renderOTHistorial()" style="width:auto" title="Hasta">
+                            <button class="btn btn-ghost btn-sm" onclick="document.getElementById('fOTNum').value='';document.getElementById('fOTEmpresa').value='';document.getElementById('fOTDesde').value='';document.getElementById('fOTHasta').value='';renderOTHistorial()">Limpiar</button>
+                        </div>
+                        <div class="table-wrap">
+                            <table>
+                                <thead><tr>
+                                    <th>N° Orden</th><th>Fecha generación</th><th>Fecha envío</th><th>Empresa</th><th>Destino</th><th>Facturas</th><th>Total bultos</th><th>Generado por</th><th>PDF</th>
+                                </tr></thead>
+                                <tbody id="tOTHistorial"><tr class="empty-row"><td colspan="9">Sin órdenes de transporte registradas</td></tr></tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
@@ -2037,6 +2069,86 @@
     </div>
 </div>
 
+<!-- ══════════════════════════════════════
+     MODAL: NUEVA ORDEN DE TRANSPORTE
+══════════════════════════════════════ -->
+<div id="otModal" class="modal">
+    <div class="modal-box" style="max-width:860px;width:95vw;max-height:92vh;overflow-y:auto">
+        <div class="modal-header">
+            <div>
+                <div class="modal-title">Nueva Orden de Transporte</div>
+                <div class="modal-subtitle">Despacho a empresa externa · Bodega Celmedik Los Angeles · No afecta inventario</div>
+            </div>
+            <button class="modal-close" onclick="closeModal('otModal')">✕</button>
+        </div>
+        <div id="otModal-err" class="form-error-banner"></div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">N° Orden de Transporte</label>
+                <input type="text" class="form-input" id="ot-numero" readonly placeholder="Se asigna al guardar" style="background:var(--bg3);color:var(--text2);font-family:var(--mono)">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Fecha de envío <span style="color:var(--danger)">*</span></label>
+                <input type="date" class="form-input" id="ot-fecha-envio">
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Empresa de transporte <span style="color:var(--danger)">*</span></label>
+                <input type="text" class="form-input" id="ot-empresa" list="ot-empresa-list" placeholder="Transfarma">
+                <datalist id="ot-empresa-list">
+                    <option value="Transfarma"></option>
+                </datalist>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Destino <span style="color:var(--danger)">*</span></label>
+                <input type="text" class="form-input" id="ot-destino" list="ot-destino-list" placeholder="Américo Vespucio 1385 bodegas 41-44">
+                <datalist id="ot-destino-list">
+                    <option value="Américo Vespucio 1385 bodegas 41-44"></option>
+                </datalist>
+            </div>
+        </div>
+
+        <!-- ── FACTURAS ASOCIADAS ── -->
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin:16px 0">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+                <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px">Facturas asociadas (Salidas de Los Angeles)</div>
+                <button type="button" class="btn btn-sm btn-ghost" onclick="addOTFacturaRow()">+ Agregar factura</button>
+            </div>
+            <div style="font-size:11.5px;color:var(--text3);margin-bottom:10px">
+                Solo se permiten N° de documento asociados a una <strong>Salida</strong> de la bodega <em>Celmedik Los Angeles</em> que aún no hayan sido usados en otra Orden de Transporte.
+            </div>
+            <div class="table-wrap" style="background:var(--surface);border:1px solid var(--border)">
+                <table>
+                    <thead><tr>
+                        <th style="width:55%">N° Factura (Salida)</th>
+                        <th>N° Bultos</th>
+                        <th style="width:60px"></th>
+                    </tr></thead>
+                    <tbody id="otFacturasBody"></tbody>
+                </table>
+            </div>
+            <datalist id="ot-facturas-disponibles"></datalist>
+            <div style="margin-top:10px;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);display:flex;justify-content:space-between;align-items:center">
+                <span style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.4px">Total de bultos</span>
+                <span id="ot-total-bultos" style="font-size:20px;font-weight:700;font-family:var(--mono);color:var(--accent2)">0</span>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">Observaciones</label>
+            <textarea class="form-textarea" id="ot-obs" rows="2" placeholder="Notas adicionales..."></textarea>
+        </div>
+
+        <div class="btn-row">
+            <button type="button" class="btn btn-ghost" onclick="closeModal('otModal')">Cancelar</button>
+            <button type="button" class="btn btn-primary" id="btn-save-ot" onclick="saveOrdenTransporte()">Guardar y generar PDF</button>
+        </div>
+    </div>
+</div>
+
 <script>
 // ══ FIREBASE ══
 const firebaseConfig = {
@@ -2101,7 +2213,7 @@ function getStockFiltrado() {
     Object.entries(stock).forEach(([k, s]) => { if (s.bodega === bFija) out[k] = s; });
     return out;
 }
-let data = { productos:{}, bodegas:{}, movimientos:{}, cuarentena:{}, devoluciones:{}, auditoria:{}, ajustesMovimiento:{} };
+let data = { productos:{}, bodegas:{}, movimientos:{}, cuarentena:{}, devoluciones:{}, auditoria:{}, ajustesMovimiento:{}, ordenesTransporte:{} };
 let selectedBodega = 'TOTAL';
 let movDocItems = [];
 
@@ -2207,6 +2319,13 @@ function loadProfile() {
         if (navAdmin) navAdmin.style.display = userPerfil === 'Maestro' ? '' : 'none';
         const navTransporte = document.getElementById('nav-transporte');
         if (navTransporte) navTransporte.style.display = (userPerfil === 'Maestro' || userPerfil === 'Farmacéutico') ? '' : 'none';
+        // Orden de Transporte: solo perfiles que operan en Bodega Celmedik Los Angeles.
+        // Operario Santiago (fijo a Biodial) y Visualizador no acceden.
+        const navOT = document.getElementById('nav-orden-transporte');
+        if (navOT) {
+            const perfilesOT = ['Maestro','Farmacéutico','Operador','Operador Los Angeles'];
+            navOT.style.display = perfilesOT.includes(userPerfil) ? '' : 'none';
+        }
         applyPerfilUI();
         showScreen('app');
         attachListeners();
@@ -2700,8 +2819,13 @@ function navigateTo(page) {
     if (pg) pg.classList.add('active');
     const lnk = document.querySelector(`.nav-link[data-page="${page}"]`);
     if (lnk) lnk.classList.add('active');
-    const titles = { dashboard:'Dashboard', productos:'Productos Maestro', stock:'Stock Actual', bodegas:'Bodegas', movimientos:'Movimientos', ajusteMov:'Ajuste de Movimiento', cuarentena:'Cuarentena', devoluciones:'Devoluciones', retiro:'Retiro de Mercado', ajustes:'Ajuste de Inventario', trazabilidad:'Trazabilidad de Lotes', alertas:'Alertas', reportes:'Reportes ISP', auditoria:'Auditoría', dashComercial:'Dashboard Comercial' };
+    const titles = { dashboard:'Dashboard', productos:'Productos Maestro', stock:'Stock Actual', bodegas:'Bodegas', movimientos:'Movimientos', ordenTransporte:'Orden de Transporte', ajusteMov:'Ajuste de Movimiento', cuarentena:'Cuarentena', devoluciones:'Devoluciones', retiro:'Retiro de Mercado', ajustes:'Ajuste de Inventario', trazabilidad:'Trazabilidad de Lotes', alertas:'Alertas', reportes:'Reportes ISP', auditoria:'Auditoría', dashComercial:'Dashboard Comercial' };
     document.getElementById('pageTitle').textContent = titles[page] || page;
+    if (page === 'ordenTransporte') {
+        const perfilesOT = ['Maestro','Farmacéutico','Operador','Operador Los Angeles'];
+        if (!perfilesOT.includes(userPerfil)) { navigateTo('dashboard'); return; }
+        renderOTHistorial();
+    }
     if (page === 'ajustes') { if (userPerfil !== 'Maestro') { navigateTo('dashboard'); return; } renderAjustes(); }
     if (page === 'ajusteMov') { if (userPerfil !== 'Maestro') { navigateTo('dashboard'); return; } resetAjusteMov(); renderAjustesMovHistorial(); }
     if (page === 'admin')   { if (userPerfil !== 'Maestro') { navigateTo('dashboard'); return; } renderUsuarios(); loadDriveCfg(); }
@@ -2719,12 +2843,13 @@ function attachListeners() {
     db.ref(`usuarios/${uid}/cuarentena`).on('value', s => { data.cuarentena = s.val()||{}; renderCuarentena(); updateStats(); });
     db.ref(`usuarios/${uid}/devoluciones`).on('value', s => { data.devoluciones = s.val()||{}; _invalidateStockCache(); _invalidateBodegaFijaLoteCache(); renderDevoluciones(); });
     db.ref(`usuarios/${uid}/ajustesMovimiento`).on('value', s => { data.ajustesMovimiento = s.val()||{}; renderAjustesMovHistorial(); });
+    db.ref(`usuarios/${uid}/ordenesTransporte`).on('value', s => { data.ordenesTransporte = s.val()||{}; renderOTHistorial(); });
 }
 
 function detachListeners() {
     if (!currentUser) return;
     const uid = rootUid || currentUser.uid;
-    ['productos','bodegas','movimientos','cuarentena','devoluciones','ajustesMovimiento'].forEach(k => db.ref(`usuarios/${uid}/${k}`).off());
+    ['productos','bodegas','movimientos','cuarentena','devoluciones','ajustesMovimiento','ordenesTransporte'].forEach(k => db.ref(`usuarios/${uid}/${k}`).off());
 }
 
 // ══ AUDIT LOG ══
@@ -6809,6 +6934,525 @@ async function exportDCPDF() {
     } finally {
         if (btn) { btn.textContent = '↓ Exportar PDF'; btn.disabled = false; }
     }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  ORDEN DE TRANSPORTE
+//  - Operación que registra un requerimiento de transporte a
+//    empresa externa, asociado a una o más Salidas de la bodega
+//    Celmedik Los Angeles.
+//  - No genera descuentos ni ajustes en el inventario.
+//  - Cada N° de factura (documento de Salida) sólo puede usarse
+//    una vez en una Orden de Transporte.
+// ══════════════════════════════════════════════════════════════
+const OT_BODEGA_NOMBRE = 'CELMEDIK LOS ANGELES';
+let _otFacturasRows = []; // [{ numero, bultos }]
+
+function _otEsc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// Devuelve los N° de documento de Salida disponibles en la bodega
+// Celmedik Los Angeles que aún no se han usado en ninguna OT previa.
+function getSalidasLAFacturas() {
+    const set = new Map(); // num -> { numero, fecha, items, cliente }
+    Object.values(data.movimientos || {}).forEach(m => {
+        if (m.tipo !== 'Salida') return;
+        if ((m.bodega || '').toUpperCase() !== OT_BODEGA_NOMBRE) return;
+        const num = (m.documentoId || m.referencia || '').trim();
+        if (!num) return;
+        if (!set.has(num)) set.set(num, {
+            numero: num,
+            fecha: m.fechaDocumento || (m.fecha ? m.fecha.slice(0,10) : ''),
+            fechaDespacho: m.fechaDespacho || '',
+            cliente: m.proveedor || '',
+            items: []
+        });
+        const reg = set.get(num);
+        reg.items.push({
+            sku: m.sku, descripcion: m.descripcion || '', lote: m.lote || '',
+            vence: m.vence || '', cantidad: parseFloat(m.cantidad) || 0,
+            ubicacion: m.ubicacion || '', precio: m.precio || 0
+        });
+    });
+    // Excluir facturas ya usadas en alguna OT
+    const usadas = new Set();
+    Object.values(data.ordenesTransporte || {}).forEach(ot => {
+        (ot.facturas || []).forEach(f => { if (f && f.numero) usadas.add(String(f.numero).trim()); });
+    });
+    const out = [];
+    set.forEach((v, k) => { if (!usadas.has(k)) out.push(v); });
+    out.sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
+    return out;
+}
+
+// Mapa de las facturas usadas en otras OT (para validación dura)
+function getFacturasUsadasOT(exceptOtId) {
+    const m = new Map();
+    Object.entries(data.ordenesTransporte || {}).forEach(([id, ot]) => {
+        if (exceptOtId && id === exceptOtId) return;
+        (ot.facturas || []).forEach(f => {
+            if (f && f.numero) m.set(String(f.numero).trim(), ot.numero || id);
+        });
+    });
+    return m;
+}
+
+// Correlativo OT-YYYY-NNNN para el año actual.
+function generarNumeroOT() {
+    const año = new Date().getFullYear();
+    const prefix = `OT-${año}-`;
+    let max = 0;
+    Object.values(data.ordenesTransporte || {}).forEach(ot => {
+        const n = String(ot.numero || '');
+        if (n.startsWith(prefix)) {
+            const seq = parseInt(n.slice(prefix.length), 10);
+            if (!isNaN(seq) && seq > max) max = seq;
+        }
+    });
+    return `${prefix}${String(max + 1).padStart(4, '0')}`;
+}
+
+function openOTModal() {
+    if (userPerfil === 'Visualizador') { alert('Su perfil es de solo lectura.'); return; }
+    const perfilesOT = ['Maestro','Farmacéutico','Operador','Operador Los Angeles'];
+    if (!perfilesOT.includes(userPerfil)) {
+        alert('Su perfil no puede generar Órdenes de Transporte.');
+        return;
+    }
+    _otFacturasRows = [];
+    document.getElementById('ot-numero').value = generarNumeroOT();
+    document.getElementById('ot-fecha-envio').value = new Date().toISOString().split('T')[0];
+    document.getElementById('ot-empresa').value = 'Transfarma';
+    document.getElementById('ot-destino').value = 'Américo Vespucio 1385 bodegas 41-44';
+    document.getElementById('ot-obs').value = '';
+    const errEl = document.getElementById('otModal-err'); if (errEl) errEl.style.display = 'none';
+    _otRefreshFacturasDatalist();
+    addOTFacturaRow();
+    openModal('otModal');
+}
+
+function _otRefreshFacturasDatalist() {
+    const dl = document.getElementById('ot-facturas-disponibles');
+    if (!dl) return;
+    const usadasEnForm = new Set(_otFacturasRows.map(r => (r.numero || '').trim()).filter(Boolean));
+    const disponibles = getSalidasLAFacturas().filter(s => !usadasEnForm.has(s.numero));
+    dl.innerHTML = disponibles.map(s => `<option value="${_otEsc(s.numero)}">${_otEsc(s.fecha || '')} · ${_otEsc(s.cliente || '')}</option>`).join('');
+}
+
+function addOTFacturaRow() {
+    _otFacturasRows.push({ numero: '', bultos: '' });
+    renderOTFacturasRows();
+}
+
+function removeOTFacturaRow(idx) {
+    _otFacturasRows.splice(idx, 1);
+    if (!_otFacturasRows.length) _otFacturasRows.push({ numero: '', bultos: '' });
+    renderOTFacturasRows();
+}
+
+function _onOTFacturaChange(idx, field, value) {
+    if (!_otFacturasRows[idx]) return;
+    _otFacturasRows[idx][field] = value;
+    _updateOTTotalBultos();
+    _otRefreshFacturasDatalist();
+}
+
+function _updateOTTotalBultos() {
+    const total = _otFacturasRows.reduce((a, r) => a + (parseFloat(r.bultos) || 0), 0);
+    const el = document.getElementById('ot-total-bultos');
+    if (el) el.textContent = total;
+}
+
+function renderOTFacturasRows() {
+    const tb = document.getElementById('otFacturasBody');
+    if (!tb) return;
+    tb.innerHTML = _otFacturasRows.map((r, i) => `
+        <tr>
+            <td>
+                <input type="text" class="form-input" list="ot-facturas-disponibles"
+                       value="${_otEsc(r.numero)}"
+                       oninput="_onOTFacturaChange(${i}, 'numero', this.value)"
+                       placeholder="Seleccione o escriba N° de Salida..." style="font-family:var(--mono);font-size:12.5px">
+            </td>
+            <td>
+                <input type="number" class="form-input no-spinner" min="0" step="1"
+                       value="${_otEsc(r.bultos)}"
+                       oninput="_onOTFacturaChange(${i}, 'bultos', this.value)"
+                       onwheel="this.blur()" placeholder="0" style="max-width:120px;font-family:var(--mono)">
+            </td>
+            <td>
+                <button class="btn btn-sm btn-danger-sm" onclick="removeOTFacturaRow(${i})" title="Quitar">✕</button>
+            </td>
+        </tr>
+    `).join('');
+    _updateOTTotalBultos();
+}
+
+function saveOrdenTransporte() {
+    const perfilesOT = ['Maestro','Farmacéutico','Operador','Operador Los Angeles'];
+    if (!perfilesOT.includes(userPerfil)) { showFormError('otModal-err', 'Su perfil no puede generar Órdenes de Transporte.'); return; }
+
+    const fechaEnvio = (document.getElementById('ot-fecha-envio')?.value || '').trim();
+    const empresa    = (document.getElementById('ot-empresa')?.value || '').trim();
+    const destino    = (document.getElementById('ot-destino')?.value || '').trim();
+    const obs        = (document.getElementById('ot-obs')?.value || '').trim();
+
+    if (!fechaEnvio) { showFormError('otModal-err', 'Indique la fecha de envío.'); return; }
+    if (!empresa)    { showFormError('otModal-err', 'Indique la empresa de transporte.'); return; }
+    if (!destino)    { showFormError('otModal-err', 'Indique el destino.'); return; }
+
+    const facturasLimpias = _otFacturasRows
+        .map(r => ({ numero: (r.numero || '').trim(), bultos: parseInt(r.bultos, 10) || 0 }))
+        .filter(r => r.numero);
+    if (!facturasLimpias.length) { showFormError('otModal-err', 'Agregue al menos una factura asociada.'); return; }
+
+    // Validaciones por factura
+    const salidasDisponibles = new Map();
+    getSalidasLAFacturas().forEach(s => salidasDisponibles.set(s.numero, s));
+    // También cargamos todas las salidas LA (aun usadas) para detectar uso previo
+    const todasLA = new Map();
+    Object.values(data.movimientos || {}).forEach(m => {
+        if (m.tipo === 'Salida' && (m.bodega || '').toUpperCase() === OT_BODEGA_NOMBRE) {
+            const num = (m.documentoId || m.referencia || '').trim();
+            if (num) todasLA.set(num, true);
+        }
+    });
+    const usadasOtras = getFacturasUsadasOT(null);
+    const numerosEnForm = facturasLimpias.map(f => f.numero);
+    const dup = numerosEnForm.find((n, i) => numerosEnForm.indexOf(n) !== i);
+    if (dup) { showFormError('otModal-err', `La factura «${dup}» está duplicada en esta OT.`); return; }
+
+    for (const f of facturasLimpias) {
+        if (!todasLA.has(f.numero)) {
+            showFormError('otModal-err', `La factura «${f.numero}» no corresponde a una Salida de la bodega Celmedik Los Angeles.`);
+            return;
+        }
+        if (usadasOtras.has(f.numero)) {
+            showFormError('otModal-err', `La factura «${f.numero}» ya fue utilizada en la OT ${usadasOtras.get(f.numero)}.`);
+            return;
+        }
+        if (f.bultos < 0 || isNaN(f.bultos)) {
+            showFormError('otModal-err', `Indique un N° de bultos válido para la factura «${f.numero}».`);
+            return;
+        }
+    }
+
+    const totalBultos = facturasLimpias.reduce((a, f) => a + f.bultos, 0);
+    const numeroOT = generarNumeroOT();
+    const fechaISO = new Date().toISOString();
+    const uid = rootUid || currentUser.uid;
+
+    // Enriquecer cada factura con sus ítems y datos del cliente para el PDF
+    const facturasPersist = facturasLimpias.map(f => {
+        const det = salidasDisponibles.get(f.numero) || _detalleSalidaPorDoc(f.numero);
+        return {
+            numero: f.numero,
+            bultos: f.bultos,
+            fechaDoc: det?.fecha || '',
+            fechaDespacho: det?.fechaDespacho || '',
+            cliente: det?.cliente || '',
+            items: (det?.items || []).map(it => ({
+                sku: it.sku, descripcion: it.descripcion || '',
+                lote: it.lote || '', vence: it.vence || '',
+                cantidad: it.cantidad || 0
+            }))
+        };
+    });
+
+    const ot = {
+        numero: numeroOT,
+        fechaGeneracion: fechaISO,
+        fechaEnvio,
+        empresaTransporte: empresa,
+        destino,
+        bodega: 'Celmedik Los Angeles',
+        facturas: facturasPersist,
+        totalBultos,
+        observaciones: obs,
+        generadoPor: currentUser.email,
+        generadoPorPerfil: userPerfil || '',
+        generadoPorUid: currentUser.uid
+    };
+
+    showConfirm(
+        'Confirmar Orden de Transporte',
+        'Esta operación NO afecta el inventario',
+        `<strong>${_otEsc(numeroOT)}</strong><br>
+         <span style="color:var(--text3)">Empresa:</span> ${_otEsc(empresa)}<br>
+         <span style="color:var(--text3)">Destino:</span> ${_otEsc(destino)}<br>
+         <span style="color:var(--text3)">Fecha envío:</span> <strong>${fmtDate(fechaEnvio)}</strong><br>
+         <span style="color:var(--text3)">Facturas:</span> <strong>${facturasLimpias.length}</strong> · <span style="color:var(--text3)">Total bultos:</span> <strong>${totalBultos}</strong>`,
+        'Guardar y generar PDF',
+        'btn-primary',
+        () => {
+            _setBtnLoading('btn-save-ot', true);
+            db.ref(`usuarios/${uid}/ordenesTransporte`).push(ot)
+                .then(() => {
+                    logAudit('Crear OT', 'OrdenTransporte', '', '', `${numeroOT} · ${facturasLimpias.length} factura(s) · ${totalBultos} bulto(s)`);
+                    _setBtnLoading('btn-save-ot', false, 'Guardar y generar PDF');
+                    closeModal('otModal');
+                    generatePDFOrdenTransporte(ot);
+                })
+                .catch(err => {
+                    _setBtnLoading('btn-save-ot', false, 'Guardar y generar PDF');
+                    showFormError('otModal-err', 'Error al guardar: ' + err.message);
+                });
+        }
+    );
+}
+
+// Detalle de una Salida por documentoId (cuando ya está usada en una OT existente,
+// el helper de "disponibles" no la trae; este auxiliar la recupera para regenerar el PDF).
+function _detalleSalidaPorDoc(docId) {
+    const movs = Object.values(data.movimientos || {}).filter(m => m.tipo === 'Salida' && (m.documentoId || m.referencia) === docId);
+    if (!movs.length) return null;
+    const ref = movs[0];
+    return {
+        numero: docId,
+        fecha: ref.fechaDocumento || (ref.fecha ? ref.fecha.slice(0,10) : ''),
+        fechaDespacho: ref.fechaDespacho || '',
+        cliente: ref.proveedor || '',
+        items: movs.map(m => ({
+            sku: m.sku, descripcion: m.descripcion || '',
+            lote: m.lote || '', vence: m.vence || '',
+            cantidad: parseFloat(m.cantidad) || 0
+        }))
+    };
+}
+
+// ── PDF de la Orden de Transporte (formato espejo del PDF de Salida) ──
+function generatePDFOrdenTransporte(ot) {
+    if (typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF) {
+        alert('No se pudo cargar la librería PDF. Verifique su conexión a internet.');
+        return;
+    }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const margin = 18;
+
+    // Encabezado
+    doc.setFillColor(255, 255, 255);
+    doc.rect(0, 0, pageW, 26, 'F');
+    let textStartX = margin;
+    const logoEl = document.getElementById('logoImg');
+    if (logoEl && logoEl.complete && logoEl.naturalWidth > 0) {
+        try {
+            const logoH = 14;
+            const logoW = Math.min(logoH * (logoEl.naturalWidth / logoEl.naturalHeight), 26);
+            doc.addImage(logoEl, 'PNG', margin, 5, logoW, logoH);
+            textStartX = margin + logoW + 4;
+        } catch(e) {}
+    }
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(15); doc.setFont('helvetica', 'bold');
+    doc.text('Celmedik WMS', textStartX, 11);
+    doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+    doc.text('Sistema de Gestión de Almacén Farmacéutico · NT 147 BPA ISP Chile', textStartX, 17);
+    doc.setFontSize(11); doc.setFont('helvetica', 'bold');
+    doc.text('ORDEN DE TRANSPORTE', pageW - margin, 11, { align: 'right' });
+    doc.setFontSize(9); doc.setFont('helvetica', 'normal');
+    doc.text(ot.numero, pageW - margin, 17, { align: 'right' });
+
+    doc.setDrawColor(180, 180, 180);
+    doc.line(margin, 24, pageW - margin, 24);
+
+    // Info del documento
+    doc.setTextColor(29, 45, 62);
+    let y = 34;
+    const col2 = pageW / 2;
+    const addInfo = (label, value, x, yPos, lw) => {
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.text(label, x, yPos);
+        doc.setFont('helvetica', 'normal'); doc.text(String(value || '—'), x + (lw || 28), yPos);
+    };
+    addInfo('N° Orden:', ot.numero, margin, y, 28);
+    addInfo('Fecha generación:', new Date(ot.fechaGeneracion).toLocaleString('es-CL'), col2, y, 38);
+    y += 6;
+    addInfo('Fecha de envío:', fmtDate(ot.fechaEnvio), margin, y, 28);
+    addInfo('Bodega origen:', ot.bodega || 'Celmedik Los Angeles', col2, y, 30);
+    y += 6;
+    addInfo('Empresa transporte:', ot.empresaTransporte, margin, y, 38);
+    y += 6;
+    addInfo('Destino:', ot.destino, margin, y, 18);
+    y += 6;
+    const usuarioLabel = ot.generadoPorPerfil
+        ? `${ot.generadoPor || '—'}  ·  ${ot.generadoPorPerfil}`
+        : (ot.generadoPor || '—');
+    addInfo('Generado por:', usuarioLabel, margin, y, 28);
+    if (ot.observaciones) {
+        y += 6;
+        addInfo('Observaciones:', ot.observaciones, margin, y, 32);
+    }
+
+    // Resumen de facturas
+    y += 10;
+    doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(29, 45, 62);
+    doc.text('FACTURAS ASOCIADAS', margin, y);
+    y += 2;
+    doc.autoTable({
+        startY: y,
+        head: [['N° Factura (Salida)', 'Fecha doc.', 'Cliente / Destinatario', 'N° Bultos']],
+        body: (ot.facturas || []).map(f => [
+            f.numero,
+            f.fechaDoc ? fmtDate(f.fechaDoc) : '—',
+            f.cliente || '—',
+            String(f.bultos || 0)
+        ]),
+        theme: 'striped',
+        headStyles: { fillColor: [8, 84, 160], textColor: 255, fontSize: 8, fontStyle: 'bold' },
+        bodyStyles: { fontSize: 8, textColor: [29, 45, 62] },
+        alternateRowStyles: { fillColor: [245, 245, 245] },
+        columnStyles: {
+            0: { cellWidth: 42, fontStyle: 'bold' },
+            1: { cellWidth: 25, halign: 'center' },
+            2: { cellWidth: 'auto' },
+            3: { cellWidth: 22, halign: 'center', fontStyle: 'bold' }
+        },
+        margin: { left: margin, right: margin }
+    });
+    y = doc.lastAutoTable.finalY + 4;
+    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(29, 45, 62);
+    doc.text(`Total de bultos: ${ot.totalBultos || 0}`, pageW - margin, y, { align: 'right' });
+
+    // Detalle de productos por factura
+    y += 8;
+    if (y > pageH - 40) { doc.addPage(); y = 20; }
+    doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(29, 45, 62);
+    doc.text('DETALLE DE PRODUCTOS', margin, y);
+    y += 2;
+
+    const bodyDet = [];
+    (ot.facturas || []).forEach(f => {
+        (f.items || []).forEach(it => {
+            bodyDet.push([
+                f.numero,
+                it.sku,
+                it.descripcion || '—',
+                it.lote || '—',
+                it.vence ? fmtDate(it.vence) : '—',
+                String(it.cantidad || 0)
+            ]);
+        });
+    });
+    if (bodyDet.length) {
+        doc.autoTable({
+            startY: y,
+            head: [['Factura', 'SKU', 'Descripción', 'Lote', 'Vencimiento', 'Cant.']],
+            body: bodyDet,
+            theme: 'striped',
+            headStyles: { fillColor: [8, 84, 160], textColor: 255, fontSize: 7, fontStyle: 'bold' },
+            bodyStyles: { fontSize: 7, textColor: [29, 45, 62] },
+            alternateRowStyles: { fillColor: [245, 245, 245] },
+            columnStyles: {
+                0: { cellWidth: 30, fontStyle: 'bold' },
+                1: { cellWidth: 22, fontStyle: 'bold' },
+                2: { cellWidth: 'auto' },
+                3: { cellWidth: 24 },
+                4: { cellWidth: 22 },
+                5: { cellWidth: 14, halign: 'center' }
+            },
+            margin: { left: margin, right: margin }
+        });
+        y = doc.lastAutoTable.finalY + 4;
+        const totalUnidades = bodyDet.reduce((a, r) => a + (parseFloat(r[5]) || 0), 0);
+        doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(29, 45, 62);
+        doc.text(`Total unidades despachadas: ${totalUnidades}`, pageW - margin, y, { align: 'right' });
+    } else {
+        doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(150, 150, 150);
+        doc.text('(sin detalle de productos disponible)', margin, y + 6);
+        y += 10;
+    }
+
+    // Firmas
+    y += 20;
+    if (y > pageH - 55) { doc.addPage(); y = 20; }
+    doc.setDrawColor(180, 180, 180);
+    const sigW = (pageW - margin * 2 - 20) / 2;
+    doc.line(margin, y, margin + sigW, y);
+    doc.line(pageW - margin - sigW, y, pageW - margin, y);
+    doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 100, 100);
+    doc.text('Entregado por / Bodega', margin, y + 5);
+    doc.text('Recibido por / Transportista', pageW - margin - sigW, y + 5);
+    y += 12;
+    doc.text('Nombre: _______________________________', margin, y);
+    doc.text('Nombre: _______________________________', pageW - margin - sigW, y);
+    y += 6;
+    doc.text('RUT: _____________  Fecha: ____________', margin, y);
+    doc.text('RUT: _____________  Patente: __________', pageW - margin - sigW, y);
+
+    // Pie
+    doc.setDrawColor(180, 180, 180);
+    doc.line(margin, pageH - 16, pageW - margin, pageH - 16);
+    doc.setFontSize(7); doc.setTextColor(0, 0, 0);
+    doc.text('Documento generado por Celmedik WMS · Orden de Transporte · Normativa ISP Chile · Norma Técnica N°147 BPA', pageW / 2, pageH - 10, { align: 'center' });
+    doc.text(`${new Date().toLocaleString('es-CL')} · ${ot.generadoPor || ''}`, pageW / 2, pageH - 5, { align: 'center' });
+
+    try {
+        doc.setProperties({
+            title: `Orden de Transporte ${ot.numero}`,
+            subject: 'Celmedik WMS · Orden de Transporte',
+            author: ot.generadoPor || 'Celmedik WMS',
+            creator: 'Celmedik WMS',
+            keywords: [
+                `tipo:OrdenTransporte`,
+                `numero:${ot.numero}`,
+                `usuario:${ot.generadoPor || ''}`,
+                `perfil:${ot.generadoPorPerfil || ''}`,
+                `uid:${ot.generadoPorUid || ''}`,
+                `fecha:${ot.fechaGeneracion || ''}`
+            ].join(' ')
+        });
+    } catch(_) {}
+
+    const userSlug = (ot.generadoPor || 'sinuser').replace(/@.*$/, '').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 24);
+    const fechaSlug = new Date().toISOString().split('T')[0];
+    const filename = `OrdenTransporte_${ot.numero}_${userSlug}_${fechaSlug}.pdf`;
+    doc.save(filename);
+}
+
+function regenerarPDFOT(otId) {
+    const ot = (data.ordenesTransporte || {})[otId];
+    if (!ot) { alert('No se encontró la Orden de Transporte.'); return; }
+    generatePDFOrdenTransporte(ot);
+}
+
+function renderOTHistorial() {
+    const tb = document.getElementById('tOTHistorial');
+    if (!tb) return;
+    const fNum     = (document.getElementById('fOTNum')?.value || '').toLowerCase();
+    const fEmp     = (document.getElementById('fOTEmpresa')?.value || '').toLowerCase();
+    const fDesde   = document.getElementById('fOTDesde')?.value || '';
+    const fHasta   = document.getElementById('fOTHasta')?.value || '';
+    let rows = Object.entries(data.ordenesTransporte || {}).map(([id, ot]) => ({ id, ...ot }));
+    if (fNum) rows = rows.filter(o =>
+        (o.numero || '').toLowerCase().includes(fNum) ||
+        (o.facturas || []).some(f => (f.numero || '').toLowerCase().includes(fNum))
+    );
+    if (fEmp) rows = rows.filter(o => (o.empresaTransporte || '').toLowerCase().includes(fEmp));
+    if (fDesde) rows = rows.filter(o => (o.fechaGeneracion || '').slice(0, 10) >= fDesde);
+    if (fHasta) rows = rows.filter(o => (o.fechaGeneracion || '').slice(0, 10) <= fHasta);
+    rows.sort((a, b) => new Date(b.fechaGeneracion || 0) - new Date(a.fechaGeneracion || 0));
+
+    if (!rows.length) {
+        tb.innerHTML = '<tr class="empty-row"><td colspan="9">Sin órdenes de transporte registradas</td></tr>';
+        return;
+    }
+    tb.innerHTML = rows.map(o => {
+        const facts = (o.facturas || []).map(f => `${_otEsc(f.numero)} (${f.bultos||0})`).join(', ');
+        return `<tr>
+            <td class="text-mono" style="color:var(--accent2);font-size:11px;font-weight:600">${_otEsc(o.numero || '—')}</td>
+            <td class="text-mono" style="font-size:11px">${fmtDateTime(o.fechaGeneracion)}</td>
+            <td>${o.fechaEnvio ? fmtDate(o.fechaEnvio) : '—'}</td>
+            <td>${_otEsc(o.empresaTransporte || '—')}</td>
+            <td style="max-width:200px;font-size:12px">${_otEsc(o.destino || '—')}</td>
+            <td style="font-size:11px;max-width:220px;white-space:normal">${facts || '—'}</td>
+            <td style="text-align:center;font-weight:600;font-family:var(--mono)">${o.totalBultos || 0}</td>
+            <td style="font-size:11px;color:var(--text3)">${_otEsc(o.generadoPor || '—')}</td>
+            <td><button class="btn btn-sm btn-icon" style="font-size:10px;white-space:nowrap" onclick="regenerarPDFOT('${o.id}')">PDF</button></td>
+        </tr>`;
+    }).join('');
 }
 
 // ══ UTILS ══
