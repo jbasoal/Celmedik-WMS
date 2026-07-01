@@ -892,6 +892,7 @@
                                 <th>Fecha</th><th>Tipo</th><th>SKU</th><th>Descripción</th><th>Lote</th><th>Vence</th><th>Qty</th><th>Bodega</th><th>Ubicación</th><th>Proveedor/Cliente</th><th>Referencia</th><th>Status</th><th>Usuario</th><th>Obs.</th><th>PDF</th>
                             </tr></thead><tbody id="tMovimientos"><tr class="empty-row"><td colspan="15">No hay movimientos registrados</td></tr></tbody></table>
                         </div>
+                        <div id="movPaginacionFooter"></div>
                     </div>
                 </div>
 
@@ -5099,6 +5100,12 @@ async function uploadSalidaToDrive(blob, filename, docData) {
     return result;
 }
 
+// Paginación de la tabla de Movimientos. Renderizar 5000+ filas en un solo
+// innerHTML congela el navegador; se muestra en bloques y el resto queda
+// disponible con el botón "Cargar más".
+const MOV_PAGE_SIZE = 200;
+let _movVisibleCount = MOV_PAGE_SIZE;
+
 function clearFiltrosMovimientos() {
     _clearFields('fMovSKU','fMovLote','fMovReferencia','fMovFechaDesde','fMovFechaHasta');
     document.getElementById('fMovTipo').value = '';
@@ -5106,7 +5113,13 @@ function clearFiltrosMovimientos() {
     renderMovimientos();
 }
 
-function renderMovimientos() {
+function mostrarMasMovimientos() {
+    _movVisibleCount += MOV_PAGE_SIZE;
+    renderMovimientos(true);
+}
+
+function renderMovimientos(preservePage) {
+    if (!preservePage) _movVisibleCount = MOV_PAGE_SIZE;
     const fTipo = document.getElementById('fMovTipo')?.value||'';
     const fBodega = document.getElementById('fMovBodega')?.value||'';
     const fSKU = (document.getElementById('fMovSKU')?.value||'').toLowerCase();
@@ -5125,11 +5138,21 @@ function renderMovimientos() {
     if (fDesde) rows = rows.filter(m => m.fecha && m.fecha.slice(0,10) >= fDesde);
     if (fHasta) rows = rows.filter(m => m.fecha && m.fecha.slice(0,10) <= fHasta);
     rows.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+    const total = rows.length;
+    const footer = document.getElementById('movPaginacionFooter');
     const tb = document.getElementById('tMovimientos');
-    if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="15">No hay movimientos</td></tr>'; return; }
-    // Track which documentoIds already have a PDF button rendered to avoid duplicates
+    if (!total) {
+        tb.innerHTML = '<tr class="empty-row"><td colspan="15">No hay movimientos</td></tr>';
+        if (footer) footer.innerHTML = '';
+        return;
+    }
+    const visibles = Math.min(_movVisibleCount, total);
+    const shown = rows.slice(0, visibles);
+    // Track which documentoIds already have a PDF button rendered to avoid duplicates.
+    // Se calcula sobre la ventana visible: al hacer "Cargar más" se re-renderiza
+    // desde el inicio, por lo que la primera aparición del documento sigue siendo la primera.
     const pdfRendered = new Set();
-    tb.innerHTML = rows.map(m => {
+    tb.innerHTML = shown.map(m => {
         const tC = m.tipo === 'Entrada' ? 'badge-success' : m.tipo === 'Salida' ? 'badge-danger' : m.tipo === 'Destrucción' ? 'badge-danger' : m.tipo === 'CambioEstado' ? 'badge-gray' : m.tipo === 'CambioUbicacion' ? 'badge-gray' : 'badge-warning';
         const tipoLabel = m.tipo === 'CambioUbicacion' ? 'Cambio de Ubicación' : m.tipo;
         const ubicCell = m.ubicacionOrigen
@@ -5162,6 +5185,17 @@ function renderMovimientos() {
             <td>${pdfCell}</td>
         </tr>`;
     }).join('');
+    if (footer) {
+        if (visibles < total) {
+            footer.innerHTML = `<div style="display:flex;align-items:center;gap:12px;padding:10px 4px;color:var(--text2);font-size:12px">
+                <span>Mostrando <strong>${visibles}</strong> de <strong>${total}</strong> movimientos</span>
+                <button class="btn btn-sm btn-ghost" onclick="mostrarMasMovimientos()">Cargar más (+${Math.min(MOV_PAGE_SIZE, total - visibles)})</button>
+                <button class="btn btn-sm btn-ghost" onclick="_movVisibleCount=${total};renderMovimientos(true)">Ver todos</button>
+            </div>`;
+        } else {
+            footer.innerHTML = `<div style="padding:10px 4px;color:var(--text3);font-size:12px">Mostrando ${total} movimiento${total===1?'':'s'}</div>`;
+        }
+    }
 }
 
 // ══ STOCK ══
