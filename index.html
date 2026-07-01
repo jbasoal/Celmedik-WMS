@@ -882,6 +882,7 @@
                             </select>
                             <input type="text" class="form-input" id="fMovSKU" placeholder="SKU..." onkeyup="renderMovimientos()">
                             <input type="text" class="form-input" id="fMovLote" placeholder="Lote..." onkeyup="renderMovimientos()">
+                            <input type="text" class="form-input" id="fMovReferencia" placeholder="N° Referencia..." onkeyup="renderMovimientos()">
                             <input type="date" class="form-input" id="fMovFechaDesde" onchange="renderMovimientos()" style="width:auto" title="Desde">
                             <input type="date" class="form-input" id="fMovFechaHasta" onchange="renderMovimientos()" style="width:auto" title="Hasta">
                             <button class="btn btn-ghost btn-sm" onclick="clearFiltrosMovimientos()">Limpiar</button>
@@ -2832,18 +2833,59 @@ function navigateTo(page) {
     if (page === 'alertas') renderAlertas();
     if (page === 'auditoria') renderAuditoria();
     if (page === 'dashComercial') renderDashComercial();
+    // Como los renders "pesados" se gatean por visibilidad en attachListeners,
+    // al entrar por primera vez a estas páginas se dispara su render.
+    if (page === 'productos')    renderProductos();
+    if (page === 'stock')        renderStock();
+    if (page === 'movimientos')  renderMovimientos();
+    if (page === 'cuarentena')   renderCuarentena();
+    if (page === 'devoluciones') renderDevoluciones();
 }
 
 // ══ DATA LISTENERS ══
+// Batching: cada listener de Firebase dispara varios renders en cascada. Al
+// abrir la app se disparan 7 listeners en paralelo, generando decenas de
+// renders redundantes que congelan la UI. Se acumulan las intenciones en un
+// Set y se ejecuta un único render por frame (requestAnimationFrame).
+// Además, sólo se renderiza la página actualmente visible; el resto se
+// re-renderiza al navegar hacia ella.
+const _pendingRenders = new Set();
+let _renderRafHandle = null;
+function _isPageActive(id) {
+    const el = document.getElementById(id);
+    return !!(el && el.classList.contains('active'));
+}
+function _flushPendingRenders() {
+    _renderRafHandle = null;
+    const q = new Set(_pendingRenders);
+    _pendingRenders.clear();
+    if (q.has('bodegas'))           { renderBodegas(); renderBodegaBtns(); updateBodegaSelect(); }
+    if (q.has('productos') && _isPageActive('productos'))       renderProductos();
+    if (q.has('movimientos') && _isPageActive('movimientos'))   renderMovimientos();
+    if (q.has('stock') && _isPageActive('stock'))               renderStock();
+    if (q.has('cuarentena') && _isPageActive('cuarentena'))     renderCuarentena();
+    if (q.has('devoluciones') && _isPageActive('devoluciones')) renderDevoluciones();
+    if (q.has('ajustesMov') && _isPageActive('ajusteMov'))      renderAjustesMovHistorial();
+    if (q.has('ordenesTransporte') && _isPageActive('ordenTransporte')) renderOTHistorial();
+    if (q.has('stats'))             updateStats();
+}
+function _scheduleRender(...names) {
+    names.forEach(n => _pendingRenders.add(n));
+    if (_renderRafHandle) return;
+    _renderRafHandle = (typeof requestAnimationFrame === 'function')
+        ? requestAnimationFrame(_flushPendingRenders)
+        : setTimeout(_flushPendingRenders, 16);
+}
+
 function attachListeners() {
     const uid = rootUid || currentUser.uid;
-    db.ref(`usuarios/${uid}/productos`).on('value', s => { data.productos = s.val()||{}; renderProductos(); updateStats(); renderStock(); });
-    db.ref(`usuarios/${uid}/bodegas`).on('value', s => { data.bodegas = s.val()||{}; renderBodegas(); renderBodegaBtns(); updateBodegaSelect(); updateStats(); });
-    db.ref(`usuarios/${uid}/movimientos`).on('value', s => { data.movimientos = s.val()||{}; _invalidateStockCache(); _invalidateBodegaFijaLoteCache(); renderMovimientos(); renderStock(); renderCuarentena(); updateStats(); });
-    db.ref(`usuarios/${uid}/cuarentena`).on('value', s => { data.cuarentena = s.val()||{}; renderCuarentena(); updateStats(); });
-    db.ref(`usuarios/${uid}/devoluciones`).on('value', s => { data.devoluciones = s.val()||{}; _invalidateStockCache(); _invalidateBodegaFijaLoteCache(); renderDevoluciones(); });
-    db.ref(`usuarios/${uid}/ajustesMovimiento`).on('value', s => { data.ajustesMovimiento = s.val()||{}; renderAjustesMovHistorial(); });
-    db.ref(`usuarios/${uid}/ordenesTransporte`).on('value', s => { data.ordenesTransporte = s.val()||{}; renderOTHistorial(); });
+    db.ref(`usuarios/${uid}/productos`).on('value', s => { data.productos = s.val()||{}; _scheduleRender('productos','stock','stats'); });
+    db.ref(`usuarios/${uid}/bodegas`).on('value', s => { data.bodegas = s.val()||{}; _scheduleRender('bodegas','stats'); });
+    db.ref(`usuarios/${uid}/movimientos`).on('value', s => { data.movimientos = s.val()||{}; _invalidateStockCache(); _invalidateBodegaFijaLoteCache(); _scheduleRender('movimientos','stock','cuarentena','stats'); });
+    db.ref(`usuarios/${uid}/cuarentena`).on('value', s => { data.cuarentena = s.val()||{}; _scheduleRender('cuarentena','stats'); });
+    db.ref(`usuarios/${uid}/devoluciones`).on('value', s => { data.devoluciones = s.val()||{}; _invalidateStockCache(); _invalidateBodegaFijaLoteCache(); _scheduleRender('devoluciones','stock','stats'); });
+    db.ref(`usuarios/${uid}/ajustesMovimiento`).on('value', s => { data.ajustesMovimiento = s.val()||{}; _scheduleRender('ajustesMov'); });
+    db.ref(`usuarios/${uid}/ordenesTransporte`).on('value', s => { data.ordenesTransporte = s.val()||{}; _scheduleRender('ordenesTransporte'); });
 }
 
 function detachListeners() {
@@ -5058,7 +5100,7 @@ async function uploadSalidaToDrive(blob, filename, docData) {
 }
 
 function clearFiltrosMovimientos() {
-    _clearFields('fMovSKU','fMovLote','fMovFechaDesde','fMovFechaHasta');
+    _clearFields('fMovSKU','fMovLote','fMovReferencia','fMovFechaDesde','fMovFechaHasta');
     document.getElementById('fMovTipo').value = '';
     const bSel = document.getElementById('fMovBodega'); if (bSel) bSel.value = '';
     renderMovimientos();
@@ -5069,6 +5111,7 @@ function renderMovimientos() {
     const fBodega = document.getElementById('fMovBodega')?.value||'';
     const fSKU = (document.getElementById('fMovSKU')?.value||'').toLowerCase();
     const fLote = (document.getElementById('fMovLote')?.value||'').toLowerCase();
+    const fReferencia = (document.getElementById('fMovReferencia')?.value||'').toLowerCase();
     const fDesde = document.getElementById('fMovFechaDesde')?.value||'';
     const fHasta = document.getElementById('fMovFechaHasta')?.value||'';
     let rows = Object.values(data.movimientos||{});
@@ -5078,6 +5121,7 @@ function renderMovimientos() {
     if (fTipo) rows = rows.filter(m => m.tipo === fTipo);
     if (fSKU) rows = rows.filter(m => (m.sku||'').toLowerCase().includes(fSKU));
     if (fLote) rows = rows.filter(m => (m.lote||'').toLowerCase().includes(fLote));
+    if (fReferencia) rows = rows.filter(m => (m.referencia||'').toLowerCase().includes(fReferencia));
     if (fDesde) rows = rows.filter(m => m.fecha && m.fecha.slice(0,10) >= fDesde);
     if (fHasta) rows = rows.filter(m => m.fecha && m.fecha.slice(0,10) <= fHasta);
     rows.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
