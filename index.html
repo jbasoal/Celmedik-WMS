@@ -175,8 +175,9 @@
         body.perfil-operador .need-maestro,
         body.perfil-farmaceutico .need-maestro { display: none !important; }
         body.perfil-operador-bodega .need-maestro { display: none !important; }
-        /* Filtro Bodega en Movimientos: oculto para operadores (vista atada a su bodega fija) */
-        body.perfil-operador .filtro-bodega-mov { display: none !important; }
+        /* Filtro Bodega en Movimientos: oculto para operadores con UNA sola bodega fija.
+           Operadores con múltiples bodegas permitidas ven el filtro para poder alternar. */
+        body.perfil-operador:not(.perfil-operador-multi-bodega) .filtro-bodega-mov { display: none !important; }
 
         /* ══════════════════════════════════════
            APP LAYOUT
@@ -1073,7 +1074,7 @@
                                     <option value="Farmacéutico">Farmacéutico — Cambios de estado + movimientos</option>
                                     <option value="Operador">Operador — Entradas/Salidas/Devoluciones (cuarentena)</option>
                                     <option value="Operador Los Angeles">Operador Los Angeles — Solo Bodega Celmedik Los Angeles</option>
-                                    <option value="Operario Santiago">Operario Santiago — Solo Bodega Celmedik Biodial</option>
+                                    <option value="Operario Santiago">Operario Santiago — Bodegas Celmedik Biodial y Externa</option>
                                     <option value="Visualizador">Visualizador — Solo lectura</option>
                                     <option value="Transportista">Transportista — App móvil de despachos</option>
                                 </select>
@@ -1087,7 +1088,7 @@
                                 <div><strong>Farmacéutico:</strong> Movimientos completos + cambios de estado (liberar/rechazar cuarentena).</div>
                                 <div><strong>Operador:</strong> Entradas a cuarentena, salidas de aprobados, devoluciones a cuarentena.</div>
                                 <div><strong>Operador Los Angeles:</strong> Mismas atribuciones del Operador, restringido a movimientos en <em>Bodega Celmedik Los Angeles</em>.</div>
-                                <div><strong>Operario Santiago:</strong> Mismas atribuciones del Operador, restringido a movimientos en <em>Bodega Celmedik Biodial</em>.</div>
+                                <div><strong>Operario Santiago:</strong> Mismas atribuciones del Operador, restringido a movimientos en <em>Bodega Celmedik Biodial</em> y <em>Bodega Externa</em>.</div>
                                 <div><strong>Visualizador:</strong> Solo lectura, sin modificaciones.</div>
                                 <div><strong>Transportista:</strong> Solo acceso a la app móvil de conductor (conductor.html). No accede al WMS.</div>
                             </div>
@@ -2168,34 +2169,48 @@ const db = firebase.database();
 
 let currentUser = null, userPerfil = null, rootUid = null;
 
-// ── Perfiles de Operador con bodega fija ──
+// ── Perfiles de Operador con bodegas fijas ──
 // Estos perfiles tienen las mismas atribuciones del Operador estándar pero
-// solo pueden registrar/ver movimientos asociados a una bodega específica.
+// solo pueden registrar/ver movimientos asociados a una o varias bodegas
+// específicas. Un perfil puede tener asignada más de una bodega (ej. Operario
+// Santiago con "CELMEDIK BIODIAL" + "Bodega Externa").
 const OPERADOR_BODEGA_FIJA = {
-    'Operador Los Angeles': 'CELMEDIK LOS ANGELES',
-    'Operario Santiago': 'CELMEDIK BIODIAL'
+    'Operador Los Angeles': ['CELMEDIK LOS ANGELES'],
+    'Operario Santiago':    ['CELMEDIK BIODIAL', 'Bodega Externa']
 };
 function isOperadorRole(p) {
     return p === 'Operador' || Object.prototype.hasOwnProperty.call(OPERADOR_BODEGA_FIJA, p);
 }
-function bodegaFijaPerfil(p) {
-    return OPERADOR_BODEGA_FIJA[p] || null;
+function bodegasFijasPerfil(p) {
+    const v = OPERADOR_BODEGA_FIJA[p];
+    if (!v) return null;
+    return Array.isArray(v) ? v.slice() : [v]; // tolera formato antiguo (string)
 }
+function bodegasFijasActual() { return bodegasFijasPerfil(userPerfil); }
+// Retrocompat: usado como marcador booleano y (cuando hay una sola) como
+// anclaje del select de bodega. Devuelve la primera bodega permitida o null.
 function bodegaFijaActual() {
-    return bodegaFijaPerfil(userPerfil);
+    const arr = bodegasFijasActual();
+    return (arr && arr.length) ? arr[0] : null;
+}
+// True si no hay restricción o si la bodega está en el conjunto permitido.
+function _bodegaPermitida(nombre) {
+    const arr = bodegasFijasActual();
+    if (!arr) return true;
+    return arr.includes(nombre || '');
 }
 
-// Cache de pares "SKU|LOTE" presentes en la bodega fija del operador.
+// Cache de pares "SKU|LOTE" presentes en cualquiera de las bodegas permitidas.
 // Se invalida junto con el cache de stock cuando cambian movimientos/devoluciones.
 let _bodegaFijaLoteCache = null;
 function _invalidateBodegaFijaLoteCache() { _bodegaFijaLoteCache = null; }
 function bodegaFijaLoteSet() {
-    const bFija = bodegaFijaActual();
-    if (!bFija) return null;
+    const arr = bodegasFijasActual();
+    if (!arr) return null;
     if (_bodegaFijaLoteCache) return _bodegaFijaLoteCache;
     const set = new Set();
     Object.values(data.movimientos||{}).forEach(m => {
-        if ((m.bodega||'') === bFija) set.add(`${m.sku||''}|${m.lote||''}`);
+        if (arr.includes(m.bodega||'')) set.add(`${m.sku||''}|${m.lote||''}`);
     });
     _bodegaFijaLoteCache = set;
     return set;
@@ -2205,14 +2220,14 @@ function _matchBodegaFijaLote(sku, lote) {
     if (!s) return true;
     return s.has(`${sku||''}|${lote||''}`);
 }
-// Devuelve solo las entradas de stock que pertenecen a la bodega fija del operador
-// (o el stock completo si no aplica restricción).
+// Devuelve solo las entradas de stock que pertenecen a alguna de las bodegas
+// permitidas del operador (o el stock completo si no aplica restricción).
 function getStockFiltrado() {
     const stock = calcStock();
-    const bFija = bodegaFijaActual();
-    if (!bFija) return stock;
+    const arr = bodegasFijasActual();
+    if (!arr) return stock;
     const out = {};
-    Object.entries(stock).forEach(([k, s]) => { if (s.bodega === bFija) out[k] = s; });
+    Object.entries(stock).forEach(([k, s]) => { if (arr.includes(s.bodega)) out[k] = s; });
     return out;
 }
 let data = { productos:{}, bodegas:{}, movimientos:{}, cuarentena:{}, devoluciones:{}, auditoria:{}, ajustesMovimiento:{}, ordenesTransporte:{} };
@@ -2266,7 +2281,7 @@ function _resetAppMemoryState() {
         // Limpia campos del login para que el siguiente usuario no vea el correo previo
         const e = document.getElementById('loginEmail'); if (e) e.value = '';
         const p = document.getElementById('loginPassword'); if (p) p.value = '';
-        document.body.classList.remove('perfil-visualizador','perfil-operador','perfil-operador-bodega','perfil-farmaceutico','perfil-maestro');
+        document.body.classList.remove('perfil-visualizador','perfil-operador','perfil-operador-bodega','perfil-operador-multi-bodega','perfil-farmaceutico','perfil-maestro');
     } catch(_) {}
 }
 
@@ -2351,11 +2366,16 @@ function applyPerfilUI() {
     document.body.classList.toggle('perfil-visualizador', isVisualizador);
     document.body.classList.toggle('perfil-operador', isOperador);
     document.body.classList.toggle('perfil-operador-bodega', isOperadorBodega);
+    // Operador con MÁS de una bodega permitida: se mantiene visible el filtro de bodega.
+    const _bfArr = bodegasFijasActual();
+    document.body.classList.toggle('perfil-operador-multi-bodega', !!(_bfArr && _bfArr.length > 1));
     document.body.classList.toggle('perfil-farmaceutico', isFarmaceutico);
     document.body.classList.toggle('perfil-maestro', isMaestro);
-    // Operador con bodega fija: anclar el filtro de stock/movimientos a su bodega.
-    const _bFija = bodegaFijaActual();
-    if (_bFija) selectedBodega = _bFija;
+    // Operador con bodega(s) fija(s): si tiene una sola, anclar el filtro a esa
+    // bodega. Si tiene varias, dejar 'TOTAL' para permitir alternar entre ellas.
+    const _arrFijas = bodegasFijasActual();
+    if (_arrFijas && _arrFijas.length === 1) selectedBodega = _arrFijas[0];
+    else if (_arrFijas && _arrFijas.length > 1 && !_arrFijas.includes(selectedBodega)) selectedBodega = 'TOTAL';
 }
 
 function showScreen(which) {
@@ -2910,12 +2930,12 @@ function updateStats() {
     const lotesEnStock = Object.values(stockMap).filter(s => s.cantidad > 0).length;
     let prods, movs, cuarCount;
     if (bFija) {
-        // Productos: sólo SKUs con stock o movimientos en la bodega fija
+        // Productos: sólo SKUs con stock o movimientos en alguna bodega permitida
         const skusEnBodega = new Set();
         Object.values(stockMap).forEach(s => { if (s.cantidad > 0) skusEnBodega.add(s.sku); });
-        Object.values(data.movimientos||{}).forEach(m => { if ((m.bodega||'') === bFija) skusEnBodega.add(m.sku); });
+        Object.values(data.movimientos||{}).forEach(m => { if (_bodegaPermitida(m.bodega)) skusEnBodega.add(m.sku); });
         prods = skusEnBodega.size;
-        movs  = Object.values(data.movimientos||{}).filter(m => (m.bodega||'') === bFija).length;
+        movs  = Object.values(data.movimientos||{}).filter(m => _bodegaPermitida(m.bodega)).length;
     } else {
         prods = Object.keys(data.productos||{}).length;
         movs  = Object.keys(data.movimientos||{}).length;
@@ -3185,17 +3205,19 @@ function deleteBodega(id) {
 function renderBodegaBtns() {
     const c = document.getElementById('bodegaBtns');
     c.querySelectorAll('[data-bodega-btn]').forEach(b => b.remove());
-    const bFija = bodegaFijaActual();
-    // Operadores con bodega fija: ocultar botón "Todas" y bloquear selección a la bodega asignada.
+    const arrFijas = bodegasFijasActual();
+    const singleFija = (arrFijas && arrFijas.length === 1) ? arrFijas[0] : null;
+    // Operadores con UNA sola bodega fija: ocultar "Todas" y anclar la selección.
+    // Con múltiples bodegas permitidas: se muestran todas y también "Todas" para verlas juntas.
     const btnTotal = document.getElementById('btnTOTAL');
-    if (bFija) {
+    if (singleFija) {
         if (btnTotal) btnTotal.style.display = 'none';
-        if (selectedBodega !== bFija) selectedBodega = bFija;
+        if (selectedBodega !== singleFija) selectedBodega = singleFija;
     } else if (btnTotal) {
         btnTotal.style.display = '';
     }
     Object.entries(data.bodegas||{}).forEach(([id, b]) => {
-        if (bFija && b.nombre !== bFija) return;
+        if (arrFijas && !arrFijas.includes(b.nombre)) return;
         const btn = document.createElement('button');
         btn.className = 'btn btn-sm btn-icon'; btn.dataset.bodegaBtn = id;
         btn.textContent = b.nombre;
@@ -3206,8 +3228,11 @@ function renderBodegaBtns() {
 }
 
 function selBodega(nombre) {
-    const bFija = bodegaFijaActual();
-    if (bFija && nombre !== bFija) nombre = bFija;
+    const arrFijas = bodegasFijasActual();
+    // Con bodegas restringidas, sólo se aceptan las permitidas o 'TOTAL'.
+    if (arrFijas && nombre !== 'TOTAL' && !arrFijas.includes(nombre)) {
+        nombre = arrFijas.length === 1 ? arrFijas[0] : 'TOTAL';
+    }
     selectedBodega = nombre;
     const btnTotal = document.getElementById('btnTOTAL');
     if (btnTotal) btnTotal.style.cssText = nombre === 'TOTAL' ? 'background:var(--accent);color:white;border-color:var(--accent)' : '';
@@ -3218,22 +3243,24 @@ function selBodega(nombre) {
 }
 
 function updateBodegaSelect() {
-    const bFija = bodegaFijaActual();
+    const arrFijas = bodegasFijasActual();
+    const singleFija = (arrFijas && arrFijas.length === 1) ? arrFijas[0] : null;
     ['md-bodega'].forEach(selId => {
         const sel = document.getElementById(selId);
         if (!sel) return;
         const cur = sel.value;
         sel.innerHTML = '<option value="">Seleccionar...</option>';
         Object.values(data.bodegas||{}).forEach(b => {
-            if (bFija && b.nombre !== bFija) return;
+            if (arrFijas && !arrFijas.includes(b.nombre)) return;
             const o = document.createElement('option'); o.value = b.nombre; o.textContent = b.nombre; sel.appendChild(o);
         });
-        if (bFija) {
-            sel.value = bFija;
+        if (singleFija) {
+            sel.value = singleFija;
             sel.disabled = true;
         } else {
             sel.disabled = false;
-            if (cur) sel.value = cur;
+            // Preserva selección si sigue siendo válida.
+            if (cur && (!arrFijas || arrFijas.includes(cur))) sel.value = cur;
         }
     });
     _refreshMovBodegaFilter();
@@ -4062,8 +4089,12 @@ function saveDocumento() {
 
     if (!tipo) { showFormError('movModal-err', 'Seleccione el tipo de movimiento.'); return; }
     if (!bodega) { showFormError('movModal-err', 'Seleccione la bodega.'); return; }
-    const _bFija = bodegaFijaActual();
-    if (_bFija && bodega !== _bFija) { showFormError('movModal-err', `Su perfil solo puede registrar movimientos en la bodega «${_bFija}».`); return; }
+    const _arrFijasMov = bodegasFijasActual();
+    if (_arrFijasMov && !_arrFijasMov.includes(bodega)) {
+        const _lista = _arrFijasMov.map(b => `«${b}»`).join(_arrFijasMov.length === 2 ? ' o ' : ', ');
+        showFormError('movModal-err', `Su perfil solo puede registrar movimientos en ${_arrFijasMov.length === 1 ? 'la bodega' : 'las bodegas'} ${_lista}.`);
+        return;
+    }
     if (!movDocItems.length) { showFormError('movModal-err', 'Debe agregar al menos un producto al documento.'); return; }
     if (tipo === 'Salida' && !fechaDespacho) { showFormError('movModal-err', 'Debe indicar la fecha de despacho.'); return; }
 
@@ -5128,9 +5159,9 @@ function renderMovimientos(preservePage) {
     const fDesde = document.getElementById('fMovFechaDesde')?.value||'';
     const fHasta = document.getElementById('fMovFechaHasta')?.value||'';
     let rows = Object.values(data.movimientos||{});
-    const _bFijaMov = bodegaFijaActual();
-    if (_bFijaMov) rows = rows.filter(m => (m.bodega||'') === _bFijaMov);
-    else if (fBodega) rows = rows.filter(m => (m.bodega||'') === fBodega);
+    const _arrFijasMov = bodegasFijasActual();
+    if (_arrFijasMov) rows = rows.filter(m => _arrFijasMov.includes(m.bodega||''));
+    if (fBodega) rows = rows.filter(m => (m.bodega||'') === fBodega);
     if (fTipo) rows = rows.filter(m => m.tipo === fTipo);
     if (fSKU) rows = rows.filter(m => (m.sku||'').toLowerCase().includes(fSKU));
     if (fLote) rows = rows.filter(m => (m.lote||'').toLowerCase().includes(fLote));
@@ -5255,9 +5286,9 @@ function renderStock() {
     const thead   = document.getElementById('tStockHead');
     const subtitleEl = document.getElementById('stockSortSubtitle');
 
-    const _bFijaStock = bodegaFijaActual();
+    const _arrFijasStock = bodegasFijasActual();
     let rows = Object.values(stock).filter(s => {
-        if (_bFijaStock && s.bodega !== _bFijaStock) return false;
+        if (_arrFijasStock && !_arrFijasStock.includes(s.bodega)) return false;
         const bMatch = selectedBodega === 'TOTAL' || s.bodega === selectedBodega;
         const st = getLoteStatus(s);
         const statusMatch = fStatus === '' || st === fStatus;
@@ -5398,8 +5429,7 @@ function _puedeCambiarCuarentena(sku, bodega) {
     if (userPerfil === 'Maestro' || userPerfil === 'Farmacéutico') return true;
     if (isOperadorRole(userPerfil)) {
         if (!_cuarPermisivoOperario(sku)) return false;
-        const bFija = bodegaFijaActual();
-        if (bFija && (bodega||'') !== bFija) return false; // solo su bodega
+        if (!_bodegaPermitida(bodega)) return false; // solo sus bodegas permitidas
         return true;
     }
     return false;
@@ -5408,11 +5438,11 @@ function _puedeCambiarCuarentena(sku, bodega) {
 function renderCuarentena() {
     const tb = document.getElementById('tCuarentena');
     if (!tb) return;
-    const bFija = bodegaFijaActual();
+    const arrFijasCq = bodegasFijasActual();
     const stock = calcStock();
     const prods = data.productos || {};
     let entries = Object.values(stock).filter(s => (parseFloat(s.cantidad)||0) > 0 && getLoteStatus(s) === 'Cuarentena');
-    if (bFija) entries = entries.filter(s => (s.bodega||'') === bFija);
+    if (arrFijasCq) entries = entries.filter(s => arrFijasCq.includes(s.bodega||''));
     // Agrupar por SKU + Lote + Bodega (sumando ubicaciones)
     const groups = {};
     entries.forEach(s => {
@@ -6124,9 +6154,9 @@ function ejecutarRetiro() {
     const c = document.getElementById('retiroResults');
     if (!lote) { c.innerHTML = '<p class="text-muted text-sm">Ingrese un número de lote.</p>'; return; }
 
-    const _bFijaRet = bodegaFijaActual();
+    const _arrFijasRet = bodegasFijasActual();
     const movs = Object.values(data.movimientos||{}).filter(m =>
-        m.lote === lote && (!sku || m.sku === sku) && (!_bFijaRet || (m.bodega||'') === _bFijaRet)
+        m.lote === lote && (!sku || m.sku === sku) && (!_arrFijasRet || _arrFijasRet.includes(m.bodega||''))
     ).sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
 
     if (!movs.length) { c.innerHTML = `<div class="alert-banner success"><div class="alert-banner-icon">✓</div><div><div class="alert-banner-title">Sin registros encontrados</div><div class="alert-banner-text">El lote ${lote} no tiene movimientos registrados en el sistema.</div></div></div>`; return; }
@@ -6174,12 +6204,12 @@ function verTrazabilidadLote(sku, lote) {
     const c = document.getElementById('trazResults');
     if (!lote) { c.innerHTML = '<p class="text-muted text-sm">Ingrese un número de lote.</p>'; return; }
 
-    const _bFijaTraz = bodegaFijaActual();
+    const _arrFijasTraz = bodegasFijasActual();
     const movs = Object.values(data.movimientos||{})
-        .filter(m => m.lote === lote && (!sku || m.sku === sku) && (!_bFijaTraz || (m.bodega||'') === _bFijaTraz))
+        .filter(m => m.lote === lote && (!sku || m.sku === sku) && (!_arrFijasTraz || _arrFijasTraz.includes(m.bodega||'')))
         .sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
 
-    const _passLote = (skuL, loteL) => !_bFijaTraz || _matchBodegaFijaLote(skuL, loteL);
+    const _passLote = (skuL, loteL) => !_arrFijasTraz || _matchBodegaFijaLote(skuL, loteL);
     const cuars = Object.values(data.cuarentena||{}).filter(q => q.lote === lote && (!sku || q.sku === sku) && _passLote(q.sku, q.lote));
     const devs = Object.values(data.devoluciones||{}).filter(d => d.lote === lote && (!sku || d.sku === sku) && _passLote(d.sku, d.lote));
 
@@ -6279,8 +6309,8 @@ function rptMovimientos() {
     const fTipo = (document.getElementById('rptFMovTipo')?.value||'');
 
     let movs = Object.values(data.movimientos||{});
-    const _bFijaRpt = bodegaFijaActual();
-    if (_bFijaRpt) movs = movs.filter(m => (m.bodega||'') === _bFijaRpt);
+    const _arrFijasRpt = bodegasFijasActual();
+    if (_arrFijasRpt) movs = movs.filter(m => _arrFijasRpt.includes(m.bodega||''));
     if (fSKU)  movs = movs.filter(m => (m.sku||'').toLowerCase().includes(fSKU));
     if (fLote) movs = movs.filter(m => (m.lote||'').toLowerCase().includes(fLote));
     if (fTipo) movs = movs.filter(m => m.tipo === fTipo);
@@ -6590,10 +6620,9 @@ function getDCRango() {
 }
 
 function getDCSalidas(desde, hasta) {
-    const bFija = bodegaFijaActual();
     return Object.values(data.movimientos || {}).filter(m => {
         if (m.tipo !== 'Salida') return false;
-        if (bFija && (m.bodega||'') !== bFija) return false;
+        if (!_bodegaPermitida(m.bodega)) return false;
         const f = new Date(m.fecha);
         return f >= desde && f <= hasta;
     });
@@ -6821,7 +6850,7 @@ function renderDCAlertas() {
     const stock = bFija ? getStockFiltrado() : calcStock();
     const prods = data.productos || {};
     const movs  = bFija
-        ? Object.values(data.movimientos || {}).filter(m => (m.bodega||'') === bFija)
+        ? Object.values(data.movimientos || {}).filter(m => _bodegaPermitida(m.bodega))
         : Object.values(data.movimientos || {});
 
     // SKUs visibles para este perfil (con stock o movimientos en su bodega fija)
