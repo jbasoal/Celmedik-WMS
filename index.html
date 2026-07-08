@@ -626,6 +626,11 @@
                 <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></span>
                 Movimientos
             </a>
+            <a class="nav-link" data-page="facturasPorDespachar">
+                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></span>
+                Facturas por Despachar
+                <span id="fpdBadge" class="badge badge-warning" style="margin-left:auto;font-size:10px;display:none">0</span>
+            </a>
             <a class="nav-link" data-page="ordenTransporte" id="nav-orden-transporte" style="display:none">
                 <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></span>
                 Orden de Transporte
@@ -894,6 +899,41 @@
                             </tr></thead><tbody id="tMovimientos"><tr class="empty-row"><td colspan="15">No hay movimientos registrados</td></tr></tbody></table>
                         </div>
                         <div id="movPaginacionFooter"></div>
+                    </div>
+                </div>
+
+                <!-- ── FACTURAS POR DESPACHAR ── -->
+                <div id="facturasPorDespachar" class="page">
+                    <div class="card">
+                        <div class="card-header">
+                            <div style="display:flex;align-items:center;gap:16px">
+                                <div>
+                                    <div class="card-title">Facturas por Despachar</div>
+                                    <div class="card-subtitle">Facturas pendientes de despacho · Con o sin reserva de stock</div>
+                                </div>
+                                <button class="btn btn-primary btn-sm need-write" onclick="openFacturaModal()">+ Nueva Factura</button>
+                            </div>
+                        </div>
+                        <div class="filter-bar">
+                            <input type="text" class="form-input" id="fFPDCliente" placeholder="Cliente..." oninput="renderFacturasPorDespachar()" style="max-width:220px">
+                            <select class="form-select" id="fFPDEstatus" onchange="renderFacturasPorDespachar()" style="width:auto">
+                                <option value="Pendiente">Pendientes</option>
+                                <option value="Despachada">Despachadas</option>
+                                <option value="Anulada">Anuladas</option>
+                                <option value="">Todos los estatus</option>
+                            </select>
+                            <input type="date" class="form-input" id="fFPDDesde" onchange="renderFacturasPorDespachar()" style="width:auto" title="Fecha teórica desde">
+                            <input type="date" class="form-input" id="fFPDHasta" onchange="renderFacturasPorDespachar()" style="width:auto" title="Fecha teórica hasta">
+                            <button class="btn btn-ghost btn-sm" onclick="clearFiltrosFPD()">Limpiar</button>
+                        </div>
+                        <div class="table-wrap">
+                            <table>
+                                <thead><tr>
+                                    <th>N° Factura</th><th>Fecha doc</th><th>Fecha despacho</th><th>Cliente</th><th>Destino</th><th>Reserva</th><th>Productos</th><th>Stock</th><th>Estatus</th><th>Acciones</th>
+                                </tr></thead>
+                                <tbody id="tFacturasPorDespachar"><tr class="empty-row"><td colspan="10">No hay facturas registradas</td></tr></tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
 
@@ -1540,7 +1580,7 @@
             </div>
             <div class="form-group" id="md-numdoc-group">
                 <label class="form-label">N° Documento / Factura</label>
-                <input type="text" class="form-input" id="md-numdoc" placeholder="Ej: FAC-2024-001" oninput="_checkNumDocDup()" onblur="_checkNumDocDup()">
+                <input type="text" class="form-input" id="md-numdoc" placeholder="Ej: FAC-2024-001" oninput="_checkNumDocDup()" onblur="_checkNumDocDup(); _autoFillFromFactura();">
                 <div id="md-numdoc-warn" style="display:none;margin-top:6px;font-size:12px;font-weight:600;color:var(--warning,#B25E00);background:rgba(217,119,6,.12);border:1px solid rgba(217,119,6,.35);border-radius:6px;padding:6px 10px"></div>
             </div>
         </div>
@@ -1548,12 +1588,18 @@
         <div id="md-status-row" style="display:none"><select id="md-status-prod" style="display:none"></select><div id="md-status-info" style="display:none"><div id="md-status-info-text"></div></div></div>
         <div class="form-row" id="md-proveedor-row">
             <div class="form-group" id="md-proveedor-group">
-                <label class="form-label">Proveedor / Destinatario</label>
-                <input type="text" class="form-input" id="md-proveedor" placeholder="Nombre proveedor o destinatario">
+                <label class="form-label">Proveedor / Cliente</label>
+                <input type="text" class="form-input" id="md-proveedor" placeholder="Nombre proveedor o cliente">
             </div>
             <div class="form-group">
                 <label class="form-label">Fecha del documento</label>
                 <input type="date" class="form-input" id="md-fecha">
+            </div>
+        </div>
+        <div class="form-row" id="md-destino-row" style="display:none">
+            <div class="form-group" id="md-destino-group">
+                <label class="form-label">Destino (ciudad)</label>
+                <input type="text" class="form-input" id="md-destino" placeholder="Ej: Santiago, Concepción...">
             </div>
         </div>
         <div class="form-row" id="md-despacho-row" style="display:none">
@@ -2152,6 +2198,126 @@
     </div>
 </div>
 
+<!-- ══════════════════════════════════════
+     MODAL: NUEVA FACTURA POR DESPACHAR
+══════════════════════════════════════ -->
+<div id="fpdModal" class="modal">
+    <div class="modal-box" style="max-width:920px;width:96vw;max-height:92vh;overflow-y:auto">
+        <div class="modal-header">
+            <div>
+                <div class="modal-title">Nueva Factura por Despachar</div>
+                <div class="modal-subtitle">Registro de factura pendiente · Con o sin reserva de stock</div>
+            </div>
+            <button class="modal-close" onclick="closeModal('fpdModal')">✕</button>
+        </div>
+        <div id="fpdModal-err" class="form-error-banner"></div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">N° Factura <span style="color:var(--danger)">*</span></label>
+                <input type="text" class="form-input" id="fpd-numero" placeholder="Ej: FAC-2026-001">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Fecha del documento <span style="color:var(--danger)">*</span></label>
+                <input type="date" class="form-input" id="fpd-fecha-doc">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Cliente <span style="color:var(--danger)">*</span></label>
+                <input type="text" class="form-input" id="fpd-cliente" placeholder="Nombre del cliente">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Destino (ciudad) <span style="color:var(--danger)">*</span></label>
+                <input type="text" class="form-input" id="fpd-destino" placeholder="Ej: Santiago, Concepción...">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Fecha teórica de despacho <span style="color:var(--danger)">*</span></label>
+                <input type="date" class="form-input" id="fpd-fecha-desp">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Reserva de stock <span style="color:var(--danger)">*</span></label>
+                <select class="form-select" id="fpd-reserva" onchange="_fpdOnReservaChange()">
+                    <option value="sin">Sin reserva (sólo registra la factura)</option>
+                    <option value="con">Con reserva (descuenta stock disponible)</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- ── AGREGAR PRODUCTO ── -->
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin:16px 0">
+            <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">Agregar producto a la factura</div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">SKU <span style="color:var(--danger)">*</span></label>
+                    <div class="sku-ac-wrap">
+                        <input type="text" class="form-input" id="fpd-i-sku" oninput="skuAutocomplete(this,'fpd-i-sku-dd')" onblur="setTimeout(()=>hideDropdown('fpd-i-sku-dd'),200)" placeholder="SKU o nombre del producto..." autocomplete="off">
+                        <div id="fpd-i-sku-dd" class="sku-dropdown" style="display:none"></div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Descripción</label>
+                    <input type="text" class="form-input" id="fpd-i-desc" readonly placeholder="—" style="background:var(--bg3);color:var(--text2)">
+                </div>
+            </div>
+            <div id="fpd-reserva-fields" style="display:none">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Bodega <span style="color:var(--danger)">*</span></label>
+                        <select class="form-select" id="fpd-i-bodega" onchange="_fpdOnBodegaChange()">
+                            <option value="">Seleccionar...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Lote <span style="color:var(--danger)">*</span></label>
+                        <select class="form-select" id="fpd-i-lote" onchange="_fpdOnLoteChange()">
+                            <option value="">Seleccione bodega y SKU primero...</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Ubicación <span style="color:var(--danger)">*</span></label>
+                        <select class="form-select" id="fpd-i-ubic">
+                            <option value="">Seleccione lote primero...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Vence</label>
+                        <input type="text" class="form-input" id="fpd-i-vence" readonly placeholder="—" style="background:var(--bg3);color:var(--text2)">
+                    </div>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Cantidad <span style="color:var(--danger)">*</span></label>
+                    <input type="number" class="form-input no-spinner" id="fpd-i-qty" min="0.001" step="any" placeholder="0" onwheel="this.blur()">
+                </div>
+                <div class="form-group" style="align-self:end">
+                    <button type="button" class="btn btn-primary" onclick="fpdAddItem()">+ Agregar producto</button>
+                </div>
+            </div>
+            <div id="fpd-i-info" style="font-size:12px;color:var(--text3);margin-top:6px"></div>
+        </div>
+
+        <div class="table-wrap" style="max-height:220px;overflow-y:auto">
+            <table style="font-size:12px">
+                <thead><tr>
+                    <th>SKU</th><th>Descripción</th><th>Bodega</th><th>Lote</th><th>Ubicación</th><th>Cantidad</th><th></th>
+                </tr></thead>
+                <tbody id="fpd-items-tbody"><tr class="empty-row"><td colspan="7">Sin productos agregados</td></tr></tbody>
+            </table>
+        </div>
+
+        <div class="btn-row">
+            <button type="button" class="btn btn-ghost" onclick="closeModal('fpdModal')">Cancelar</button>
+            <button type="button" class="btn btn-primary" id="btn-save-fpd" onclick="saveFactura()">Guardar Factura</button>
+        </div>
+    </div>
+</div>
+
 <script>
 // ══ FIREBASE ══
 const firebaseConfig = {
@@ -2230,7 +2396,7 @@ function getStockFiltrado() {
     Object.entries(stock).forEach(([k, s]) => { if (arr.includes(s.bodega)) out[k] = s; });
     return out;
 }
-let data = { productos:{}, bodegas:{}, movimientos:{}, cuarentena:{}, devoluciones:{}, auditoria:{}, ajustesMovimiento:{}, ordenesTransporte:{} };
+let data = { productos:{}, bodegas:{}, movimientos:{}, cuarentena:{}, devoluciones:{}, auditoria:{}, ajustesMovimiento:{}, ordenesTransporte:{}, facturasPorDespachar:{} };
 let selectedBodega = 'TOTAL';
 let movDocItems = [];
 
@@ -2273,7 +2439,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // que acceda al mismo navegador después de un logout.
 function _resetAppMemoryState() {
     try {
-        data = { productos:{}, bodegas:{}, movimientos:{}, cuarentena:{}, devoluciones:{}, auditoria:{}, ajustesMovimiento:{} };
+        data = { productos:{}, bodegas:{}, movimientos:{}, cuarentena:{}, devoluciones:{}, auditoria:{}, ajustesMovimiento:{}, facturasPorDespachar:{} };
         movDocItems = [];
         userPerfil = null; rootUid = null;
         _stockCache = null;
@@ -2841,7 +3007,7 @@ function navigateTo(page) {
     if (pg) pg.classList.add('active');
     const lnk = document.querySelector(`.nav-link[data-page="${page}"]`);
     if (lnk) lnk.classList.add('active');
-    const titles = { dashboard:'Dashboard', productos:'Productos Maestro', stock:'Stock Actual', bodegas:'Bodegas', movimientos:'Movimientos', ordenTransporte:'Orden de Transporte', ajusteMov:'Ajuste de Movimiento', cuarentena:'Cuarentena', devoluciones:'Devoluciones', retiro:'Retiro de Mercado', ajustes:'Ajuste de Inventario', trazabilidad:'Trazabilidad de Lotes', alertas:'Alertas', reportes:'Reportes ISP', auditoria:'Auditoría', dashComercial:'Dashboard Comercial' };
+    const titles = { dashboard:'Dashboard', productos:'Productos Maestro', stock:'Stock Actual', bodegas:'Bodegas', movimientos:'Movimientos', facturasPorDespachar:'Facturas por Despachar', ordenTransporte:'Orden de Transporte', ajusteMov:'Ajuste de Movimiento', cuarentena:'Cuarentena', devoluciones:'Devoluciones', retiro:'Retiro de Mercado', ajustes:'Ajuste de Inventario', trazabilidad:'Trazabilidad de Lotes', alertas:'Alertas', reportes:'Reportes ISP', auditoria:'Auditoría', dashComercial:'Dashboard Comercial' };
     document.getElementById('pageTitle').textContent = titles[page] || page;
     if (page === 'ordenTransporte') {
         const perfilesOT = ['Maestro','Farmacéutico','Operador','Operador Los Angeles'];
@@ -2861,6 +3027,7 @@ function navigateTo(page) {
     if (page === 'movimientos')  renderMovimientos();
     if (page === 'cuarentena')   renderCuarentena();
     if (page === 'devoluciones') renderDevoluciones();
+    if (page === 'facturasPorDespachar') renderFacturasPorDespachar();
 }
 
 // ══ DATA LISTENERS ══
@@ -2888,6 +3055,11 @@ function _flushPendingRenders() {
     if (q.has('devoluciones') && _isPageActive('devoluciones')) renderDevoluciones();
     if (q.has('ajustesMov') && _isPageActive('ajusteMov'))      renderAjustesMovHistorial();
     if (q.has('ordenesTransporte') && _isPageActive('ordenTransporte')) renderOTHistorial();
+    if (q.has('facturasPorDespachar')) {
+        _updateFPDBadge();
+        if (_isPageActive('facturasPorDespachar')) renderFacturasPorDespachar();
+        if (_isPageActive('alertas')) renderAlertas();
+    }
     if (q.has('stats'))             updateStats();
 }
 function _scheduleRender(...names) {
@@ -2907,12 +3079,13 @@ function attachListeners() {
     db.ref(`usuarios/${uid}/devoluciones`).on('value', s => { data.devoluciones = s.val()||{}; _invalidateStockCache(); _invalidateBodegaFijaLoteCache(); _scheduleRender('devoluciones','stock','stats'); });
     db.ref(`usuarios/${uid}/ajustesMovimiento`).on('value', s => { data.ajustesMovimiento = s.val()||{}; _scheduleRender('ajustesMov'); });
     db.ref(`usuarios/${uid}/ordenesTransporte`).on('value', s => { data.ordenesTransporte = s.val()||{}; _scheduleRender('ordenesTransporte'); });
+    db.ref(`usuarios/${uid}/facturasPorDespachar`).on('value', s => { data.facturasPorDespachar = s.val()||{}; _invalidateStockCache(); _scheduleRender('facturasPorDespachar','stock','stats'); });
 }
 
 function detachListeners() {
     if (!currentUser) return;
     const uid = rootUid || currentUser.uid;
-    ['productos','bodegas','movimientos','cuarentena','devoluciones','ajustesMovimiento','ordenesTransporte'].forEach(k => db.ref(`usuarios/${uid}/${k}`).off());
+    ['productos','bodegas','movimientos','cuarentena','devoluciones','ajustesMovimiento','ordenesTransporte','facturasPorDespachar'].forEach(k => db.ref(`usuarios/${uid}/${k}`).off());
 }
 
 // ══ AUDIT LOG ══
@@ -3065,6 +3238,35 @@ function calcAlertas() {
         if (bFija && lotesSku.length === 0) return;
         const totalStock = lotesSku.reduce((a, s) => a + s.cantidad, 0);
         if (totalStock < p.stockMin) alertas.push({ tipo:'info', titulo:`Stock bajo mínimo: ${p.descripcion}`, texto:`Stock actual: ${totalStock} ud. Mínimo: ${p.stockMin} ud.`, dias: 9999 });
+    });
+
+    // Facturas por Despachar pendientes: alerta si la fecha teórica está dentro
+    // de 3 días y hay stock disponible del SKU. Ayuda a priorizar el despacho.
+    const hoyStart = new Date(); hoyStart.setHours(0,0,0,0);
+    const arrFijasAl = bodegasFijasActual();
+    Object.values(data.facturasPorDespachar || {}).forEach(f => {
+        if (!f || f.estatus !== 'Pendiente' || !f.fechaTeoricaDespacho) return;
+        // Alcance por bodegas permitidas
+        if (arrFijasAl && f.conReserva && Array.isArray(f.items) && f.items.length &&
+            !f.items.some(it => arrFijasAl.includes(it.bodega || ''))) return;
+        const fecha = new Date(f.fechaTeoricaDespacho + 'T00:00:00');
+        const dias = Math.ceil((fecha - hoyStart) / 86400000);
+        if (dias < 0 || dias > 3) return;
+        // ¿Hay stock disponible de al menos un SKU?
+        const items = f.items || [];
+        const hayStock = items.some(it => {
+            if (f.conReserva) return true; // el stock ya está reservado
+            return _stockDisponibleSKU(it.sku) >= (parseFloat(it.cantidad) || 0);
+        });
+        if (!hayStock) return;
+        const skusTxt = items.map(it => it.sku).join(', ');
+        const tipoAlerta = dias <= 1 ? 'danger' : 'warning';
+        alertas.push({
+            tipo: tipoAlerta,
+            titulo: `Factura ${f.numero} — despacho ${dias === 0 ? 'HOY' : `en ${dias} día${dias===1?'':'s'}`}`,
+            texto: `Cliente ${f.cliente || '—'} · Destino ${f.destino || '—'} · SKUs: ${skusTxt} · ${f.conReserva ? 'Reserva activa' : 'Stock disponible'}.`,
+            dias
+        });
     });
 
     alertas.sort((a, b) => a.dias - b.dias);
@@ -3375,6 +3577,9 @@ function _refreshMiStatusField(tipo) {
     if (proveedorGroup) proveedorGroup.style.display = isCambioUbic ? 'none' : '';
     const despachoRow = document.getElementById('md-despacho-row');
     if (despachoRow) despachoRow.style.display = (tipo === 'Salida') ? '' : 'none';
+    // Casilla "Destino (ciudad)": visible sólo en Salida.
+    const destinoRow = document.getElementById('md-destino-row');
+    if (destinoRow) destinoRow.style.display = (tipo === 'Salida') ? '' : 'none';
     // Fecha de despacho por defecto = hoy al elegir Salida (si está vacía)
     if (tipo === 'Salida') {
         const fdEl = document.getElementById('md-fecha-despacho');
@@ -4076,11 +4281,87 @@ function _checkNumDocDup() {
     warnEl.style.display = 'block';
 }
 
+// Autocompletar el modal de Movimiento cuando el N° documento coincide con una
+// factura pendiente por despachar. Sólo aplica a Salidas.
+function _autoFillFromFactura() {
+    const tipo = document.getElementById('md-tipo')?.value || '';
+    if (tipo !== 'Salida') return;
+    const num = (document.getElementById('md-numdoc')?.value || '').trim();
+    if (!num) return;
+    const f = _findFacturaPendientePorNumero(num);
+    if (!f) return;
+    // Auto-fill cabecera (respetando lo que el usuario ya haya escrito).
+    const provEl = document.getElementById('md-proveedor');
+    if (provEl && !provEl.value.trim()) provEl.value = f.cliente || '';
+    const destEl = document.getElementById('md-destino');
+    if (destEl && !destEl.value.trim()) destEl.value = f.destino || '';
+    const fechaDocEl = document.getElementById('md-fecha');
+    if (fechaDocEl && !fechaDocEl.value && f.fechaDocumento) fechaDocEl.value = f.fechaDocumento;
+    const fechaDespEl = document.getElementById('md-fecha-despacho');
+    if (fechaDespEl && !fechaDespEl.value && f.fechaTeoricaDespacho) fechaDespEl.value = f.fechaTeoricaDespacho;
+    // Bodega: usar la de las líneas con reserva si todas coinciden.
+    const bodegaEl = document.getElementById('md-bodega');
+    if (bodegaEl && !bodegaEl.value && f.conReserva && f.items && f.items.length) {
+        const bodegas = Array.from(new Set(f.items.map(i => i.bodega).filter(Boolean)));
+        if (bodegas.length === 1) {
+            bodegaEl.value = bodegas[0];
+            if (typeof onDocBodegaChange === 'function') onDocBodegaChange();
+        }
+    }
+    // Items:
+    //   - "Con reserva": se cargan directamente al documento (tienen lote y
+    //     ubicación conocidos). El usuario sólo confirma.
+    //   - "Sin reserva": NO se pre-cargan (no tienen lote); se muestra la
+    //     lista pendiente en el aviso para que el usuario agregue cada ítem
+    //     con su lote y ubicación desde el formulario habitual.
+    const arrFijas = bodegasFijasActual();
+    const prods = data.productos || {};
+    if (movDocItems && movDocItems.length === 0 && f.conReserva) {
+        (f.items || []).forEach(it => {
+            if (arrFijas && it.bodega && !arrFijas.includes(it.bodega)) return;
+            if (!it.lote) return; // seguridad: sin lote no se puede descontar stock
+            const p = prods[it.sku] || {};
+            movDocItems.push({
+                sku: it.sku,
+                descripcion: it.descripcion || p.descripcion || '',
+                tipo: p.tipo || '',
+                lote: it.lote,
+                vence: it.vence || '',
+                qty: parseFloat(it.cantidad) || 0,
+                precio: 0,
+                status: 'Aprobado',
+                ubicacion: it.ubicacion || '',
+                _fromFactura: true,
+                _facturaId: f.id
+            });
+        });
+        if (typeof renderDocItems === 'function') renderDocItems();
+    }
+    // Aviso informativo en la casilla de warning bajo N° Documento.
+    const info = document.getElementById('md-numdoc-warn');
+    if (info) {
+        let msg;
+        if (f.conReserva) {
+            msg = `✓ Factura «${f.numero}» encontrada (con reserva). Se autocompletaron cliente/destino y ${movDocItems.length} ítem(s) con lote y ubicación reservados.`;
+        } else {
+            const pendientes = (f.items || []).map(it => `${it.sku} · ${it.cantidad} ud`).join(' | ');
+            msg = `✓ Factura «${f.numero}» encontrada (sin reserva). Cliente/destino autocompletados. Debe agregar manualmente cada ítem con su lote y ubicación:\n${pendientes}`;
+        }
+        info.textContent = msg;
+        info.style.display = 'block';
+        info.style.color = 'var(--success,#0a6)';
+        info.style.background = 'rgba(16,185,129,.12)';
+        info.style.borderColor = 'rgba(16,185,129,.35)';
+        info.style.whiteSpace = 'pre-line';
+    }
+}
+
 function saveDocumento() {
     if (userPerfil === 'Visualizador') { alert('Su perfil es de solo lectura.'); return; }
     const tipo = document.getElementById('md-tipo').value;
     const numDoc = document.getElementById('md-numdoc').value.trim();
     const proveedor = document.getElementById('md-proveedor').value.trim();
+    const destino = (document.getElementById('md-destino')?.value || '').trim();
     const fechaDoc = document.getElementById('md-fecha').value;
     const fechaDespacho = (document.getElementById('md-fecha-despacho')?.value || '').trim();
     const bodega = document.getElementById('md-bodega').value;
@@ -4116,7 +4397,8 @@ function saveDocumento() {
         <strong>${tipoLabel}: ${movDocItems.length} producto(s)</strong><br>
         <span style="color:var(--text3)">Documento:</span> <strong>${documentoId}</strong><br>
         <span style="color:var(--text3)">Bodega:</span> ${bodega}<br>
-        ${isCambioUbic ? '' : `<span style="color:var(--text3)">Proveedor/Destino:</span> ${proveedor||'—'}<br>`}
+        ${isCambioUbic ? '' : `<span style="color:var(--text3)">Proveedor/Cliente:</span> ${proveedor||'—'}<br>`}
+        ${tipo === 'Salida' && destino ? `<span style="color:var(--text3)">Destino:</span> ${destino}<br>` : ''}
         ${tipo === 'Salida' && fechaDespacho ? `<span style="color:var(--text3)">Fecha de despacho:</span> <strong>${fmtDate(fechaDespacho)}</strong><br>` : ''}
         <span style="color:var(--text3)">Total unidades:</span> <strong>${totalUnidades}</strong>`;
 
@@ -4141,6 +4423,7 @@ function saveDocumento() {
                     status: item.status || 'Aprobado',
                     bodega, ubicacion: item.ubicacion || ubic,
                     proveedor, referencia: numDoc,
+                    destino: tipo === 'Salida' ? destino : '',
                     observaciones: obs,
                     fecha: fechaISO,
                     usuario,
@@ -4159,10 +4442,25 @@ function saveDocumento() {
             db.ref().update(updates)
                 .then(() => {
                     logAudit(tipo, 'Movimientos', `${movDocItems.length} SKUs`, documentoId, `Total: ${totalUnidades} ud.`);
+                    // Si es Salida y coincide con una Factura por Despachar Pendiente, marcarla como Despachada.
+                    if (tipo === 'Salida') {
+                        const fac = _findFacturaPendientePorNumero(numDoc);
+                        if (fac) {
+                            db.ref(`usuarios/${uid}/facturasPorDespachar/${fac.id}`).update({
+                                estatus: 'Despachada',
+                                fechaDespacho: fechaISO,
+                                documentoIdSalida: documentoId,
+                                usuarioDespacho: currentUser.email
+                            }).then(() => {
+                                logAudit('Despachar factura', 'FacturasPorDespachar', '', '', `${fac.numero} · ${fac.cliente || ''}`);
+                            });
+                        }
+                    }
                     const docData = {
                         documentoId, tipo, numDoc, fecha: fechaISO, fechaDoc,
                         fechaDespacho: tipo === 'Salida' ? fechaDespacho : '',
-                        proveedor, bodega, ubic, obs,
+                        proveedor, destino: tipo === 'Salida' ? destino : '',
+                        bodega, ubic, obs,
                         items: [...movDocItems], usuario,
                         usuarioPerfil: userPerfil || '',
                         usuarioUid: currentUser.uid
@@ -6410,6 +6708,15 @@ function selectSKUInto(sku, inputId, dropdownId, infoId) {
     if (inputId === 'mi-sku') {
         onMiSKUChange();
     }
+    // Modal Nueva Factura por Despachar: rellenar descripción y refrescar
+    // selects de lote/ubicación cuando se elige un SKU.
+    if (inputId === 'fpd-i-sku') {
+        const prod = data.productos[sku];
+        const desc = document.getElementById('fpd-i-desc');
+        if (desc) desc.value = prod ? (prod.descripcion || '') : '';
+        _fpdPopulateLoteSelect();
+        _fpdRefreshItemInfo();
+    }
 }
 
 // ══ FORM ERRORS ══
@@ -6523,12 +6830,21 @@ function closeModal(id) {
 
 function resetMovModal() {
     movDocItems = [];
-    _clearFields('md-tipo','md-numdoc','md-proveedor','md-obs');
+    _clearFields('md-tipo','md-numdoc','md-proveedor','md-destino','md-obs');
     const fechaEl = document.getElementById('md-fecha');
     if (fechaEl) fechaEl.value = new Date().toISOString().split('T')[0];
     const fdEl = document.getElementById('md-fecha-despacho'); if (fdEl) fdEl.value = '';
     const fdRow = document.getElementById('md-despacho-row'); if (fdRow) fdRow.style.display = 'none';
-    const ndWarn = document.getElementById('md-numdoc-warn'); if (ndWarn) { ndWarn.style.display = 'none'; ndWarn.textContent = ''; }
+    const destinoRow = document.getElementById('md-destino-row'); if (destinoRow) destinoRow.style.display = 'none';
+    const ndWarn = document.getElementById('md-numdoc-warn');
+    if (ndWarn) {
+        ndWarn.style.display = 'none';
+        ndWarn.textContent = '';
+        // Restaura estilo por defecto (podía haber quedado en verde por autoFillFromFactura).
+        ndWarn.style.color = '';
+        ndWarn.style.background = '';
+        ndWarn.style.borderColor = '';
+    }
     const bodegaEl = document.getElementById('md-bodega'); if (bodegaEl) bodegaEl.value = '';
     const ubicWrap = document.getElementById('mi-ubic-wrap');
     if (ubicWrap) ubicWrap.innerHTML = '<input type="text" class="form-input" id="mi-ubic" placeholder="Ej: Estante A-1">';
@@ -7560,6 +7876,478 @@ function renderOTHistorial() {
             <td><button class="btn btn-sm btn-icon" style="font-size:10px;white-space:nowrap" onclick="regenerarPDFOT('${o.id}')">PDF</button></td>
         </tr>`;
     }).join('');
+}
+
+// ══════════════════════════════════════
+//    FACTURAS POR DESPACHAR
+// ══════════════════════════════════════
+// Modelo Firebase: usuarios/{uid}/facturasPorDespachar/{id}
+//   { numero, fechaDocumento, fechaTeoricaDespacho, cliente, destino,
+//     conReserva:boolean, items:[{sku,descripcion,cantidad,bodega?,lote?,vence?,ubicacion?}],
+//     estatus: 'Pendiente'|'Despachada'|'Anulada',
+//     fechaCreacion, usuario,
+//     // al despachar:
+//     fechaDespacho, documentoIdSalida }
+
+let _fpdItems = [];              // items en edición dentro del modal
+let _fpdEditingId = null;        // (no usado hoy, previsto para edición futura)
+
+// Cantidad reservada por SKU (para calcular "stock disponible" y validaciones simples).
+// Se recalcula sobre demanda; barato porque no hay caché global.
+function _reservasPorSKU() {
+    const map = {};
+    Object.values(data.facturasPorDespachar || {}).forEach(f => {
+        if (!f || f.estatus !== 'Pendiente' || !f.conReserva) return;
+        (f.items || []).forEach(it => {
+            if (!it || !it.sku) return;
+            const q = parseFloat(it.cantidad) || 0;
+            if (!q) return;
+            map[it.sku] = (map[it.sku] || 0) + q;
+        });
+    });
+    return map;
+}
+// Cantidad reservada por lote específico (para validar disponibilidad al reservar).
+function _reservasPorLote() {
+    const map = {}; // key = sku|lote|bodega|ubic → qty
+    Object.values(data.facturasPorDespachar || {}).forEach(f => {
+        if (!f || f.estatus !== 'Pendiente' || !f.conReserva) return;
+        (f.items || []).forEach(it => {
+            if (!it || !it.sku || !it.lote) return;
+            const k = `${it.sku}|${it.lote}|${it.bodega||''}|${it.ubicacion||''}`;
+            map[k] = (map[k] || 0) + (parseFloat(it.cantidad) || 0);
+        });
+    });
+    return map;
+}
+// Stock total (todas las bodegas) del SKU, sumando lotes en estado Aprobado.
+function _stockAprobadoSKU(sku) {
+    const st = calcStock();
+    let total = 0;
+    Object.values(st).forEach(s => {
+        if (s.sku === sku && (parseFloat(s.cantidad)||0) > 0 && getLoteStatus(s) === 'Aprobado') {
+            total += parseFloat(s.cantidad) || 0;
+        }
+    });
+    return total;
+}
+// Stock disponible = stock aprobado - reservado por facturas pendientes con reserva.
+function _stockDisponibleSKU(sku) {
+    const reservas = _reservasPorSKU();
+    return _stockAprobadoSKU(sku) - (reservas[sku] || 0);
+}
+// Disponible en un lote específico (usado al reservar).
+function _stockDisponibleLote(sku, lote, bodega, ubicacion, excluyeFacturaId) {
+    const st = calcStock();
+    const k = `${sku}|${lote}|${bodega||''}|${ubicacion||''}`;
+    const totalLote = parseFloat((st[k]||{}).cantidad) || 0;
+    // Reservas de este lote específico, excluyendo la factura que se edita (si aplica).
+    let reservado = 0;
+    Object.entries(data.facturasPorDespachar || {}).forEach(([id, f]) => {
+        if (!f || f.estatus !== 'Pendiente' || !f.conReserva) return;
+        if (excluyeFacturaId && id === excluyeFacturaId) return;
+        (f.items || []).forEach(it => {
+            if (it && it.sku === sku && it.lote === lote && (it.bodega||'') === (bodega||'') && (it.ubicacion||'') === (ubicacion||'')) {
+                reservado += parseFloat(it.cantidad) || 0;
+            }
+        });
+    });
+    return totalLote - reservado;
+}
+
+function _updateFPDBadge() {
+    const badge = document.getElementById('fpdBadge');
+    if (!badge) return;
+    const pend = Object.values(data.facturasPorDespachar || {}).filter(f => f && f.estatus === 'Pendiente').length;
+    badge.textContent = pend;
+    badge.style.display = pend > 0 ? '' : 'none';
+}
+
+function clearFiltrosFPD() {
+    _clearFields('fFPDCliente','fFPDDesde','fFPDHasta');
+    const est = document.getElementById('fFPDEstatus'); if (est) est.value = 'Pendiente';
+    renderFacturasPorDespachar();
+}
+
+function renderFacturasPorDespachar() {
+    const tb = document.getElementById('tFacturasPorDespachar');
+    if (!tb) return;
+    const fCli    = (document.getElementById('fFPDCliente')?.value || '').toLowerCase();
+    const fEst    = document.getElementById('fFPDEstatus')?.value ?? 'Pendiente';
+    const fDesde  = document.getElementById('fFPDDesde')?.value || '';
+    const fHasta  = document.getElementById('fFPDHasta')?.value || '';
+
+    const arrFijas = bodegasFijasActual();
+    let rows = Object.entries(data.facturasPorDespachar || {}).map(([id, f]) => ({ id, ...f }));
+
+    // Filtro por bodegas permitidas: si el operador tiene bodegas fijas y la
+    // factura tiene reserva, se muestra sólo si al menos un ítem cae en su bodega.
+    if (arrFijas) {
+        rows = rows.filter(f => {
+            if (!f.conReserva || !f.items || !f.items.length) return true;
+            return f.items.some(it => arrFijas.includes(it.bodega || ''));
+        });
+    }
+    if (fCli)   rows = rows.filter(f => (f.cliente || '').toLowerCase().includes(fCli));
+    if (fEst)   rows = rows.filter(f => (f.estatus || '') === fEst);
+    if (fDesde) rows = rows.filter(f => (f.fechaTeoricaDespacho || '') >= fDesde);
+    if (fHasta) rows = rows.filter(f => (f.fechaTeoricaDespacho || '') <= fHasta);
+    rows.sort((a, b) => (a.fechaTeoricaDespacho || '').localeCompare(b.fechaTeoricaDespacho || ''));
+
+    if (!rows.length) {
+        tb.innerHTML = '<tr class="empty-row"><td colspan="10">No hay facturas registradas para los filtros aplicados</td></tr>';
+        return;
+    }
+
+    const prods = data.productos || {};
+    const hoy = new Date(); hoy.setHours(0,0,0,0);
+
+    tb.innerHTML = rows.map(f => {
+        const items = f.items || [];
+        const prodsHTML = items.map(it => {
+            const desc = it.descripcion || prods[it.sku]?.descripcion || '';
+            const loteInfo = f.conReserva && it.lote ? ` <span style="color:var(--text3);font-size:10px">[${it.bodega||''} · ${it.lote}${it.ubicacion?' · '+it.ubicacion:''}]</span>` : '';
+            return `<div style="font-size:11px;margin-bottom:2px"><strong>${it.sku}</strong> · ${desc||'—'} · ${it.cantidad} ud${loteInfo}</div>`;
+        }).join('') || '<span style="color:var(--text3)">—</span>';
+
+        // Indicador de stock disponible por SKU
+        let stockHTML;
+        if (f.estatus !== 'Pendiente') {
+            stockHTML = '<span style="color:var(--text3);font-size:11px">—</span>';
+        } else {
+            const skuStates = items.map(it => {
+                if (f.conReserva) {
+                    // ya reservado: se considera con stock reservado
+                    return { sku: it.sku, ok: true, reservado: true, qty: parseFloat(it.cantidad)||0 };
+                }
+                const disp = _stockDisponibleSKU(it.sku);
+                const need = parseFloat(it.cantidad) || 0;
+                return { sku: it.sku, ok: disp >= need, disp, need };
+            });
+            const todosOk = skuStates.every(s => s.ok);
+            if (f.conReserva) {
+                stockHTML = `<span class="badge badge-blue" style="font-size:10px">🔒 Reservado</span>`;
+            } else if (todosOk) {
+                stockHTML = `<span class="badge badge-success" style="font-size:10px">✓ Disponible</span>`;
+            } else {
+                const faltantes = skuStates.filter(s => !s.ok).map(s => `${s.sku} (${s.disp}/${s.need})`).join(', ');
+                stockHTML = `<span class="badge badge-warning" style="font-size:10px" title="${faltantes}">⚠ Falta stock</span>`;
+            }
+        }
+
+        // Estatus badge
+        const estBadge = f.estatus === 'Despachada' ? '<span class="badge badge-gray" style="font-size:10px">✓ Despachada</span>'
+                       : f.estatus === 'Anulada'    ? '<span class="badge badge-danger" style="font-size:10px">⊘ Anulada</span>'
+                       :                              '<span class="badge badge-warning" style="font-size:10px">⏱ Pendiente</span>';
+
+        // Alerta si está próxima a vencer (3 días) y hay stock
+        let alertaCell = '';
+        if (f.estatus === 'Pendiente' && f.fechaTeoricaDespacho) {
+            const fecha = new Date(f.fechaTeoricaDespacho + 'T00:00:00');
+            const dias = Math.ceil((fecha - hoy) / 86400000);
+            if (dias >= 0 && dias <= 3) alertaCell = ` <span title="Faltan ${dias} día(s) para el despacho" style="color:var(--warning,#B25E00)">⚠</span>`;
+        }
+
+        // Acciones
+        const canWrite = userPerfil !== 'Visualizador';
+        const acciones = f.estatus === 'Pendiente' && canWrite ? `
+            <button class="btn btn-sm btn-icon" title="Anular factura" onclick="anularFactura('${f.id}')" style="font-size:10px;color:var(--danger)">⊘</button>
+            ${f.conReserva ? `<button class="btn btn-sm btn-icon" title="Anular reserva (mantiene factura pendiente sin reserva)" onclick="anularReservaFactura('${f.id}')" style="font-size:10px">🔓</button>` : ''}
+        ` : '<span style="color:var(--text3)">—</span>';
+
+        return `<tr>
+            <td class="text-mono" style="color:var(--accent2);font-weight:600">${f.numero || '—'}${alertaCell}</td>
+            <td style="font-size:11px">${f.fechaDocumento ? fmtDate(f.fechaDocumento) : '—'}</td>
+            <td style="font-size:11px">${f.fechaTeoricaDespacho ? fmtDate(f.fechaTeoricaDespacho) : '—'}</td>
+            <td>${f.cliente || '—'}</td>
+            <td style="font-size:12px">${f.destino || '—'}</td>
+            <td>${f.conReserva ? '<span class="badge badge-blue" style="font-size:10px">Con reserva</span>' : '<span class="badge badge-gray" style="font-size:10px">Sin reserva</span>'}</td>
+            <td style="max-width:340px">${prodsHTML}</td>
+            <td>${stockHTML}</td>
+            <td>${estBadge}</td>
+            <td style="white-space:nowrap">${acciones}</td>
+        </tr>`;
+    }).join('');
+}
+
+// ── MODAL: Nueva Factura ──
+function openFacturaModal() {
+    if (userPerfil === 'Visualizador') { alert('Su perfil es de solo lectura.'); return; }
+    _fpdItems = [];
+    _fpdEditingId = null;
+    _clearFields('fpd-numero','fpd-cliente','fpd-destino');
+    const hoy = new Date().toISOString().slice(0,10);
+    document.getElementById('fpd-fecha-doc').value  = hoy;
+    document.getElementById('fpd-fecha-desp').value = hoy;
+    document.getElementById('fpd-reserva').value = 'sin';
+    _clearFields('fpd-i-sku','fpd-i-desc','fpd-i-qty','fpd-i-vence');
+    // Poblar select de bodegas permitidas
+    _fpdRefreshBodegaSelect();
+    _fpdOnReservaChange();
+    _fpdRenderItems();
+    const err = document.getElementById('fpdModal-err'); if (err) err.style.display = 'none';
+    openModal('fpdModal');
+}
+
+function _fpdRefreshBodegaSelect() {
+    const sel = document.getElementById('fpd-i-bodega');
+    if (!sel) return;
+    const arrFijas = bodegasFijasActual();
+    sel.innerHTML = '<option value="">Seleccionar...</option>';
+    Object.values(data.bodegas || {}).forEach(b => {
+        if (arrFijas && !arrFijas.includes(b.nombre)) return;
+        const o = document.createElement('option'); o.value = b.nombre; o.textContent = b.nombre;
+        sel.appendChild(o);
+    });
+}
+
+function _fpdOnReservaChange() {
+    const con = document.getElementById('fpd-reserva').value === 'con';
+    const wrap = document.getElementById('fpd-reserva-fields');
+    if (wrap) wrap.style.display = con ? '' : 'none';
+    // Reset lote/ubicación
+    _fpdResetLoteUbicSelects();
+    _fpdRefreshItemInfo();
+}
+
+function _fpdResetLoteUbicSelects() {
+    const sLote = document.getElementById('fpd-i-lote');
+    const sUbic = document.getElementById('fpd-i-ubic');
+    if (sLote) sLote.innerHTML = '<option value="">Seleccione bodega y SKU primero...</option>';
+    if (sUbic) sUbic.innerHTML = '<option value="">Seleccione lote primero...</option>';
+    const v = document.getElementById('fpd-i-vence'); if (v) v.value = '';
+}
+
+function _fpdOnBodegaChange() { _fpdPopulateLoteSelect(); _fpdRefreshItemInfo(); }
+function _fpdOnLoteChange()   { _fpdPopulateUbicSelect(); _fpdRefreshItemInfo(); }
+
+function _fpdPopulateLoteSelect() {
+    const sku    = (document.getElementById('fpd-i-sku')?.value || '').trim().toUpperCase();
+    const bodega = document.getElementById('fpd-i-bodega')?.value || '';
+    const sLote  = document.getElementById('fpd-i-lote');
+    if (!sLote) return;
+    if (!sku || !bodega) { sLote.innerHTML = '<option value="">Seleccione bodega y SKU primero...</option>'; return; }
+    // Lotes con stock aprobado > 0 en esa bodega y SKU
+    const st = calcStock();
+    const lotesSet = new Map();  // lote → vence (mínimo)
+    Object.values(st).forEach(s => {
+        if (s.sku !== sku || s.bodega !== bodega) return;
+        if ((parseFloat(s.cantidad)||0) <= 0) return;
+        if (getLoteStatus(s) !== 'Aprobado') return;
+        const prev = lotesSet.get(s.lote);
+        if (!prev || (s.vence && s.vence < prev)) lotesSet.set(s.lote, s.vence || '');
+    });
+    if (!lotesSet.size) { sLote.innerHTML = '<option value="">Sin lotes aprobados en esa bodega</option>'; return; }
+    sLote.innerHTML = '<option value="">Seleccionar lote...</option>' +
+        Array.from(lotesSet.entries()).map(([lote, vence]) => `<option value="${lote}" data-vence="${vence||''}">${lote}${vence ? ' · vence '+fmtDate(vence) : ''}</option>`).join('');
+    _fpdResetUbicOnly();
+}
+
+function _fpdResetUbicOnly() {
+    const sUbic = document.getElementById('fpd-i-ubic');
+    if (sUbic) sUbic.innerHTML = '<option value="">Seleccione lote primero...</option>';
+    const v = document.getElementById('fpd-i-vence'); if (v) v.value = '';
+}
+
+function _fpdPopulateUbicSelect() {
+    const sku    = (document.getElementById('fpd-i-sku')?.value || '').trim().toUpperCase();
+    const bodega = document.getElementById('fpd-i-bodega')?.value || '';
+    const lote   = document.getElementById('fpd-i-lote')?.value || '';
+    const sUbic  = document.getElementById('fpd-i-ubic');
+    if (!sUbic) return;
+    if (!sku || !bodega || !lote) { sUbic.innerHTML = '<option value="">Seleccione lote primero...</option>'; return; }
+    const st = calcStock();
+    const ubicMap = {};
+    let venceLote = '';
+    Object.values(st).forEach(s => {
+        if (s.sku === sku && s.bodega === bodega && s.lote === lote && (parseFloat(s.cantidad)||0) > 0 && getLoteStatus(s) === 'Aprobado') {
+            ubicMap[s.ubicacion||''] = (ubicMap[s.ubicacion||'']||0) + (parseFloat(s.cantidad)||0);
+            if (s.vence) venceLote = s.vence;
+        }
+    });
+    if (!Object.keys(ubicMap).length) { sUbic.innerHTML = '<option value="">Sin ubicaciones disponibles</option>'; return; }
+    sUbic.innerHTML = '<option value="">Seleccionar ubicación...</option>' +
+        Object.entries(ubicMap).map(([u, q]) => `<option value="${u}">${u||'—'} · ${q} ud</option>`).join('');
+    const v = document.getElementById('fpd-i-vence'); if (v) v.value = venceLote ? fmtDate(venceLote) : '';
+}
+
+function _fpdRefreshItemInfo() {
+    const info = document.getElementById('fpd-i-info');
+    if (!info) { return; }
+    const sku = (document.getElementById('fpd-i-sku')?.value || '').trim().toUpperCase();
+    const conReserva = document.getElementById('fpd-reserva').value === 'con';
+    if (!sku) { info.textContent = ''; return; }
+    if (!conReserva) {
+        const disp = _stockDisponibleSKU(sku);
+        info.innerHTML = `Stock disponible actual del SKU: <strong>${disp}</strong> unidades (aprobado - reservas pendientes).`;
+    } else {
+        const bodega = document.getElementById('fpd-i-bodega')?.value || '';
+        const lote   = document.getElementById('fpd-i-lote')?.value || '';
+        const ubic   = document.getElementById('fpd-i-ubic')?.value || '';
+        if (!bodega || !lote || !ubic) { info.textContent = 'Seleccione bodega, lote y ubicación para ver disponibilidad del lote.'; return; }
+        const disp = _stockDisponibleLote(sku, lote, bodega, ubic, _fpdEditingId);
+        info.innerHTML = `Disponible en este lote/ubicación: <strong>${disp}</strong> unidades.`;
+    }
+}
+
+function fpdAddItem() {
+    const err = document.getElementById('fpdModal-err');
+    const sku = (document.getElementById('fpd-i-sku')?.value || '').trim().toUpperCase();
+    const desc = document.getElementById('fpd-i-desc')?.value || '';
+    const qty = parseFloat(document.getElementById('fpd-i-qty')?.value || '');
+    if (!sku) { showFormError('fpdModal-err', 'Ingrese SKU del producto.'); return; }
+    if (!data.productos[sku]) { showFormError('fpdModal-err', `El SKU «${sku}» no está registrado en el maestro.`); return; }
+    if (!(qty > 0)) { showFormError('fpdModal-err', 'Ingrese una cantidad mayor a 0.'); return; }
+    const conReserva = document.getElementById('fpd-reserva').value === 'con';
+    const item = {
+        sku,
+        descripcion: desc || (data.productos[sku]?.descripcion || ''),
+        cantidad: qty
+    };
+    if (conReserva) {
+        const bodega = document.getElementById('fpd-i-bodega')?.value || '';
+        const lote   = document.getElementById('fpd-i-lote')?.value || '';
+        const ubic   = document.getElementById('fpd-i-ubic')?.value || '';
+        if (!bodega) { showFormError('fpdModal-err', 'Seleccione la bodega para la reserva.'); return; }
+        if (!lote)   { showFormError('fpdModal-err', 'Seleccione el lote a reservar.'); return; }
+        if (!ubic)   { showFormError('fpdModal-err', 'Seleccione la ubicación.'); return; }
+        const disp = _stockDisponibleLote(sku, lote, bodega, ubic, _fpdEditingId);
+        // Considerar también reservas del mismo item ya agregado en este form.
+        const yaAgregado = _fpdItems.filter(i => i.sku===sku && i.lote===lote && i.bodega===bodega && i.ubicacion===ubic).reduce((a,i)=>a+i.cantidad, 0);
+        if (qty + yaAgregado > disp) {
+            showFormError('fpdModal-err', `No hay stock suficiente para reservar. Disponible: ${disp} ud (ya agregadas ${yaAgregado} ud en esta factura).`);
+            return;
+        }
+        // Vence: leer del select de lote
+        const sLote = document.getElementById('fpd-i-lote');
+        const opt = sLote?.options[sLote.selectedIndex];
+        const vence = opt?.dataset?.vence || '';
+        item.bodega = bodega; item.lote = lote; item.ubicacion = ubic; item.vence = vence;
+    } else {
+        // Sin reserva: sólo se pide SKU + cantidad. No se afecta stock.
+        // Aviso informativo si no hay stock, pero no bloqueamos.
+    }
+    _fpdItems.push(item);
+    // Reset campos de ítem
+    _clearFields('fpd-i-sku','fpd-i-desc','fpd-i-qty');
+    _fpdResetLoteUbicSelects();
+    if (err) err.style.display = 'none';
+    _fpdRenderItems();
+    _fpdRefreshItemInfo();
+}
+
+function _fpdRemoveItem(idx) {
+    _fpdItems.splice(idx, 1);
+    _fpdRenderItems();
+}
+
+function _fpdRenderItems() {
+    const tb = document.getElementById('fpd-items-tbody');
+    if (!tb) return;
+    if (!_fpdItems.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="7">Sin productos agregados</td></tr>'; return; }
+    tb.innerHTML = _fpdItems.map((it, i) => `<tr>
+        <td class="text-mono">${it.sku}</td>
+        <td>${it.descripcion || '—'}</td>
+        <td>${it.bodega || '—'}</td>
+        <td class="text-mono">${it.lote || '—'}</td>
+        <td>${it.ubicacion || '—'}</td>
+        <td style="font-weight:600">${it.cantidad}</td>
+        <td><button class="btn btn-sm btn-icon" onclick="_fpdRemoveItem(${i})" style="color:var(--danger)">✕</button></td>
+    </tr>`).join('');
+}
+
+function saveFactura() {
+    if (userPerfil === 'Visualizador') { alert('Su perfil es de solo lectura.'); return; }
+    const numero      = (document.getElementById('fpd-numero').value || '').trim();
+    const fechaDoc    = document.getElementById('fpd-fecha-doc').value;
+    const cliente     = (document.getElementById('fpd-cliente').value || '').trim();
+    const destino     = (document.getElementById('fpd-destino').value || '').trim();
+    const fechaDesp   = document.getElementById('fpd-fecha-desp').value;
+    const conReserva  = document.getElementById('fpd-reserva').value === 'con';
+
+    if (!numero)    { showFormError('fpdModal-err', 'Ingrese el N° de factura.'); return; }
+    if (!fechaDoc)  { showFormError('fpdModal-err', 'Ingrese la fecha del documento.'); return; }
+    if (!cliente)   { showFormError('fpdModal-err', 'Ingrese el cliente.'); return; }
+    if (!destino)   { showFormError('fpdModal-err', 'Ingrese el destino (ciudad).'); return; }
+    if (!fechaDesp) { showFormError('fpdModal-err', 'Ingrese la fecha teórica de despacho.'); return; }
+    if (!_fpdItems.length) { showFormError('fpdModal-err', 'Agregue al menos un producto.'); return; }
+
+    // Duplicado: mismo N° de factura pendiente/despachada
+    const dup = Object.values(data.facturasPorDespachar || {}).find(f => f && f.numero === numero && f.estatus !== 'Anulada');
+    if (dup) { showFormError('fpdModal-err', `Ya existe una factura «${numero}» con estatus «${dup.estatus}». Anule la anterior o use otro N°.`); return; }
+
+    const uid = rootUid || currentUser.uid;
+    const factura = {
+        numero,
+        fechaDocumento: fechaDoc,
+        fechaTeoricaDespacho: fechaDesp,
+        cliente,
+        destino,
+        conReserva,
+        items: _fpdItems.map(i => ({ ...i })),
+        estatus: 'Pendiente',
+        fechaCreacion: new Date().toISOString(),
+        usuario: currentUser.email
+    };
+
+    _setBtnLoading('btn-save-fpd', true);
+    db.ref(`usuarios/${uid}/facturasPorDespachar`).push(factura)
+        .then(() => {
+            logAudit('Crear', 'FacturasPorDespachar', factura.items.map(i=>i.sku).join(','), '',
+                `${numero} · ${cliente} · ${destino} · ${conReserva?'con reserva':'sin reserva'} · ${factura.items.length} SKU(s)`);
+            _setBtnLoading('btn-save-fpd', false, 'Guardar Factura');
+            closeModal('fpdModal');
+        })
+        .catch(err => {
+            _setBtnLoading('btn-save-fpd', false, 'Guardar Factura');
+            showFormError('fpdModal-err', 'Error al guardar: ' + err.message);
+        });
+}
+
+function anularFactura(id) {
+    if (userPerfil === 'Visualizador') return;
+    const f = (data.facturasPorDespachar || {})[id];
+    if (!f) return;
+    if (f.estatus !== 'Pendiente') { alert('Solo se pueden anular facturas pendientes.'); return; }
+    if (!confirm(`¿Anular la factura «${f.numero}»?\n\n${f.conReserva ? 'La reserva de stock quedará liberada automáticamente.' : ''}`)) return;
+    const uid = rootUid || currentUser.uid;
+    db.ref(`usuarios/${uid}/facturasPorDespachar/${id}`).update({
+        estatus: 'Anulada',
+        fechaAnulacion: new Date().toISOString(),
+        usuarioAnulacion: currentUser.email
+    }).then(() => {
+        logAudit('Anular factura', 'FacturasPorDespachar', '', '', `${f.numero} · ${f.cliente || ''}`);
+    });
+}
+
+function anularReservaFactura(id) {
+    if (userPerfil === 'Visualizador') return;
+    const f = (data.facturasPorDespachar || {})[id];
+    if (!f) return;
+    if (f.estatus !== 'Pendiente') { alert('Solo se puede anular la reserva de facturas pendientes.'); return; }
+    if (!f.conReserva) { alert('Esta factura no tiene reserva de stock.'); return; }
+    if (!confirm(`¿Anular la reserva de la factura «${f.numero}»?\n\nLa factura queda pendiente sin reserva; los ítems mantendrán SKU y cantidad pero se liberará el stock reservado.`)) return;
+    const uid = rootUid || currentUser.uid;
+    const itemsSinLote = (f.items || []).map(i => ({ sku: i.sku, descripcion: i.descripcion || '', cantidad: i.cantidad }));
+    db.ref(`usuarios/${uid}/facturasPorDespachar/${id}`).update({
+        conReserva: false,
+        items: itemsSinLote,
+        fechaAnulacionReserva: new Date().toISOString(),
+        usuarioAnulacionReserva: currentUser.email
+    }).then(() => {
+        logAudit('Anular reserva', 'FacturasPorDespachar', '', '', `${f.numero}`);
+    });
+}
+
+// Busca una factura Pendiente cuyo N° coincida (case-insensitive, trimmed).
+function _findFacturaPendientePorNumero(num) {
+    const n = (num || '').trim().toLowerCase();
+    if (!n) return null;
+    for (const [id, f] of Object.entries(data.facturasPorDespachar || {})) {
+        if (!f || f.estatus !== 'Pendiente') continue;
+        if ((f.numero || '').trim().toLowerCase() === n) return { id, ...f };
+    }
+    return null;
 }
 
 // ══ UTILS ══
