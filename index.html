@@ -907,12 +907,13 @@
                 <div id="facturasPorDespachar" class="page">
                     <div class="card">
                         <div class="card-header">
-                            <div style="display:flex;align-items:center;gap:16px">
+                            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
                                 <div>
                                     <div class="card-title">Facturas por Despachar</div>
                                     <div class="card-subtitle">Facturas pendientes de despacho · Con o sin reserva de stock</div>
                                 </div>
                                 <button class="btn btn-primary btn-sm need-write" onclick="openFacturaModal()">+ Nueva Factura</button>
+                                <button class="btn btn-ghost btn-sm" onclick="openResumenSkuModal()" title="Ver totales de productos pendientes agrupados por SKU">📊 Resumen por SKU</button>
                             </div>
                         </div>
                         <div class="filter-bar">
@@ -2323,6 +2324,49 @@
     </div>
 </div>
 
+<!-- ══════════════════════════════════════
+     MODAL: RESUMEN POR SKU - FACTURAS PENDIENTES
+══════════════════════════════════════ -->
+<div id="resumenSkuModal" class="modal">
+    <div class="modal-box" style="max-width:1000px;width:96vw;max-height:92vh;overflow-y:auto">
+        <div class="modal-header">
+            <div>
+                <div class="modal-title">Resumen por SKU · Facturas por Despachar</div>
+                <div class="modal-subtitle">Totales de productos pendientes agrupados por SKU</div>
+            </div>
+            <button class="modal-close" onclick="closeModal('resumenSkuModal')">✕</button>
+        </div>
+
+        <div class="filter-bar" style="margin-bottom:12px">
+            <select class="form-select" id="fRSkuTipo" onchange="renderResumenSku()" style="width:auto;min-width:220px">
+                <option value="todos">Todas las pendientes (con y sin reserva)</option>
+                <option value="sinreserva">Sólo pendientes SIN reserva</option>
+                <option value="conreserva">Sólo pendientes CON reserva</option>
+            </select>
+            <input type="text" class="form-input" id="fRSkuBusqueda" placeholder="Buscar SKU o descripción..." oninput="renderResumenSku()" style="max-width:280px">
+            <div id="rskuTotalInfo" style="margin-left:auto;font-size:12px;color:var(--text2);align-self:center"></div>
+        </div>
+
+        <div class="table-wrap" style="max-height:60vh;overflow-y:auto">
+            <table>
+                <thead><tr>
+                    <th style="min-width:110px">SKU</th>
+                    <th>Descripción</th>
+                    <th style="text-align:right;min-width:110px">Cant. total pendiente</th>
+                    <th style="text-align:right;min-width:110px">Stock disponible</th>
+                    <th style="text-align:right;min-width:100px">Cobertura</th>
+                    <th style="min-width:320px">Desglose (N° factura · cliente · cantidad)</th>
+                </tr></thead>
+                <tbody id="tResumenSku"><tr class="empty-row"><td colspan="6">Sin datos</td></tr></tbody>
+            </table>
+        </div>
+
+        <div class="btn-row">
+            <button type="button" class="btn btn-ghost" onclick="closeModal('resumenSkuModal')">Cerrar</button>
+        </div>
+    </div>
+</div>
+
 <script>
 // ══ FIREBASE ══
 const firebaseConfig = {
@@ -3064,6 +3108,9 @@ function _flushPendingRenders() {
         _updateFPDBadge();
         if (_isPageActive('facturasPorDespachar')) renderFacturasPorDespachar();
         if (_isPageActive('alertas')) renderAlertas();
+        // Refresca el resumen por SKU si está abierto.
+        const rsm = document.getElementById('resumenSkuModal');
+        if (rsm && rsm.classList.contains('active')) renderResumenSku();
     }
     if (q.has('stats'))             updateStats();
 }
@@ -8463,6 +8510,115 @@ function _findFacturaPendientePorNumero(num) {
         if ((f.numero || '').trim().toLowerCase() === n) return { id, ...f };
     }
     return null;
+}
+
+// ── RESUMEN POR SKU ──
+// Agrupa los items de las facturas Pendientes por SKU. Respeta el filtro por
+// bodegas permitidas del perfil (usa bodegaConsumo con fallback a items[].bodega
+// para registros antiguos). Devuelve un array de objetos con:
+//   { sku, descripcion, totalPendiente, facturas:[{numero, cliente, cantidad, conReserva}] }
+function _resumenSkuFacturasPendientes(tipo /* 'todos'|'sinreserva'|'conreserva' */) {
+    const arrFijas = bodegasFijasActual();
+    const prods = data.productos || {};
+    const acc = {};
+    Object.values(data.facturasPorDespachar || {}).forEach(f => {
+        if (!f || f.estatus !== 'Pendiente') return;
+        if (tipo === 'sinreserva' && f.conReserva) return;
+        if (tipo === 'conreserva' && !f.conReserva) return;
+        // Alcance por bodegas permitidas del perfil
+        if (arrFijas) {
+            if (f.bodegaConsumo) {
+                if (!arrFijas.includes(f.bodegaConsumo)) return;
+            } else if (f.items && f.items.some(it => arrFijas.includes(it.bodega || ''))) {
+                // OK — registro antiguo con al menos un ítem en bodega permitida
+            } else {
+                return;
+            }
+        }
+        (f.items || []).forEach(it => {
+            if (!it || !it.sku) return;
+            const sku = it.sku;
+            const qty = parseFloat(it.cantidad) || 0;
+            if (qty <= 0) return;
+            if (!acc[sku]) acc[sku] = {
+                sku,
+                descripcion: it.descripcion || prods[sku]?.descripcion || '',
+                totalPendiente: 0,
+                facturas: []
+            };
+            acc[sku].totalPendiente += qty;
+            acc[sku].facturas.push({
+                numero: f.numero || '',
+                cliente: f.cliente || '',
+                cantidad: qty,
+                conReserva: !!f.conReserva
+            });
+        });
+    });
+    return Object.values(acc).sort((a, b) => a.sku.localeCompare(b.sku));
+}
+
+function openResumenSkuModal() {
+    document.getElementById('fRSkuTipo').value = 'todos';
+    document.getElementById('fRSkuBusqueda').value = '';
+    openModal('resumenSkuModal');
+    renderResumenSku();
+}
+
+function renderResumenSku() {
+    const tipo = document.getElementById('fRSkuTipo')?.value || 'todos';
+    const q = (document.getElementById('fRSkuBusqueda')?.value || '').toLowerCase().trim();
+    const tb = document.getElementById('tResumenSku');
+    const info = document.getElementById('rskuTotalInfo');
+    if (!tb) return;
+    let rows = _resumenSkuFacturasPendientes(tipo);
+    if (q) rows = rows.filter(r => r.sku.toLowerCase().includes(q) || (r.descripcion || '').toLowerCase().includes(q));
+    if (!rows.length) {
+        tb.innerHTML = '<tr class="empty-row"><td colspan="6">Sin productos pendientes que coincidan con el filtro</td></tr>';
+        if (info) info.textContent = '';
+        return;
+    }
+    const totalSKUs = rows.length;
+    const totalUnidades = rows.reduce((a, r) => a + r.totalPendiente, 0);
+    if (info) info.innerHTML = `${totalSKUs} SKU(s) · Total pendiente: <strong>${totalUnidades}</strong> ud`;
+
+    tb.innerHTML = rows.map(r => {
+        const disp = _stockDisponibleSKU(r.sku);
+        const pend = r.totalPendiente;
+        // Cobertura: cuánto del pendiente puedo cubrir con stock disponible actual.
+        // Nota: para facturas con reserva, el disp ya descuenta las propias reservas,
+        // así que se muestra "Cubierto (reservado)" cuando aplica.
+        let cobertura, coberturaCls;
+        if (tipo === 'conreserva') {
+            cobertura = 'Reservado';
+            coberturaCls = 'badge-blue';
+        } else if (disp >= pend) {
+            cobertura = '✓ Cubre';
+            coberturaCls = 'badge-success';
+        } else if (disp <= 0) {
+            cobertura = '⚠ Sin stock';
+            coberturaCls = 'badge-danger';
+        } else {
+            cobertura = `Falta ${pend - disp}`;
+            coberturaCls = 'badge-warning';
+        }
+
+        const desgloseHTML = r.facturas
+            .sort((a, b) => (a.numero || '').localeCompare(b.numero || ''))
+            .map(fx => {
+                const marca = fx.conReserva ? '<span class="badge badge-blue" style="font-size:9px;padding:1px 5px;margin-left:4px">R</span>' : '';
+                return `<div style="font-size:11.5px;line-height:1.35"><span class="text-mono" style="color:var(--accent2)">${fx.numero || '—'}</span> · ${fx.cliente || '—'} · <strong>${fx.cantidad}</strong> ud${marca}</div>`;
+            }).join('');
+
+        return `<tr>
+            <td class="text-mono" style="color:var(--accent2);font-weight:600">${r.sku}</td>
+            <td>${r.descripcion || '—'}</td>
+            <td style="text-align:right;font-weight:700;font-size:14px">${r.totalPendiente}</td>
+            <td style="text-align:right;color:var(--text2)">${disp}</td>
+            <td style="text-align:right"><span class="badge ${coberturaCls}" style="font-size:10px">${cobertura}</span></td>
+            <td>${desgloseHTML}</td>
+        </tr>`;
+    }).join('');
 }
 
 // ══ UTILS ══
