@@ -4136,6 +4136,14 @@ function addItemToDoc() {
         if (!vence) { showFormError('mi-err', 'La fecha de vencimiento es obligatoria para entradas.'); return; }
         const vD = new Date(vence + 'T00:00:00'); const hoy = new Date(); hoy.setHours(0,0,0,0);
         if (vD < hoy) { showFormError('mi-err', 'La fecha de vencimiento no puede ser pasada para una entrada.'); return; }
+        // Restricción CELMEDIK BIODIAL: bloquea Entradas de productos clasificados
+        // como "Medicamento" (esta bodega no está habilitada para almacenarlos).
+        const bodegaSelEnt = (document.getElementById('md-bodega')?.value || '').trim().toUpperCase();
+        const tipoProdEnt  = (data.productos[sku]?.tipo || '').trim();
+        if (bodegaSelEnt === 'CELMEDIK BIODIAL' && tipoProdEnt === 'Medicamento') {
+            showFormError('mi-err', `❌ La bodega «CELMEDIK BIODIAL» no está habilitada para recibir Medicamentos. El SKU «${sku}» está clasificado como Medicamento. Seleccione otra bodega o revise la clasificación del producto.`);
+            return;
+        }
         // Con Cantidad de Pallet > 1, la ubicación se asigna por pallet (validado más
         // abajo). El campo único «mi-ubic» se oculta en ese caso, por lo que no debe
         // exigirse aquí; de lo contrario se rechaza el ingreso aunque cada pallet
@@ -4473,6 +4481,15 @@ function saveDocumento() {
     }
     if (!movDocItems.length) { showFormError('movModal-err', 'Debe agregar al menos un producto al documento.'); return; }
     if (tipo === 'Salida' && !fechaDespacho) { showFormError('movModal-err', 'Debe indicar la fecha de despacho.'); return; }
+    // Segunda barrera de la restricción CELMEDIK BIODIAL: cubre el caso en que
+    // el usuario haya cambiado la bodega después de agregar los ítems.
+    if (tipo === 'Entrada' && bodega.trim().toUpperCase() === 'CELMEDIK BIODIAL') {
+        const medicamentos = movDocItems.filter(i => (data.productos[i.sku]?.tipo || '').trim() === 'Medicamento').map(i => i.sku);
+        if (medicamentos.length) {
+            showFormError('movModal-err', `❌ La bodega «CELMEDIK BIODIAL» no está habilitada para recibir Medicamentos. Retire los siguientes SKU del documento o cambie la bodega: ${medicamentos.join(', ')}.`);
+            return;
+        }
+    }
 
     const documentoId = numDoc || `DOC-${Date.now()}`;
     const fechaISO = new Date().toISOString();
