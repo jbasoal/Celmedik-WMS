@@ -817,7 +817,8 @@
                             <input type="text" class="form-input" id="fStockLote" placeholder="Lote..." onkeyup="renderStock()" style="max-width:130px">
                             <input type="text" class="form-input" id="fStockUbic" placeholder="Ubicación..." onkeyup="renderStock()" style="max-width:130px">
                             <select class="form-select" id="fStockStatus" onchange="renderStock()" style="width:auto;min-width:150px">
-                                <option value="Aprobado">✓ Aprobado</option>
+                                <option value="Aprobado">✓ Disponible</option>
+                                <option value="Reservado">🔒 Reservado</option>
                                 <option value="">Todos los estados</option>
                                 <option value="Cuarentena">🔒 Cuarentena</option>
                                 <option value="Rechazado">⚠ Rechazado</option>
@@ -1904,7 +1905,7 @@
 <div id="cambioEstatusCuarModal" class="modal">
     <div class="modal-box" style="max-width:480px">
         <div class="modal-header">
-            <div><div class="modal-title">Cambiar estatus de lote en cuarentena</div><div class="modal-subtitle">Liberar (Aprobado) o Rechazar el lote — NT 147</div></div>
+            <div><div class="modal-title">Cambiar estatus de lote en cuarentena</div><div class="modal-subtitle">Liberar (Disponible) o Rechazar el lote — NT 147</div></div>
             <button class="modal-close" onclick="closeModal('cambioEstatusCuarModal')">✕</button>
         </div>
         <div id="cec-err" class="form-error-banner"></div>
@@ -1913,7 +1914,7 @@
             <label class="form-label">Nuevo estatus <span style="color:var(--danger)">*</span></label>
             <select class="form-select" id="cec-status" onchange="_cecToggleMotivo()">
                 <option value="">Seleccionar...</option>
-                <option value="Aprobado">✓ Aprobado (liberar)</option>
+                <option value="Aprobado">✓ Disponible (liberar)</option>
                 <option value="Rechazado">✕ Rechazado</option>
             </select>
         </div>
@@ -2033,7 +2034,7 @@
                     <label class="form-label">Status</label>
                     <select class="form-select" id="d-status">
                         <option value="Pendiente">Pendiente</option>
-                        <option value="Aprobado">Aprobado</option>
+                        <option value="Aprobado">Disponible</option>
                         <option value="Rechazado">Rechazado</option>
                     </select>
                 </div>
@@ -3205,16 +3206,21 @@ function getLoteStatus(s) {
 }
 
 function statusBadgeHTML(st) {
+    // Nota: internamente se sigue usando "Aprobado" como valor persistido en
+    // Firebase (compatibilidad con movimientos históricos); la UI muestra
+    // "Disponible". "Reservado" es un estatus virtual calculado a partir de
+    // las facturas por despachar con reserva.
     const map = {
-        'Aprobado':          { cls:'badge-success', icon:'✓' },
-        'Cuarentena':        { cls:'badge-warning',  icon:'🔒' },
-        'Rechazado':         { cls:'badge-danger',   icon:'⚠' },
-        'Vencido':           { cls:'badge-gray',     icon:'⏱' },
-        'Retiro de mercado': { cls:'badge-danger',   icon:'⚠' },
-        'Falsificado':       { cls:'badge-danger',   icon:'⛔' }
+        'Aprobado':          { cls:'badge-success', icon:'✓',  label:'Disponible' },
+        'Reservado':         { cls:'badge-blue',    icon:'🔒', label:'Reservado' },
+        'Cuarentena':        { cls:'badge-warning', icon:'🔒', label:'Cuarentena' },
+        'Rechazado':         { cls:'badge-danger',  icon:'⚠',  label:'Rechazado' },
+        'Vencido':           { cls:'badge-gray',    icon:'⏱',  label:'Vencido' },
+        'Retiro de mercado': { cls:'badge-danger',  icon:'⚠',  label:'Retiro de mercado' },
+        'Falsificado':       { cls:'badge-danger',  icon:'⛔', label:'Falsificado' }
     };
-    const d = map[st] || { cls:'badge-gray', icon:'' };
-    return `<span class="badge ${d.cls}">${d.icon} ${st}</span>`;
+    const d = map[st] || { cls:'badge-gray', icon:'', label: st };
+    return `<span class="badge ${d.cls}">${d.icon} ${d.label}</span>`;
 }
 
 // ══ ALERTAS CALC ══
@@ -3616,7 +3622,7 @@ function _refreshMiStatusField(tipo) {
             const skuAct = (document.getElementById('mi-sku')?.value || '').trim().toUpperCase();
             if (_canOperadorAprobar(skuAct)) {
                 miStatus.innerHTML =
-                    '<option value="Aprobado">✓ Aprobado</option>' +
+                    '<option value="Aprobado">✓ Disponible</option>' +
                     '<option value="Cuarentena">🔒 Cuarentena</option>';
                 miStatus.value = 'Aprobado';
             } else {
@@ -3626,7 +3632,7 @@ function _refreshMiStatusField(tipo) {
             }
         } else {
             miStatus.innerHTML =
-                '<option value="Aprobado">✓ Aprobado</option>' +
+                '<option value="Aprobado">✓ Disponible</option>' +
                 '<option value="Cuarentena">🔒 Cuarentena</option>' +
                 '<option value="Falsificado">⛔ Falsificado</option>';
             miStatus.value = 'Aprobado';
@@ -3652,7 +3658,7 @@ function _refreshMiStatusField(tipo) {
         } else {
             miStatus.innerHTML =
                 '<option value="Cuarentena">🔒 Cuarentena</option>' +
-                '<option value="Aprobado">✓ Aprobado</option>' +
+                '<option value="Aprobado">✓ Disponible</option>' +
                 '<option value="Rechazado">⚠ Rechazado</option>';
             miStatus.value = 'Cuarentena';
         }
@@ -4302,15 +4308,18 @@ function _autoFillFromFactura() {
     if (!num) return;
     const f = _findFacturaPendientePorNumero(num);
     if (!f) return;
-    // Auto-fill cabecera (respetando lo que el usuario ya haya escrito).
+    // Auto-fill cabecera: al encontrarse una factura, sus datos son la fuente
+    // autoritativa — se sobrescribe el valor por defecto (ej. la fecha del
+    // documento se pre-rellena con hoy en resetMovModal, y necesita
+    // recuperar la fecha registrada al crear la factura).
     const provEl = document.getElementById('md-proveedor');
-    if (provEl && !provEl.value.trim()) provEl.value = f.cliente || '';
+    if (provEl) provEl.value = f.cliente || provEl.value;
     const destEl = document.getElementById('md-destino');
-    if (destEl && !destEl.value.trim()) destEl.value = f.destino || '';
+    if (destEl) destEl.value = f.destino || destEl.value;
     const fechaDocEl = document.getElementById('md-fecha');
-    if (fechaDocEl && !fechaDocEl.value && f.fechaDocumento) fechaDocEl.value = f.fechaDocumento;
+    if (fechaDocEl && f.fechaDocumento) fechaDocEl.value = f.fechaDocumento;
     const fechaDespEl = document.getElementById('md-fecha-despacho');
-    if (fechaDespEl && !fechaDespEl.value && f.fechaTeoricaDespacho) fechaDespEl.value = f.fechaTeoricaDespacho;
+    if (fechaDespEl && f.fechaTeoricaDespacho) fechaDespEl.value = f.fechaTeoricaDespacho;
     // Bodega: prefiere la bodega de consumo de la factura (siempre presente
     // en registros nuevos); si el registro es antiguo, cae a la bodega de las
     // líneas con reserva cuando todas coinciden.
@@ -5588,6 +5597,51 @@ function setStockView(mode) {
     renderStock();
 }
 
+// Devuelve mapa de reservas activas por lote específico, con detalle de las
+// facturas que reservaron (para tooltip en Stock Actual).
+//   key: `${sku}|${lote}|${bodega}|${ubicacion}` → { total, facturas:[{numero,cliente,cantidad}] }
+function _reservasPorLoteDetalle() {
+    const map = {};
+    Object.values(data.facturasPorDespachar || {}).forEach(f => {
+        if (!f || f.estatus !== 'Pendiente' || !f.conReserva) return;
+        (f.items || []).forEach(it => {
+            if (!it || !it.sku || !it.lote) return;
+            const q = parseFloat(it.cantidad) || 0;
+            if (q <= 0) return;
+            const k = `${it.sku}|${it.lote}|${it.bodega||''}|${it.ubicacion||''}`;
+            if (!map[k]) map[k] = { total: 0, facturas: [] };
+            map[k].total += q;
+            map[k].facturas.push({ numero: f.numero || '', cliente: f.cliente || '', cantidad: q });
+        });
+    });
+    return map;
+}
+
+// Expande el mapa de stock crudo (calcStock) dividiendo cada lote "Aprobado"
+// con reserva activa en dos entradas virtuales:
+//   - status="Aprobado"   → cantidad DISPONIBLE (cantidad - reservada)
+//   - status="Reservado"  → cantidad reservada, con lista de facturas asociadas
+// El resto de las entradas pasa intacta.
+function _stockExpandidoConReservas(stock) {
+    const reservas = _reservasPorLoteDetalle();
+    const out = {};
+    Object.entries(stock).forEach(([k, s]) => {
+        const status = getLoteStatus(s);
+        const rKey = `${s.sku}|${s.lote}|${s.bodega||''}|${s.ubicacion||''}`;
+        const r = reservas[rKey];
+        const totalQty = parseFloat(s.cantidad) || 0;
+        if (r && r.total > 0 && status === 'Aprobado' && totalQty > 0) {
+            const reservado  = Math.min(r.total, totalQty);
+            const disponible = totalQty - reservado;
+            if (disponible > 0) out[k + '::disp'] = { ...s, cantidad: disponible };
+            if (reservado > 0)  out[k + '::res']  = { ...s, cantidad: reservado, status: 'Reservado', _reservas: r.facturas };
+        } else {
+            out[k] = s;
+        }
+    });
+    return out;
+}
+
 function renderStock() {
     const fSKU    = (document.getElementById('fStockSKU')?.value||'').toLowerCase();
     const fDesc   = (document.getElementById('fStockDesc')?.value||'').toLowerCase();
@@ -5595,7 +5649,7 @@ function renderStock() {
     const fUbic   = (document.getElementById('fStockUbic')?.value||'').toLowerCase();
     const fStatus = document.getElementById('fStockStatus')?.value ?? 'Aprobado';
     const sortBy  = document.getElementById('fStockSort')?.value || 'fefo';
-    const stock   = calcStock();
+    const stock   = _stockExpandidoConReservas(calcStock());
     const prods   = data.productos||{};
     const hoy     = new Date();
     const tb      = document.getElementById('tStock');
@@ -5625,12 +5679,15 @@ function renderStock() {
     if (stockViewMode === 'sku') {
         if (thead) thead.innerHTML = '<th>SKU</th><th>Descripción</th><th>Stock Total</th><th>Unidad de Venta</th><th>Presentación</th><th>Lotes activos</th>';
         if (subtitleEl) subtitleEl.textContent = 'Stock total consolidado por SKU';
+        // Agrega por SKU. Como el stock viene "expandido" con reservas (dos
+        // filas virtuales por lote reservado), usamos un Set para no contar
+        // dos veces el mismo lote-ubicación al totalizar la cantidad de lotes.
         const skuRows = Object.values(rows.reduce((acc, s) => {
-            if (!acc[s.sku]) acc[s.sku] = { sku: s.sku, total: 0, lotes: 0 };
+            if (!acc[s.sku]) acc[s.sku] = { sku: s.sku, total: 0, _lotSet: new Set() };
             acc[s.sku].total += parseFloat(s.cantidad)||0;
-            acc[s.sku].lotes += 1;
+            acc[s.sku]._lotSet.add(`${s.lote}|${s.bodega||''}|${s.ubicacion||''}`);
             return acc;
-        }, {})).sort((a, b) => a.sku.localeCompare(b.sku));
+        }, {})).map(r => ({ sku: r.sku, total: r.total, lotes: r._lotSet.size })).sort((a, b) => a.sku.localeCompare(b.sku));
         if (!skuRows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="6">No hay stock registrado</td></tr>'; return; }
         tb.innerHTML = skuRows.map(s => {
             const p = prods[s.sku];
@@ -5656,13 +5713,17 @@ function renderStock() {
         const stRow = getLoteStatus(s);
         const k = `${s.sku}|${s.lote}|${s.bodega||''}|${stRow}`;
         if (!grouped[k]) {
-            grouped[k] = { sku: s.sku, lote: s.lote, vence: s.vence, bodega: s.bodega, status: stRow, cantidad: 0, ubicaciones: [] };
+            grouped[k] = { sku: s.sku, lote: s.lote, vence: s.vence, bodega: s.bodega, status: stRow, cantidad: 0, ubicaciones: [], facturasReserva: [] };
         } else if (s.vence && (!grouped[k].vence || s.vence < grouped[k].vence)) {
             grouped[k].vence = s.vence;
         }
         const qty = parseFloat(s.cantidad) || 0;
         grouped[k].cantidad += qty;
         if (qty > 0) grouped[k].ubicaciones.push({ ubic: s.ubicacion || '—', qty });
+        // Acumular facturas asociadas cuando la entrada es virtual "Reservado".
+        if (stRow === 'Reservado' && Array.isArray(s._reservas)) {
+            grouped[k].facturasReserva.push(...s._reservas);
+        }
     });
     let aggRows = Object.values(grouped).filter(r => r.cantidad > 0);
 
@@ -5686,6 +5747,14 @@ function renderStock() {
             .sort((a, b) => a.ubic.localeCompare(b.ubic))
             .map(u => `${u.ubic} (${u.qty})`)
             .join(', ');
+        // Tooltip con las facturas que reservaron el stock (sólo status Reservado).
+        let statusCell;
+        if (s.status === 'Reservado' && s.facturasReserva && s.facturasReserva.length) {
+            const detalle = s.facturasReserva.map(fx => `${fx.numero || '—'}${fx.cliente ? ' · '+fx.cliente : ''} · ${fx.cantidad} ud`).join('\n');
+            statusCell = `<span title="Reservado por:\n${detalle.replace(/"/g,'&quot;')}">${statusBadgeHTML(s.status)}</span>`;
+        } else {
+            statusCell = statusBadgeHTML(s.status);
+        }
         return `<tr>
             <td class="text-mono" style="color:var(--accent2)">${s.sku}</td>
             <td style="color:var(--text)">${prods[s.sku]?.descripcion||'—'}</td>
@@ -5694,7 +5763,7 @@ function renderStock() {
             <td style="font-weight:600;color:var(--text)">${s.cantidad}</td>
             <td>${prods[s.sku]?.unidadVenta||'—'}</td>
             <td style="font-size:12px;color:var(--text2)">${prods[s.sku]?.presentacion||'—'}</td>
-            <td>${statusBadgeHTML(s.status)}</td>
+            <td>${statusCell}</td>
             <td>${s.bodega||'—'}</td>
             <td style="font-size:12px">${ubicCell || '—'}</td>
             <td><button class="btn btn-sm btn-icon" style="font-size:10px" onclick="verTrazabilidadLote('${s.sku}','${s.lote}')">Trazar</button></td>
@@ -6144,7 +6213,7 @@ function openDevModal() {
         } else {
             dStatus.innerHTML =
                 '<option value="Pendiente">Pendiente</option>' +
-                '<option value="Aprobado">Aprobado</option>' +
+                '<option value="Aprobado">Disponible</option>' +
                 '<option value="Rechazado">Rechazado</option>';
             dStatus.value = 'Pendiente';
             dStatus.disabled = false;
@@ -8087,8 +8156,8 @@ function renderFacturasPorDespachar() {
             <td style="font-size:12px">${f.destino || '—'}</td>
             <td style="font-size:12px">${bodConsumo || '—'}</td>
             <td>${f.conReserva ? '<span class="badge badge-blue" style="font-size:10px">Con reserva</span>' : '<span class="badge badge-gray" style="font-size:10px">Sin reserva</span>'}</td>
-            <td style="max-width:340px">${prodsHTML}</td>
-            <td>${stockHTML}</td>
+            <td style="min-width:420px;max-width:560px;white-space:normal">${prodsHTML}</td>
+            <td style="min-width:90px;white-space:nowrap">${stockHTML}</td>
             <td>${estBadge}</td>
             <td style="white-space:nowrap">${acciones}</td>
         </tr>`;
