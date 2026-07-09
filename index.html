@@ -919,7 +919,9 @@
                         <div class="filter-bar">
                             <input type="text" class="form-input" id="fFPDCliente" placeholder="Cliente..." oninput="renderFacturasPorDespachar()" style="max-width:220px">
                             <select class="form-select" id="fFPDEstatus" onchange="renderFacturasPorDespachar()" style="width:auto">
-                                <option value="Pendiente">Pendientes</option>
+                                <option value="ABIERTAS">Pendientes y parciales</option>
+                                <option value="Pendiente">Sólo pendientes (sin despacho)</option>
+                                <option value="Parcialmente despachada">Sólo parcialmente despachadas</option>
                                 <option value="Despachada">Despachadas</option>
                                 <option value="Anulada">Anuladas</option>
                                 <option value="">Todos los estatus</option>
@@ -3302,7 +3304,7 @@ function calcAlertas() {
     const hoyStart = new Date(); hoyStart.setHours(0,0,0,0);
     const arrFijasAl = bodegasFijasActual();
     Object.values(data.facturasPorDespachar || {}).forEach(f => {
-        if (!f || f.estatus !== 'Pendiente' || !f.fechaTeoricaDespacho) return;
+        if (!_facturaAbierta(f) || !f.fechaTeoricaDespacho) return;
         // Alcance por bodegas permitidas: prefiere bodegaConsumo (siempre
         // presente en registros nuevos); si es un registro antiguo usa las
         // bodegas de los ítems con reserva.
@@ -3317,19 +3319,22 @@ function calcAlertas() {
         const fecha = new Date(f.fechaTeoricaDespacho + 'T00:00:00');
         const dias = Math.ceil((fecha - hoyStart) / 86400000);
         if (dias < 0 || dias > 3) return;
-        // ¿Hay stock disponible de al menos un SKU?
-        const items = f.items || [];
-        const hayStock = items.some(it => {
-            if (f.conReserva) return true; // el stock ya está reservado
-            return _stockDisponibleSKU(it.sku) >= (parseFloat(it.cantidad) || 0);
+        // ¿Aún queda pendiente? Filtrar SKUs ya despachados totalmente.
+        const pendMap = _pendientePorSKUFactura(f);
+        const skusPendientes = Object.entries(pendMap).filter(([, p]) => p.pendiente > 0);
+        if (!skusPendientes.length) return;
+        const hayStock = skusPendientes.some(([sku, p]) => {
+            if (f.conReserva) return true; // reserva activa
+            return _stockDisponibleSKU(sku) >= p.pendiente;
         });
         if (!hayStock) return;
-        const skusTxt = items.map(it => it.sku).join(', ');
+        const skusTxt = skusPendientes.map(([sku]) => sku).join(', ');
         const tipoAlerta = dias <= 1 ? 'danger' : 'warning';
+        const parcialSuffix = f.estatus === 'Parcialmente despachada' ? ' (parcial)' : '';
         alertas.push({
             tipo: tipoAlerta,
-            titulo: `Factura ${f.numero} — despacho ${dias === 0 ? 'HOY' : `en ${dias} día${dias===1?'':'s'}`}`,
-            texto: `Cliente ${f.cliente || '—'} · Destino ${f.destino || '—'} · SKUs: ${skusTxt} · ${f.conReserva ? 'Reserva activa' : 'Stock disponible'}.`,
+            titulo: `Factura ${f.numero}${parcialSuffix} — despacho ${dias === 0 ? 'HOY' : `en ${dias} día${dias===1?'':'s'}`}`,
+            texto: `Cliente ${f.cliente || '—'} · Destino ${f.destino || '—'} · SKUs pendientes: ${skusTxt} · ${f.conReserva ? 'Reserva activa' : 'Stock disponible'}.`,
             dias
         });
     });
@@ -4383,17 +4388,25 @@ function _autoFillFromFactura() {
         }
     }
     // Items:
-    //   - "Con reserva": se cargan directamente al documento (tienen lote y
-    //     ubicación conocidos). El usuario sólo confirma.
+    //   - "Con reserva": se cargan directamente al documento con la cantidad
+    //     aún pendiente (descontando lo despachado en Salidas anteriores).
     //   - "Sin reserva": NO se pre-cargan (no tienen lote); se muestra la
     //     lista pendiente en el aviso para que el usuario agregue cada ítem
     //     con su lote y ubicación desde el formulario habitual.
     const arrFijas = bodegasFijasActual();
     const prods = data.productos || {};
+    const esParcial = f.estatus === 'Parcialmente despachada';
+    const pendSKU = _pendientePorSKUFactura(f);              // {sku:{original,despachado,pendiente}}
+    const despKey = _despachadoPorFacturaKey(f.numero);      // por lote exacto (para conReserva)
     if (movDocItems && movDocItems.length === 0 && f.conReserva) {
         (f.items || []).forEach(it => {
             if (arrFijas && it.bodega && !arrFijas.includes(it.bodega)) return;
             if (!it.lote) return; // seguridad: sin lote no se puede descontar stock
+            const origLinea = parseFloat(it.cantidad) || 0;
+            const k = `${it.sku}|${it.lote}|${it.bodega||''}|${it.ubicacion||''}`;
+            const despLinea = despKey[k] || 0;
+            const pendLinea = Math.max(0, origLinea - despLinea);
+            if (pendLinea <= 0) return; // línea ya cerrada
             const p = prods[it.sku] || {};
             movDocItems.push({
                 sku: it.sku,
@@ -4401,7 +4414,7 @@ function _autoFillFromFactura() {
                 tipo: p.tipo || '',
                 lote: it.lote,
                 vence: it.vence || '',
-                qty: parseFloat(it.cantidad) || 0,
+                qty: pendLinea,
                 precio: 0,
                 status: 'Aprobado',
                 ubicacion: it.ubicacion || '',
@@ -4414,12 +4427,20 @@ function _autoFillFromFactura() {
     // Aviso informativo en la casilla de warning bajo N° Documento.
     const info = document.getElementById('md-numdoc-warn');
     if (info) {
+        const parcialTxt = esParcial ? ' — DESPACHO PARCIAL EN CURSO' : '';
         let msg;
         if (f.conReserva) {
-            msg = `✓ Factura «${f.numero}» encontrada (con reserva). Se autocompletaron cliente/destino y ${movDocItems.length} ítem(s) con lote y ubicación reservados.`;
+            const cargados = movDocItems.length;
+            msg = `✓ Factura «${f.numero}»${parcialTxt} (con reserva). Cliente/destino autocompletados. Se cargaron ${cargados} línea(s) con la cantidad aún pendiente. Puede modificar la cantidad si desea despachar sólo parte.`;
         } else {
-            const pendientes = (f.items || []).map(it => `${it.sku} · ${it.cantidad} ud`).join(' | ');
-            msg = `✓ Factura «${f.numero}» encontrada (sin reserva). Cliente/destino autocompletados. Debe agregar manualmente cada ítem con su lote y ubicación:\n${pendientes}`;
+            const skusPend = Object.entries(pendSKU).filter(([, p]) => p.pendiente > 0);
+            const pendientes = skusPend.map(([sku, p]) => {
+                const orig = p.original;
+                return p.despachado > 0
+                    ? `${sku} · pendiente ${p.pendiente} de ${orig}`
+                    : `${sku} · ${p.pendiente} ud`;
+            }).join(' | ');
+            msg = `✓ Factura «${f.numero}»${parcialTxt} (sin reserva). Cliente/destino autocompletados. Debe agregar cada ítem con su lote y ubicación:\n${pendientes || '(sin ítems pendientes)'}`;
         }
         info.textContent = msg;
         info.style.display = 'block';
@@ -4516,18 +4537,55 @@ function saveDocumento() {
             db.ref().update(updates)
                 .then(() => {
                     logAudit(tipo, 'Movimientos', `${movDocItems.length} SKUs`, documentoId, `Total: ${totalUnidades} ud.`);
-                    // Si es Salida y coincide con una Factura por Despachar Pendiente, marcarla como Despachada.
+                    // Si es Salida y coincide con una Factura por Despachar "abierta"
+                    // (Pendiente o Parcialmente despachada), recalcular su estatus según
+                    // el total ya despachado por SKU vs. el total original. Puede quedar:
+                    //   - Despachada: cuando cada SKU tiene despachado >= original.
+                    //   - Parcialmente despachada: cuando hay al menos un despacho pero
+                    //     no está todo cubierto.
                     if (tipo === 'Salida') {
                         const fac = _findFacturaPendientePorNumero(numDoc);
                         if (fac) {
-                            db.ref(`usuarios/${uid}/facturasPorDespachar/${fac.id}`).update({
-                                estatus: 'Despachada',
-                                fechaDespacho: fechaISO,
-                                documentoIdSalida: documentoId,
-                                usuarioDespacho: currentUser.email
-                            }).then(() => {
-                                logAudit('Despachar factura', 'FacturasPorDespachar', '', '', `${fac.numero} · ${fac.cliente || ''}`);
+                            // Suma despachada por SKU: partiendo de data.movimientos (que puede
+                            // estar todavía "atrasada" por el listener) + los items que acabamos
+                            // de escribir en Firebase para no perder este cálculo.
+                            const despSku = _despachadoPorFacturaSKU(fac.numero);
+                            const yaTieneNuevos = Object.values(data.movimientos || {}).some(m =>
+                                m && m.tipo === 'Salida' && m.documentoId === documentoId && m.fecha === fechaISO
+                            );
+                            if (!yaTieneNuevos) {
+                                movDocItems.forEach(item => {
+                                    despSku[item.sku] = (despSku[item.sku] || 0) + (parseFloat(item.qty) || 0);
+                                });
+                            }
+                            // Original por SKU
+                            const origSku = {};
+                            (fac.items || []).forEach(it => {
+                                if (!it || !it.sku) return;
+                                const q = parseFloat(it.cantidad) || 0;
+                                origSku[it.sku] = (origSku[it.sku] || 0) + q;
                             });
+                            const cubreTodo = Object.entries(origSku).every(([sku, o]) => (despSku[sku] || 0) >= o - 1e-6);
+                            const hayAlgo   = Object.values(despSku).some(v => (v || 0) > 0);
+                            const nuevoEstatus = cubreTodo ? 'Despachada' : (hayAlgo ? 'Parcialmente despachada' : 'Pendiente');
+                            const upd = { estatus: nuevoEstatus };
+                            if (nuevoEstatus === 'Despachada') {
+                                upd.fechaDespacho = fechaISO;
+                                upd.documentoIdSalida = documentoId;
+                                upd.usuarioDespacho = currentUser.email;
+                            } else if (nuevoEstatus === 'Parcialmente despachada') {
+                                upd.fechaUltimoDespacho = fechaISO;
+                                upd.usuarioUltimoDespacho = currentUser.email;
+                            }
+                            // Solo actualizamos si cambia respecto al estatus actual (o si es la primera transición).
+                            if (fac.estatus !== nuevoEstatus || nuevoEstatus === 'Parcialmente despachada') {
+                                db.ref(`usuarios/${uid}/facturasPorDespachar/${fac.id}`).update(upd).then(() => {
+                                    const accion = nuevoEstatus === 'Despachada' ? 'Despachar factura'
+                                                  : nuevoEstatus === 'Parcialmente despachada' ? 'Despacho parcial factura'
+                                                  : 'Actualizar factura';
+                                    logAudit(accion, 'FacturasPorDespachar', '', '', `${fac.numero} · ${fac.cliente || ''} · ${nuevoEstatus}`);
+                                });
+                            }
                         }
                     }
                     const docData = {
@@ -5650,15 +5708,19 @@ function setStockView(mode) {
 function _reservasPorLoteDetalle() {
     const map = {};
     Object.values(data.facturasPorDespachar || {}).forEach(f => {
-        if (!f || f.estatus !== 'Pendiente' || !f.conReserva) return;
+        if (!_facturaAbierta(f) || !f.conReserva) return;
+        const despKey = _despachadoPorFacturaKey(f.numero);
         (f.items || []).forEach(it => {
             if (!it || !it.sku || !it.lote) return;
             const q = parseFloat(it.cantidad) || 0;
             if (q <= 0) return;
             const k = `${it.sku}|${it.lote}|${it.bodega||''}|${it.ubicacion||''}`;
+            const desp = despKey[k] || 0;
+            const pend = Math.max(0, q - desp);
+            if (pend <= 0) return;
             if (!map[k]) map[k] = { total: 0, facturas: [] };
-            map[k].total += q;
-            map[k].facturas.push({ numero: f.numero || '', cliente: f.cliente || '', cantidad: q });
+            map[k].total += pend;
+            map[k].facturas.push({ numero: f.numero || '', cliente: f.cliente || '', cantidad: pend });
         });
     });
     return map;
@@ -8026,30 +8088,98 @@ function renderOTHistorial() {
 let _fpdItems = [];              // items en edición dentro del modal
 let _fpdEditingId = null;        // (no usado hoy, previsto para edición futura)
 
-// Cantidad reservada por SKU (para calcular "stock disponible" y validaciones simples).
-// Se recalcula sobre demanda; barato porque no hay caché global.
+// Un factura se considera "abierta" (aún pendiente de despacho parcial o total)
+// si su estatus es Pendiente o Parcialmente despachada. Utilizado para todo el
+// tracking de reservas, alertas, resumen por SKU y auto-fill de movimientos.
+function _facturaAbierta(f) {
+    return f && (f.estatus === 'Pendiente' || f.estatus === 'Parcialmente despachada');
+}
+
+// Cantidad ya despachada de una factura, agrupada por SKU. Basado en las
+// Salidas cuyo documentoId (o referencia) coincide con el N° de la factura.
+function _despachadoPorFacturaSKU(facturaNumero) {
+    const n = (facturaNumero || '').trim().toLowerCase();
+    const map = {};
+    if (!n) return map;
+    Object.values(data.movimientos || {}).forEach(m => {
+        if (!m || m.tipo !== 'Salida') return;
+        const docId = (m.documentoId || '').trim().toLowerCase();
+        const ref   = (m.referencia  || '').trim().toLowerCase();
+        if (docId !== n && ref !== n) return;
+        const q = parseFloat(m.cantidad) || 0;
+        if (q <= 0) return;
+        map[m.sku] = (map[m.sku] || 0) + q;
+    });
+    return map;
+}
+
+// Cantidad ya despachada de una factura, agrupada por (sku|lote|bodega|ubic).
+// Se usa para reducir la reserva ESPECÍFICA de cada línea con reserva cuando
+// la Salida se hizo exactamente en ese lote/ubicación.
+function _despachadoPorFacturaKey(facturaNumero) {
+    const n = (facturaNumero || '').trim().toLowerCase();
+    const map = {};
+    if (!n) return map;
+    Object.values(data.movimientos || {}).forEach(m => {
+        if (!m || m.tipo !== 'Salida') return;
+        const docId = (m.documentoId || '').trim().toLowerCase();
+        const ref   = (m.referencia  || '').trim().toLowerCase();
+        if (docId !== n && ref !== n) return;
+        const q = parseFloat(m.cantidad) || 0;
+        if (q <= 0) return;
+        const k = `${m.sku}|${m.lote||''}|${m.bodega||''}|${m.ubicacion||''}`;
+        map[k] = (map[k] || 0) + q;
+    });
+    return map;
+}
+
+// Pendiente por SKU en una factura = suma originales - suma despachados.
+// Devuelve un objeto { sku → {original, despachado, pendiente} }.
+function _pendientePorSKUFactura(factura) {
+    const orig = {};
+    (factura.items || []).forEach(it => {
+        if (!it || !it.sku) return;
+        const q = parseFloat(it.cantidad) || 0;
+        if (q <= 0) return;
+        orig[it.sku] = (orig[it.sku] || 0) + q;
+    });
+    const desp = _despachadoPorFacturaSKU(factura.numero);
+    const out = {};
+    Object.entries(orig).forEach(([sku, o]) => {
+        const d = desp[sku] || 0;
+        out[sku] = { original: o, despachado: d, pendiente: Math.max(0, o - d) };
+    });
+    return out;
+}
+
+// Cantidad reservada por SKU (para calcular "stock disponible" y validaciones
+// simples). Considera despachos parciales: reserva efectiva = original - despachado.
 function _reservasPorSKU() {
     const map = {};
     Object.values(data.facturasPorDespachar || {}).forEach(f => {
-        if (!f || f.estatus !== 'Pendiente' || !f.conReserva) return;
-        (f.items || []).forEach(it => {
-            if (!it || !it.sku) return;
-            const q = parseFloat(it.cantidad) || 0;
-            if (!q) return;
-            map[it.sku] = (map[it.sku] || 0) + q;
+        if (!_facturaAbierta(f) || !f.conReserva) return;
+        const pend = _pendientePorSKUFactura(f);
+        Object.entries(pend).forEach(([sku, p]) => {
+            if (p.pendiente > 0) map[sku] = (map[sku] || 0) + p.pendiente;
         });
     });
     return map;
 }
 // Cantidad reservada por lote específico (para validar disponibilidad al reservar).
+// Descuenta despachos ya realizados sobre el MISMO (sku|lote|bodega|ubic).
 function _reservasPorLote() {
     const map = {}; // key = sku|lote|bodega|ubic → qty
     Object.values(data.facturasPorDespachar || {}).forEach(f => {
-        if (!f || f.estatus !== 'Pendiente' || !f.conReserva) return;
+        if (!_facturaAbierta(f) || !f.conReserva) return;
+        const despKey = _despachadoPorFacturaKey(f.numero);
         (f.items || []).forEach(it => {
             if (!it || !it.sku || !it.lote) return;
+            const q = parseFloat(it.cantidad) || 0;
+            if (q <= 0) return;
             const k = `${it.sku}|${it.lote}|${it.bodega||''}|${it.ubicacion||''}`;
-            map[k] = (map[k] || 0) + (parseFloat(it.cantidad) || 0);
+            const desp = despKey[k] || 0;
+            const pend = Math.max(0, q - desp);
+            if (pend > 0) map[k] = (map[k] || 0) + pend;
         });
     });
     return map;
@@ -8076,13 +8206,17 @@ function _stockDisponibleLote(sku, lote, bodega, ubicacion, excluyeFacturaId) {
     const k = `${sku}|${lote}|${bodega||''}|${ubicacion||''}`;
     const totalLote = parseFloat((st[k]||{}).cantidad) || 0;
     // Reservas de este lote específico, excluyendo la factura que se edita (si aplica).
+    // Se descuenta lo ya despachado de cada reserva.
     let reservado = 0;
     Object.entries(data.facturasPorDespachar || {}).forEach(([id, f]) => {
-        if (!f || f.estatus !== 'Pendiente' || !f.conReserva) return;
+        if (!_facturaAbierta(f) || !f.conReserva) return;
         if (excluyeFacturaId && id === excluyeFacturaId) return;
+        const despKey = _despachadoPorFacturaKey(f.numero);
         (f.items || []).forEach(it => {
             if (it && it.sku === sku && it.lote === lote && (it.bodega||'') === (bodega||'') && (it.ubicacion||'') === (ubicacion||'')) {
-                reservado += parseFloat(it.cantidad) || 0;
+                const q = parseFloat(it.cantidad) || 0;
+                const desp = despKey[k] || 0;
+                reservado += Math.max(0, q - desp);
             }
         });
     });
@@ -8092,14 +8226,15 @@ function _stockDisponibleLote(sku, lote, bodega, ubicacion, excluyeFacturaId) {
 function _updateFPDBadge() {
     const badge = document.getElementById('fpdBadge');
     if (!badge) return;
-    const pend = Object.values(data.facturasPorDespachar || {}).filter(f => f && f.estatus === 'Pendiente').length;
+    // El badge cuenta facturas "abiertas" (Pendientes + Parcialmente despachadas)
+    const pend = Object.values(data.facturasPorDespachar || {}).filter(_facturaAbierta).length;
     badge.textContent = pend;
     badge.style.display = pend > 0 ? '' : 'none';
 }
 
 function clearFiltrosFPD() {
     _clearFields('fFPDCliente','fFPDDesde','fFPDHasta');
-    const est = document.getElementById('fFPDEstatus'); if (est) est.value = 'Pendiente';
+    const est = document.getElementById('fFPDEstatus'); if (est) est.value = 'ABIERTAS';
     renderFacturasPorDespachar();
 }
 
@@ -8125,13 +8260,16 @@ function renderFacturasPorDespachar() {
         });
     }
     if (fCli)   rows = rows.filter(f => (f.cliente || '').toLowerCase().includes(fCli));
-    if (fEst)   rows = rows.filter(f => (f.estatus || '') === fEst);
+    if (fEst) {
+        if (fEst === 'ABIERTAS') rows = rows.filter(f => f.estatus === 'Pendiente' || f.estatus === 'Parcialmente despachada');
+        else rows = rows.filter(f => (f.estatus || '') === fEst);
+    }
     if (fDesde) rows = rows.filter(f => (f.fechaTeoricaDespacho || '') >= fDesde);
     if (fHasta) rows = rows.filter(f => (f.fechaTeoricaDespacho || '') <= fHasta);
     rows.sort((a, b) => (a.fechaTeoricaDespacho || '').localeCompare(b.fechaTeoricaDespacho || ''));
 
     if (!rows.length) {
-        tb.innerHTML = '<tr class="empty-row"><td colspan="10">No hay facturas registradas para los filtros aplicados</td></tr>';
+        tb.innerHTML = '<tr class="empty-row"><td colspan="11">No hay facturas registradas para los filtros aplicados</td></tr>';
         return;
     }
 
@@ -8140,25 +8278,44 @@ function renderFacturasPorDespachar() {
 
     tb.innerHTML = rows.map(f => {
         const items = f.items || [];
+        const abierta = _facturaAbierta(f);
+        const despSku = abierta ? _despachadoPorFacturaSKU(f.numero) : {};
+        // Suma pendiente por SKU (para mostrar en columna Productos con desglose parcial).
+        const origSku = {};
+        items.forEach(it => { if (it && it.sku) origSku[it.sku] = (origSku[it.sku] || 0) + (parseFloat(it.cantidad)||0); });
+
         const prodsHTML = items.map(it => {
             const desc = it.descripcion || prods[it.sku]?.descripcion || '';
             const loteInfo = f.conReserva && it.lote ? ` <span style="color:var(--text3);font-size:10px">[${it.bodega||''} · ${it.lote}${it.ubicacion?' · '+it.ubicacion:''}]</span>` : '';
-            return `<div style="font-size:11px;margin-bottom:2px"><strong>${it.sku}</strong> · ${desc||'—'} · ${it.cantidad} ud${loteInfo}</div>`;
+            // Muestra cantidad pendiente vs original si hay despachos previos para este SKU en la factura.
+            let cantTxt = `${it.cantidad} ud`;
+            if (abierta) {
+                const orig = origSku[it.sku] || 0;
+                const desp = despSku[it.sku] || 0;
+                if (desp > 0) {
+                    // Prorrateamos el despacho de este SKU sobre el original de esta línea.
+                    const propor = orig > 0 ? Math.min(1, desp / orig) : 0;
+                    const pendLinea = Math.max(0, (parseFloat(it.cantidad)||0) - propor * (parseFloat(it.cantidad)||0));
+                    // Redondeo a 2 decimales para no ensuciar la UI.
+                    const pendMostrar = Math.round(pendLinea * 100) / 100;
+                    cantTxt = `<span style="color:var(--warning,#B25E00);font-weight:600">${pendMostrar}</span> / ${it.cantidad} ud`;
+                }
+            }
+            return `<div style="font-size:11px;margin-bottom:2px"><strong>${it.sku}</strong> · ${desc||'—'} · ${cantTxt}${loteInfo}</div>`;
         }).join('') || '<span style="color:var(--text3)">—</span>';
 
-        // Indicador de stock disponible por SKU
+        // Indicador de stock disponible por SKU (respetando lo aún pendiente).
         let stockHTML;
-        if (f.estatus !== 'Pendiente') {
+        if (!abierta) {
             stockHTML = '<span style="color:var(--text3);font-size:11px">—</span>';
         } else {
-            const skuStates = items.map(it => {
-                if (f.conReserva) {
-                    // ya reservado: se considera con stock reservado
-                    return { sku: it.sku, ok: true, reservado: true, qty: parseFloat(it.cantidad)||0 };
-                }
-                const disp = _stockDisponibleSKU(it.sku);
-                const need = parseFloat(it.cantidad) || 0;
-                return { sku: it.sku, ok: disp >= need, disp, need };
+            const skuStates = Object.entries(origSku).map(([sku, orig]) => {
+                const desp = despSku[sku] || 0;
+                const pendSku = Math.max(0, orig - desp);
+                if (pendSku <= 0) return { sku, ok: true, done: true };
+                if (f.conReserva) return { sku, ok: true, reservado: true, qty: pendSku };
+                const disp = _stockDisponibleSKU(sku);
+                return { sku, ok: disp >= pendSku, disp, need: pendSku };
             });
             const todosOk = skuStates.every(s => s.ok);
             if (f.conReserva) {
@@ -8171,20 +8328,23 @@ function renderFacturasPorDespachar() {
             }
         }
 
-        // Estatus badge
+        // Estatus badge (Pendiente, Parcialmente despachada, Despachada, Anulada)
         const estBadge = f.estatus === 'Despachada' ? '<span class="badge badge-gray" style="font-size:10px">✓ Despachada</span>'
                        : f.estatus === 'Anulada'    ? '<span class="badge badge-danger" style="font-size:10px">⊘ Anulada</span>'
+                       : f.estatus === 'Parcialmente despachada' ? '<span class="badge badge-blue" style="font-size:10px" title="Se despachó parte de las unidades">◐ Parcial</span>'
                        :                              '<span class="badge badge-warning" style="font-size:10px">⏱ Pendiente</span>';
 
         // Alerta si está próxima a vencer (3 días) y hay stock
         let alertaCell = '';
-        if (f.estatus === 'Pendiente' && f.fechaTeoricaDespacho) {
+        if (abierta && f.fechaTeoricaDespacho) {
             const fecha = new Date(f.fechaTeoricaDespacho + 'T00:00:00');
             const dias = Math.ceil((fecha - hoy) / 86400000);
             if (dias >= 0 && dias <= 3) alertaCell = ` <span title="Faltan ${dias} día(s) para el despacho" style="color:var(--warning,#B25E00)">⚠</span>`;
         }
 
         // Acciones
+        // Anular factura sólo si NO tiene despachos (estatus Pendiente puro).
+        // Con parcial ya hay movimientos de salida — no se puede revertir con un click.
         const canWrite = userPerfil !== 'Visualizador';
         const acciones = f.estatus === 'Pendiente' && canWrite ? `
             <button class="btn btn-sm btn-icon" title="Anular factura" onclick="anularFactura('${f.id}')" style="font-size:10px;color:var(--danger)">⊘</button>
@@ -8506,7 +8666,7 @@ function _findFacturaPendientePorNumero(num) {
     const n = (num || '').trim().toLowerCase();
     if (!n) return null;
     for (const [id, f] of Object.entries(data.facturasPorDespachar || {})) {
-        if (!f || f.estatus !== 'Pendiente') continue;
+        if (!_facturaAbierta(f)) continue;    // Pendiente o Parcialmente despachada
         if ((f.numero || '').trim().toLowerCase() === n) return { id, ...f };
     }
     return null;
@@ -8522,7 +8682,7 @@ function _resumenSkuFacturasPendientes(tipo /* 'todos'|'sinreserva'|'conreserva'
     const prods = data.productos || {};
     const acc = {};
     Object.values(data.facturasPorDespachar || {}).forEach(f => {
-        if (!f || f.estatus !== 'Pendiente') return;
+        if (!_facturaAbierta(f)) return;    // Pendiente o Parcialmente despachada
         if (tipo === 'sinreserva' && f.conReserva) return;
         if (tipo === 'conreserva' && !f.conReserva) return;
         // Alcance por bodegas permitidas del perfil
@@ -8535,23 +8695,23 @@ function _resumenSkuFacturasPendientes(tipo /* 'todos'|'sinreserva'|'conreserva'
                 return;
             }
         }
-        (f.items || []).forEach(it => {
-            if (!it || !it.sku) return;
-            const sku = it.sku;
-            const qty = parseFloat(it.cantidad) || 0;
-            if (qty <= 0) return;
+        // Descontamos lo ya despachado por SKU (despachos parciales).
+        const pendienteMap = _pendientePorSKUFactura(f);
+        Object.entries(pendienteMap).forEach(([sku, p]) => {
+            if (p.pendiente <= 0) return;   // ya totalmente despachado ese SKU
             if (!acc[sku]) acc[sku] = {
                 sku,
-                descripcion: it.descripcion || prods[sku]?.descripcion || '',
+                descripcion: (f.items || []).find(it => it.sku === sku)?.descripcion || prods[sku]?.descripcion || '',
                 totalPendiente: 0,
                 facturas: []
             };
-            acc[sku].totalPendiente += qty;
+            acc[sku].totalPendiente += p.pendiente;
             acc[sku].facturas.push({
                 numero: f.numero || '',
                 cliente: f.cliente || '',
-                cantidad: qty,
-                conReserva: !!f.conReserva
+                cantidad: p.pendiente,
+                conReserva: !!f.conReserva,
+                parcial: p.despachado > 0
             });
         });
     });
@@ -8606,8 +8766,9 @@ function renderResumenSku() {
         const desgloseHTML = r.facturas
             .sort((a, b) => (a.numero || '').localeCompare(b.numero || ''))
             .map(fx => {
-                const marca = fx.conReserva ? '<span class="badge badge-blue" style="font-size:9px;padding:1px 5px;margin-left:4px">R</span>' : '';
-                return `<div style="font-size:11.5px;line-height:1.35"><span class="text-mono" style="color:var(--accent2)">${fx.numero || '—'}</span> · ${fx.cliente || '—'} · <strong>${fx.cantidad}</strong> ud${marca}</div>`;
+                const marcaR = fx.conReserva ? '<span class="badge badge-blue" style="font-size:9px;padding:1px 5px;margin-left:4px" title="Con reserva">R</span>' : '';
+                const marcaP = fx.parcial    ? '<span class="badge badge-warning" style="font-size:9px;padding:1px 5px;margin-left:4px" title="Despacho parcial ya iniciado">◐</span>' : '';
+                return `<div style="font-size:11.5px;line-height:1.35"><span class="text-mono" style="color:var(--accent2)">${fx.numero || '—'}</span> · ${fx.cliente || '—'} · <strong>${fx.cantidad}</strong> ud${marcaR}${marcaP}</div>`;
             }).join('');
 
         return `<tr>
