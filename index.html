@@ -929,9 +929,9 @@
                         <div class="table-wrap">
                             <table>
                                 <thead><tr>
-                                    <th>N° Factura</th><th>Fecha doc</th><th>Fecha despacho</th><th>Cliente</th><th>Destino</th><th>Reserva</th><th>Productos</th><th>Stock</th><th>Estatus</th><th>Acciones</th>
+                                    <th>N° Factura</th><th>Fecha doc</th><th>Fecha despacho</th><th>Cliente</th><th>Destino</th><th>Bodega consumo</th><th>Reserva</th><th>Productos</th><th>Stock</th><th>Estatus</th><th>Acciones</th>
                                 </tr></thead>
-                                <tbody id="tFacturasPorDespachar"><tr class="empty-row"><td colspan="10">No hay facturas registradas</td></tr></tbody>
+                                <tbody id="tFacturasPorDespachar"><tr class="empty-row"><td colspan="11">No hay facturas registradas</td></tr></tbody>
                             </table>
                         </div>
                     </div>
@@ -2245,6 +2245,15 @@
                 </select>
             </div>
         </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Bodega de consumo <span style="color:var(--danger)">*</span></label>
+                <select class="form-select" id="fpd-bodega-consumo" onchange="_fpdOnBodegaConsumoChange()">
+                    <option value="">Seleccionar bodega...</option>
+                </select>
+                <div style="font-size:11px;color:var(--text3);margin-top:4px">Bodega desde donde se despachará esta factura.</div>
+            </div>
+        </div>
 
         <!-- ── AGREGAR PRODUCTO ── -->
         <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin:16px 0">
@@ -2265,29 +2274,24 @@
             <div id="fpd-reserva-fields" style="display:none">
                 <div class="form-row">
                     <div class="form-group">
-                        <label class="form-label">Bodega <span style="color:var(--danger)">*</span></label>
-                        <select class="form-select" id="fpd-i-bodega" onchange="_fpdOnBodegaChange()">
-                            <option value="">Seleccionar...</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
                         <label class="form-label">Lote <span style="color:var(--danger)">*</span></label>
                         <select class="form-select" id="fpd-i-lote" onchange="_fpdOnLoteChange()">
-                            <option value="">Seleccione bodega y SKU primero...</option>
+                            <option value="">Seleccione bodega de consumo y SKU primero...</option>
                         </select>
                     </div>
-                </div>
-                <div class="form-row">
                     <div class="form-group">
                         <label class="form-label">Ubicación <span style="color:var(--danger)">*</span></label>
                         <select class="form-select" id="fpd-i-ubic">
                             <option value="">Seleccione lote primero...</option>
                         </select>
                     </div>
+                </div>
+                <div class="form-row">
                     <div class="form-group">
                         <label class="form-label">Vence</label>
                         <input type="text" class="form-input" id="fpd-i-vence" readonly placeholder="—" style="background:var(--bg3);color:var(--text2)">
                     </div>
+                    <div class="form-group"></div>
                 </div>
             </div>
             <div class="form-row">
@@ -3246,9 +3250,17 @@ function calcAlertas() {
     const arrFijasAl = bodegasFijasActual();
     Object.values(data.facturasPorDespachar || {}).forEach(f => {
         if (!f || f.estatus !== 'Pendiente' || !f.fechaTeoricaDespacho) return;
-        // Alcance por bodegas permitidas
-        if (arrFijasAl && f.conReserva && Array.isArray(f.items) && f.items.length &&
-            !f.items.some(it => arrFijasAl.includes(it.bodega || ''))) return;
+        // Alcance por bodegas permitidas: prefiere bodegaConsumo (siempre
+        // presente en registros nuevos); si es un registro antiguo usa las
+        // bodegas de los ítems con reserva.
+        if (arrFijasAl) {
+            if (f.bodegaConsumo) {
+                if (!arrFijasAl.includes(f.bodegaConsumo)) return;
+            } else if (f.conReserva && Array.isArray(f.items) && f.items.length &&
+                       !f.items.some(it => arrFijasAl.includes(it.bodega || ''))) {
+                return;
+            }
+        }
         const fecha = new Date(f.fechaTeoricaDespacho + 'T00:00:00');
         const dias = Math.ceil((fecha - hoyStart) / 86400000);
         if (dias < 0 || dias > 3) return;
@@ -4299,12 +4311,18 @@ function _autoFillFromFactura() {
     if (fechaDocEl && !fechaDocEl.value && f.fechaDocumento) fechaDocEl.value = f.fechaDocumento;
     const fechaDespEl = document.getElementById('md-fecha-despacho');
     if (fechaDespEl && !fechaDespEl.value && f.fechaTeoricaDespacho) fechaDespEl.value = f.fechaTeoricaDespacho;
-    // Bodega: usar la de las líneas con reserva si todas coinciden.
+    // Bodega: prefiere la bodega de consumo de la factura (siempre presente
+    // en registros nuevos); si el registro es antiguo, cae a la bodega de las
+    // líneas con reserva cuando todas coinciden.
     const bodegaEl = document.getElementById('md-bodega');
-    if (bodegaEl && !bodegaEl.value && f.conReserva && f.items && f.items.length) {
-        const bodegas = Array.from(new Set(f.items.map(i => i.bodega).filter(Boolean)));
-        if (bodegas.length === 1) {
-            bodegaEl.value = bodegas[0];
+    if (bodegaEl && !bodegaEl.value) {
+        let bodegaAplicar = f.bodegaConsumo || '';
+        if (!bodegaAplicar && f.conReserva && f.items && f.items.length) {
+            const bodegas = Array.from(new Set(f.items.map(i => i.bodega).filter(Boolean)));
+            if (bodegas.length === 1) bodegaAplicar = bodegas[0];
+        }
+        if (bodegaAplicar) {
+            bodegaEl.value = bodegaAplicar;
             if (typeof onDocBodegaChange === 'function') onDocBodegaChange();
         }
     }
@@ -7980,12 +7998,14 @@ function renderFacturasPorDespachar() {
     const arrFijas = bodegasFijasActual();
     let rows = Object.entries(data.facturasPorDespachar || {}).map(([id, f]) => ({ id, ...f }));
 
-    // Filtro por bodegas permitidas: si el operador tiene bodegas fijas y la
-    // factura tiene reserva, se muestra sólo si al menos un ítem cae en su bodega.
+    // Filtro por bodegas permitidas: si el operador tiene bodegas fijas, se
+    // muestra la factura sólo si su bodega de consumo (o cualquier item con
+    // bodega definida en registros antiguos) cae en las bodegas permitidas.
     if (arrFijas) {
         rows = rows.filter(f => {
-            if (!f.conReserva || !f.items || !f.items.length) return true;
-            return f.items.some(it => arrFijas.includes(it.bodega || ''));
+            if (f.bodegaConsumo) return arrFijas.includes(f.bodegaConsumo);
+            if (f.items && f.items.some(it => arrFijas.includes(it.bodega || ''))) return true;
+            return false;
         });
     }
     if (fCli)   rows = rows.filter(f => (f.cliente || '').toLowerCase().includes(fCli));
@@ -8055,12 +8075,17 @@ function renderFacturasPorDespachar() {
             ${f.conReserva ? `<button class="btn btn-sm btn-icon" title="Anular reserva (mantiene factura pendiente sin reserva)" onclick="anularReservaFactura('${f.id}')" style="font-size:10px">🔓</button>` : ''}
         ` : '<span style="color:var(--text3)">—</span>';
 
+        // Bodega de consumo: si el registro es antiguo y no tiene bodegaConsumo,
+        // se infiere de la primera línea con bodega.
+        const bodConsumo = f.bodegaConsumo || (f.items || []).map(it => it.bodega).find(Boolean) || '';
+
         return `<tr>
             <td class="text-mono" style="color:var(--accent2);font-weight:600">${f.numero || '—'}${alertaCell}</td>
             <td style="font-size:11px">${f.fechaDocumento ? fmtDate(f.fechaDocumento) : '—'}</td>
             <td style="font-size:11px">${f.fechaTeoricaDespacho ? fmtDate(f.fechaTeoricaDespacho) : '—'}</td>
             <td>${f.cliente || '—'}</td>
             <td style="font-size:12px">${f.destino || '—'}</td>
+            <td style="font-size:12px">${bodConsumo || '—'}</td>
             <td>${f.conReserva ? '<span class="badge badge-blue" style="font-size:10px">Con reserva</span>' : '<span class="badge badge-gray" style="font-size:10px">Sin reserva</span>'}</td>
             <td style="max-width:340px">${prodsHTML}</td>
             <td>${stockHTML}</td>
@@ -8090,15 +8115,29 @@ function openFacturaModal() {
 }
 
 function _fpdRefreshBodegaSelect() {
-    const sel = document.getElementById('fpd-i-bodega');
+    const sel = document.getElementById('fpd-bodega-consumo');
     if (!sel) return;
     const arrFijas = bodegasFijasActual();
-    sel.innerHTML = '<option value="">Seleccionar...</option>';
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">Seleccionar bodega...</option>';
     Object.values(data.bodegas || {}).forEach(b => {
         if (arrFijas && !arrFijas.includes(b.nombre)) return;
         const o = document.createElement('option'); o.value = b.nombre; o.textContent = b.nombre;
         sel.appendChild(o);
     });
+    // Auto-seleccionar cuando el perfil tiene una sola bodega permitida.
+    if (arrFijas && arrFijas.length === 1) sel.value = arrFijas[0];
+    else if (cur) sel.value = cur;
+}
+
+function _fpdOnBodegaConsumoChange() {
+    // Al cambiar la bodega de consumo se resetea el lote/ubicación de los
+    // items en edición (si el usuario ya había elegido lote de otra bodega).
+    _fpdResetLoteUbicSelects();
+    if (document.getElementById('fpd-reserva').value === 'con') {
+        _fpdPopulateLoteSelect();
+    }
+    _fpdRefreshItemInfo();
 }
 
 function _fpdOnReservaChange() {
@@ -8113,20 +8152,19 @@ function _fpdOnReservaChange() {
 function _fpdResetLoteUbicSelects() {
     const sLote = document.getElementById('fpd-i-lote');
     const sUbic = document.getElementById('fpd-i-ubic');
-    if (sLote) sLote.innerHTML = '<option value="">Seleccione bodega y SKU primero...</option>';
+    if (sLote) sLote.innerHTML = '<option value="">Seleccione bodega de consumo y SKU primero...</option>';
     if (sUbic) sUbic.innerHTML = '<option value="">Seleccione lote primero...</option>';
     const v = document.getElementById('fpd-i-vence'); if (v) v.value = '';
 }
 
-function _fpdOnBodegaChange() { _fpdPopulateLoteSelect(); _fpdRefreshItemInfo(); }
 function _fpdOnLoteChange()   { _fpdPopulateUbicSelect(); _fpdRefreshItemInfo(); }
 
 function _fpdPopulateLoteSelect() {
     const sku    = (document.getElementById('fpd-i-sku')?.value || '').trim().toUpperCase();
-    const bodega = document.getElementById('fpd-i-bodega')?.value || '';
+    const bodega = document.getElementById('fpd-bodega-consumo')?.value || '';
     const sLote  = document.getElementById('fpd-i-lote');
     if (!sLote) return;
-    if (!sku || !bodega) { sLote.innerHTML = '<option value="">Seleccione bodega y SKU primero...</option>'; return; }
+    if (!sku || !bodega) { sLote.innerHTML = '<option value="">Seleccione bodega de consumo y SKU primero...</option>'; return; }
     // Lotes con stock aprobado > 0 en esa bodega y SKU
     const st = calcStock();
     const lotesSet = new Map();  // lote → vence (mínimo)
@@ -8151,7 +8189,7 @@ function _fpdResetUbicOnly() {
 
 function _fpdPopulateUbicSelect() {
     const sku    = (document.getElementById('fpd-i-sku')?.value || '').trim().toUpperCase();
-    const bodega = document.getElementById('fpd-i-bodega')?.value || '';
+    const bodega = document.getElementById('fpd-bodega-consumo')?.value || '';
     const lote   = document.getElementById('fpd-i-lote')?.value || '';
     const sUbic  = document.getElementById('fpd-i-ubic');
     if (!sUbic) return;
@@ -8181,10 +8219,10 @@ function _fpdRefreshItemInfo() {
         const disp = _stockDisponibleSKU(sku);
         info.innerHTML = `Stock disponible actual del SKU: <strong>${disp}</strong> unidades (aprobado - reservas pendientes).`;
     } else {
-        const bodega = document.getElementById('fpd-i-bodega')?.value || '';
+        const bodega = document.getElementById('fpd-bodega-consumo')?.value || '';
         const lote   = document.getElementById('fpd-i-lote')?.value || '';
         const ubic   = document.getElementById('fpd-i-ubic')?.value || '';
-        if (!bodega || !lote || !ubic) { info.textContent = 'Seleccione bodega, lote y ubicación para ver disponibilidad del lote.'; return; }
+        if (!bodega || !lote || !ubic) { info.textContent = 'Seleccione bodega de consumo, lote y ubicación para ver disponibilidad del lote.'; return; }
         const disp = _stockDisponibleLote(sku, lote, bodega, ubic, _fpdEditingId);
         info.innerHTML = `Disponible en este lote/ubicación: <strong>${disp}</strong> unidades.`;
     }
@@ -8195,6 +8233,8 @@ function fpdAddItem() {
     const sku = (document.getElementById('fpd-i-sku')?.value || '').trim().toUpperCase();
     const desc = document.getElementById('fpd-i-desc')?.value || '';
     const qty = parseFloat(document.getElementById('fpd-i-qty')?.value || '');
+    const bodegaConsumo = document.getElementById('fpd-bodega-consumo')?.value || '';
+    if (!bodegaConsumo) { showFormError('fpdModal-err', 'Seleccione la bodega de consumo de la factura (arriba).'); return; }
     if (!sku) { showFormError('fpdModal-err', 'Ingrese SKU del producto.'); return; }
     if (!data.productos[sku]) { showFormError('fpdModal-err', `El SKU «${sku}» no está registrado en el maestro.`); return; }
     if (!(qty > 0)) { showFormError('fpdModal-err', 'Ingrese una cantidad mayor a 0.'); return; }
@@ -8202,18 +8242,17 @@ function fpdAddItem() {
     const item = {
         sku,
         descripcion: desc || (data.productos[sku]?.descripcion || ''),
-        cantidad: qty
+        cantidad: qty,
+        bodega: bodegaConsumo  // se guarda siempre para trazabilidad
     };
     if (conReserva) {
-        const bodega = document.getElementById('fpd-i-bodega')?.value || '';
         const lote   = document.getElementById('fpd-i-lote')?.value || '';
         const ubic   = document.getElementById('fpd-i-ubic')?.value || '';
-        if (!bodega) { showFormError('fpdModal-err', 'Seleccione la bodega para la reserva.'); return; }
         if (!lote)   { showFormError('fpdModal-err', 'Seleccione el lote a reservar.'); return; }
         if (!ubic)   { showFormError('fpdModal-err', 'Seleccione la ubicación.'); return; }
-        const disp = _stockDisponibleLote(sku, lote, bodega, ubic, _fpdEditingId);
+        const disp = _stockDisponibleLote(sku, lote, bodegaConsumo, ubic, _fpdEditingId);
         // Considerar también reservas del mismo item ya agregado en este form.
-        const yaAgregado = _fpdItems.filter(i => i.sku===sku && i.lote===lote && i.bodega===bodega && i.ubicacion===ubic).reduce((a,i)=>a+i.cantidad, 0);
+        const yaAgregado = _fpdItems.filter(i => i.sku===sku && i.lote===lote && i.bodega===bodegaConsumo && i.ubicacion===ubic).reduce((a,i)=>a+i.cantidad, 0);
         if (qty + yaAgregado > disp) {
             showFormError('fpdModal-err', `No hay stock suficiente para reservar. Disponible: ${disp} ud (ya agregadas ${yaAgregado} ud en esta factura).`);
             return;
@@ -8222,10 +8261,7 @@ function fpdAddItem() {
         const sLote = document.getElementById('fpd-i-lote');
         const opt = sLote?.options[sLote.selectedIndex];
         const vence = opt?.dataset?.vence || '';
-        item.bodega = bodega; item.lote = lote; item.ubicacion = ubic; item.vence = vence;
-    } else {
-        // Sin reserva: sólo se pide SKU + cantidad. No se afecta stock.
-        // Aviso informativo si no hay stock, pero no bloqueamos.
+        item.lote = lote; item.ubicacion = ubic; item.vence = vence;
     }
     _fpdItems.push(item);
     // Reset campos de ítem
@@ -8258,19 +8294,28 @@ function _fpdRenderItems() {
 
 function saveFactura() {
     if (userPerfil === 'Visualizador') { alert('Su perfil es de solo lectura.'); return; }
-    const numero      = (document.getElementById('fpd-numero').value || '').trim();
-    const fechaDoc    = document.getElementById('fpd-fecha-doc').value;
-    const cliente     = (document.getElementById('fpd-cliente').value || '').trim();
-    const destino     = (document.getElementById('fpd-destino').value || '').trim();
-    const fechaDesp   = document.getElementById('fpd-fecha-desp').value;
-    const conReserva  = document.getElementById('fpd-reserva').value === 'con';
+    const numero        = (document.getElementById('fpd-numero').value || '').trim();
+    const fechaDoc      = document.getElementById('fpd-fecha-doc').value;
+    const cliente       = (document.getElementById('fpd-cliente').value || '').trim();
+    const destino       = (document.getElementById('fpd-destino').value || '').trim();
+    const fechaDesp     = document.getElementById('fpd-fecha-desp').value;
+    const conReserva    = document.getElementById('fpd-reserva').value === 'con';
+    const bodegaConsumo = (document.getElementById('fpd-bodega-consumo').value || '').trim();
 
-    if (!numero)    { showFormError('fpdModal-err', 'Ingrese el N° de factura.'); return; }
-    if (!fechaDoc)  { showFormError('fpdModal-err', 'Ingrese la fecha del documento.'); return; }
-    if (!cliente)   { showFormError('fpdModal-err', 'Ingrese el cliente.'); return; }
-    if (!destino)   { showFormError('fpdModal-err', 'Ingrese el destino (ciudad).'); return; }
-    if (!fechaDesp) { showFormError('fpdModal-err', 'Ingrese la fecha teórica de despacho.'); return; }
+    if (!numero)        { showFormError('fpdModal-err', 'Ingrese el N° de factura.'); return; }
+    if (!fechaDoc)      { showFormError('fpdModal-err', 'Ingrese la fecha del documento.'); return; }
+    if (!cliente)       { showFormError('fpdModal-err', 'Ingrese el cliente.'); return; }
+    if (!destino)       { showFormError('fpdModal-err', 'Ingrese el destino (ciudad).'); return; }
+    if (!fechaDesp)     { showFormError('fpdModal-err', 'Ingrese la fecha teórica de despacho.'); return; }
+    if (!bodegaConsumo) { showFormError('fpdModal-err', 'Seleccione la bodega de consumo.'); return; }
     if (!_fpdItems.length) { showFormError('fpdModal-err', 'Agregue al menos un producto.'); return; }
+
+    // Seguridad: perfiles con bodegas fijas sólo pueden crear facturas en bodegas permitidas.
+    const arrFijas = bodegasFijasActual();
+    if (arrFijas && !arrFijas.includes(bodegaConsumo)) {
+        showFormError('fpdModal-err', `Su perfil solo puede crear facturas en las bodegas: ${arrFijas.join(', ')}.`);
+        return;
+    }
 
     // Duplicado: mismo N° de factura pendiente/despachada
     const dup = Object.values(data.facturasPorDespachar || {}).find(f => f && f.numero === numero && f.estatus !== 'Anulada');
@@ -8283,6 +8328,7 @@ function saveFactura() {
         fechaTeoricaDespacho: fechaDesp,
         cliente,
         destino,
+        bodegaConsumo,
         conReserva,
         items: _fpdItems.map(i => ({ ...i })),
         estatus: 'Pendiente',
@@ -8294,7 +8340,7 @@ function saveFactura() {
     db.ref(`usuarios/${uid}/facturasPorDespachar`).push(factura)
         .then(() => {
             logAudit('Crear', 'FacturasPorDespachar', factura.items.map(i=>i.sku).join(','), '',
-                `${numero} · ${cliente} · ${destino} · ${conReserva?'con reserva':'sin reserva'} · ${factura.items.length} SKU(s)`);
+                `${numero} · ${cliente} · ${destino} · ${bodegaConsumo} · ${conReserva?'con reserva':'sin reserva'} · ${factura.items.length} SKU(s)`);
             _setBtnLoading('btn-save-fpd', false, 'Guardar Factura');
             closeModal('fpdModal');
         })
