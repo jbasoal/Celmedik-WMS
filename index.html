@@ -3128,7 +3128,7 @@ function attachListeners() {
     const uid = rootUid || currentUser.uid;
     db.ref(`usuarios/${uid}/productos`).on('value', s => { data.productos = s.val()||{}; _scheduleRender('productos','stock','stats'); });
     db.ref(`usuarios/${uid}/bodegas`).on('value', s => { data.bodegas = s.val()||{}; _scheduleRender('bodegas','stats'); });
-    db.ref(`usuarios/${uid}/movimientos`).on('value', s => { data.movimientos = s.val()||{}; _invalidateStockCache(); _invalidateBodegaFijaLoteCache(); _scheduleRender('movimientos','stock','cuarentena','stats'); });
+    db.ref(`usuarios/${uid}/movimientos`).on('value', s => { data.movimientos = s.val()||{}; _invalidateStockCache(); _invalidateBodegaFijaLoteCache(); _scheduleRender('movimientos','stock','cuarentena','facturasPorDespachar','stats'); });
     db.ref(`usuarios/${uid}/cuarentena`).on('value', s => { data.cuarentena = s.val()||{}; _scheduleRender('cuarentena','stats'); });
     db.ref(`usuarios/${uid}/devoluciones`).on('value', s => { data.devoluciones = s.val()||{}; _invalidateStockCache(); _invalidateBodegaFijaLoteCache(); _scheduleRender('devoluciones','stock','stats'); });
     db.ref(`usuarios/${uid}/ajustesMovimiento`).on('value', s => { data.ajustesMovimiento = s.val()||{}; _scheduleRender('ajustesMov'); });
@@ -5377,6 +5377,82 @@ function abrirAnularSalida() {
     openModal('anularSalidaModal');
 }
 
+// Si el documentoId anulado coincide con una Factura por Despachar, se recalcula
+// su estatus (Pendiente / Parcialmente despachada / Despachada) según el nuevo
+// balance de despachos vs. anulaciones. Se limpian los metadatos de despacho
+// que dejan de aplicar cuando la factura vuelve atrás.
+function _actualizarEstatusFacturaTrasAnulacion(docId, itemsAnulados, ahora, uid) {
+    const nn = (docId || '').trim().toLowerCase();
+    if (!nn) return;
+    // Buscar factura por numero (cualquier estatus salvo Anulada)
+    let facEntry = null;
+    Object.entries(data.facturasPorDespachar || {}).forEach(([id, f]) => {
+        if (!f) return;
+        if ((f.numero || '').trim().toLowerCase() === nn) facEntry = { id, ...f };
+    });
+    if (!facEntry || facEntry.estatus === 'Anulada') return;
+
+    // Puede que el listener aún no haya cargado los ajustes recién escritos.
+    // Si no están, restamos manualmente para no doble-contar el despacho.
+    const yaReflejadas = Object.values(data.movimientos || {}).some(m =>
+        m && m.tipo === 'AjusteInventario' &&
+        (m.anulacionDe || '').trim().toLowerCase() === nn &&
+        m.fecha === ahora
+    );
+    const despSku = _despachadoPorFacturaSKU(facEntry.numero);
+    if (!yaReflejadas) {
+        itemsAnulados.forEach(it => {
+            const q = parseFloat(it.original.cantidad) || 0;
+            if (q <= 0) return;
+            despSku[it.original.sku] = Math.max(0, (despSku[it.original.sku] || 0) - q);
+        });
+    }
+
+    const origSku = {};
+    (facEntry.items || []).forEach(it => {
+        if (!it || !it.sku) return;
+        const q = parseFloat(it.cantidad) || 0;
+        origSku[it.sku] = (origSku[it.sku] || 0) + q;
+    });
+
+    const cubreTodo = Object.entries(origSku).every(([sku, o]) => (despSku[sku] || 0) >= o - 1e-6);
+    const hayAlgo   = Object.values(despSku).some(v => (v || 0) > 0);
+    const nuevoEstatus = cubreTodo ? 'Despachada' : (hayAlgo ? 'Parcialmente despachada' : 'Pendiente');
+
+    if (facEntry.estatus === nuevoEstatus && nuevoEstatus !== 'Parcialmente despachada') {
+        // Sin cambio de estatus, salvo Parcial (donde queremos registrar la anulación como último evento).
+        return;
+    }
+
+    const upd = { estatus: nuevoEstatus };
+    if (nuevoEstatus === 'Pendiente') {
+        // Vuelve al estado inicial: limpiar cualquier metadato de despacho.
+        upd.fechaDespacho = null;
+        upd.documentoIdSalida = null;
+        upd.usuarioDespacho = null;
+        upd.fechaUltimoDespacho = null;
+        upd.usuarioUltimoDespacho = null;
+        upd.fechaUltimaAnulacion = ahora;
+        upd.usuarioUltimaAnulacion = currentUser.email;
+    } else if (nuevoEstatus === 'Parcialmente despachada') {
+        upd.fechaUltimaAnulacion = ahora;
+        upd.usuarioUltimaAnulacion = currentUser.email;
+        // Si veníamos de Despachada, limpiar los campos de cierre completo.
+        upd.fechaDespacho = null;
+        upd.documentoIdSalida = null;
+        upd.usuarioDespacho = null;
+    }
+    // Si nuevoEstatus === 'Despachada' se mantienen los campos previos.
+
+    db.ref(`usuarios/${uid}/facturasPorDespachar/${facEntry.id}`).update(upd).then(() => {
+        logAudit(
+            'Recalcular factura por anulación',
+            'FacturasPorDespachar', '', '',
+            `${facEntry.numero} · ${facEntry.cliente || ''} · ${facEntry.estatus} → ${nuevoEstatus}`
+        );
+    });
+}
+
 function confirmarAnularSalida() {
     if (userPerfil !== 'Maestro') { showFormError('anular-err', 'Solo el perfil Maestro puede anular salidas.'); return; }
     if (!_ajMovHeader || _ajMovHeader.tipo !== 'Salida' || !_ajMovItems.length) {
@@ -5409,12 +5485,16 @@ function confirmarAnularSalida() {
         n++;
     });
     if (!n) { showFormError('anular-err', 'La salida no tiene líneas con cantidad > 0 para anular.'); return; }
+    // Captura items para el recálculo posterior (evita mutaciones intermedias).
+    const itemsSnapshot = _ajMovItems.map(it => ({ original: { ...it.original } }));
     db.ref().update(updates)
         .then(() => {
             logAudit('Anular Salida', 'Movimientos', `${n} líneas`, docId, `Ajustes positivos generados · Motivo: ${motivo}`);
+            // Recalcular factura por despachar asociada (si existe).
+            _actualizarEstatusFacturaTrasAnulacion(docId, itemsSnapshot, ahora, uid);
             closeModal('anularSalidaModal');
             const c = document.getElementById('ajMovResults');
-            if (c) c.insertAdjacentHTML('afterbegin', `<div class="alert-banner success" style="margin:8px 0"><div class="alert-banner-icon">✓</div><div><div class="alert-banner-title">Salida ${docId} anulada</div><div class="alert-banner-text">Se generaron ${n} ajuste(s) positivo(s) en Ajuste de Inventario. La salida original permanece en Movimientos para trazabilidad.</div></div></div>`);
+            if (c) c.insertAdjacentHTML('afterbegin', `<div class="alert-banner success" style="margin:8px 0"><div class="alert-banner-icon">✓</div><div><div class="alert-banner-title">Salida ${docId} anulada</div><div class="alert-banner-text">Se generaron ${n} ajuste(s) positivo(s) en Ajuste de Inventario. La salida original permanece en Movimientos para trazabilidad. Si el N° coincide con una Factura por Despachar, su estatus se actualizó automáticamente.</div></div></div>`);
         })
         .catch(err => showFormError('anular-err', 'Error: ' + err.message));
 }
@@ -8114,39 +8194,57 @@ function _facturaAbierta(f) {
 
 // Cantidad ya despachada de una factura, agrupada por SKU. Basado en las
 // Salidas cuyo documentoId (o referencia) coincide con el N° de la factura.
+// IMPORTANTE: descuenta las anulaciones (AjusteInventario positivo con
+// anulacionDe apuntando al mismo N° factura); asi el pendiente vuelve a
+// mostrarse correctamente cuando se anula una Salida asociada.
 function _despachadoPorFacturaSKU(facturaNumero) {
     const n = (facturaNumero || '').trim().toLowerCase();
     const map = {};
     if (!n) return map;
     Object.values(data.movimientos || {}).forEach(m => {
-        if (!m || m.tipo !== 'Salida') return;
+        if (!m) return;
         const docId = (m.documentoId || '').trim().toLowerCase();
         const ref   = (m.referencia  || '').trim().toLowerCase();
-        if (docId !== n && ref !== n) return;
+        const anul  = (m.anulacionDe || '').trim().toLowerCase();
         const q = parseFloat(m.cantidad) || 0;
         if (q <= 0) return;
-        map[m.sku] = (map[m.sku] || 0) + q;
+        if (m.tipo === 'Salida' && (docId === n || ref === n)) {
+            map[m.sku] = (map[m.sku] || 0) + q;
+        } else if (m.tipo === 'AjusteInventario' && m.ajusteTipo === 'Positivo' && anul === n) {
+            // Anulación de una Salida asociada a esta factura: reversa lo despachado.
+            // Se exige ajusteTipo=Positivo para no confundir con anulaciones de Entrada
+            // (que usan ajusteTipo=Negativo) que casualmente compartan el mismo N°.
+            map[m.sku] = (map[m.sku] || 0) - q;
+        }
     });
+    // No permitir despachos negativos (sobre-anulación).
+    Object.keys(map).forEach(sku => { if (map[sku] < 0) map[sku] = 0; });
     return map;
 }
 
 // Cantidad ya despachada de una factura, agrupada por (sku|lote|bodega|ubic).
 // Se usa para reducir la reserva ESPECÍFICA de cada línea con reserva cuando
-// la Salida se hizo exactamente en ese lote/ubicación.
+// la Salida se hizo exactamente en ese lote/ubicación. Igual que arriba,
+// descuenta las anulaciones.
 function _despachadoPorFacturaKey(facturaNumero) {
     const n = (facturaNumero || '').trim().toLowerCase();
     const map = {};
     if (!n) return map;
     Object.values(data.movimientos || {}).forEach(m => {
-        if (!m || m.tipo !== 'Salida') return;
+        if (!m) return;
         const docId = (m.documentoId || '').trim().toLowerCase();
         const ref   = (m.referencia  || '').trim().toLowerCase();
-        if (docId !== n && ref !== n) return;
+        const anul  = (m.anulacionDe || '').trim().toLowerCase();
         const q = parseFloat(m.cantidad) || 0;
         if (q <= 0) return;
         const k = `${m.sku}|${m.lote||''}|${m.bodega||''}|${m.ubicacion||''}`;
-        map[k] = (map[k] || 0) + q;
+        if (m.tipo === 'Salida' && (docId === n || ref === n)) {
+            map[k] = (map[k] || 0) + q;
+        } else if (m.tipo === 'AjusteInventario' && m.ajusteTipo === 'Positivo' && anul === n) {
+            map[k] = (map[k] || 0) - q;
+        }
     });
+    Object.keys(map).forEach(k => { if (map[k] < 0) map[k] = 0; });
     return map;
 }
 
