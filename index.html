@@ -4633,6 +4633,10 @@ function generatePDF(docData, opts) {
         alert('No se pudo cargar la librería PDF. Verifique su conexión a internet.');
         return;
     }
+    // Filtrar líneas "eliminadas" (cantidad = 0) desde Ajuste de Movimiento:
+    // permanecen en la base para trazabilidad pero no deben aparecer en la
+    // hoja de despacho ni en el detalle por ubicación, ni sumar al total.
+    docData = { ...docData, items: (docData.items || []).filter(it => (parseFloat(it.qty) || 0) > 0) };
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
     const pageW = doc.internal.pageSize.getWidth();
@@ -4903,7 +4907,10 @@ function _requiereDetalleUbicacion(docData) {
     if (!docData || docData.tipo !== 'Salida') return false;
     const bodega = (docData.bodega || '').toLowerCase();
     if (!bodega.includes('biodial')) return false;
-    return (docData.items || []).some(it => _palletSizeForSku(it.sku));
+    // Sólo se considera SKU "objetivo" si además tiene cantidad > 0 (evita
+    // generar la hoja adicional cuando la línea fue anulada vía Ajuste de
+    // Movimiento cantidad = 0).
+    return (docData.items || []).some(it => _palletSizeForSku(it.sku) && (parseFloat(it.qty) || 0) > 0);
 }
 
 function regenerarPDF(documentoId) {
