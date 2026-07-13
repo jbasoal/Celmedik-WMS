@@ -5057,7 +5057,7 @@ function renderAjusteMovUI() {
                             <td style="font-size:12px">${_ajmEsc(o.descripcion||'—')}</td>
                             <td><input type="text" id="ajm-i-${idx}-lote" class="form-input" style="font-size:12px;min-width:90px" value="${_ajmEsc(o.lote||'')}" oninput="updAjMovField(${idx},'lote',this.value)"></td>
                             <td><input type="date" id="ajm-i-${idx}-vence" class="form-input" style="font-size:12px" value="${_ajmEsc((o.vence||'').slice(0,10))}" oninput="updAjMovField(${idx},'vence',this.value)"></td>
-                            <td><input type="number" id="ajm-i-${idx}-cantidad" class="form-input" style="font-size:12px;width:80px" min="0.001" step="any" value="${_ajmEsc(o.cantidad||0)}" oninput="updAjMovField(${idx},'cantidad',this.value)"></td>
+                            <td><input type="number" id="ajm-i-${idx}-cantidad" class="form-input" style="font-size:12px;width:80px" min="0" step="any" value="${_ajmEsc(o.cantidad||0)}" oninput="updAjMovField(${idx},'cantidad',this.value)" title="0 elimina el efecto de esta línea (queda registrada pero no afecta stock)"></td>
                             <td><input type="number" id="ajm-i-${idx}-precio" class="form-input" style="font-size:12px;width:90px" min="0" step="0.01" value="${_ajmEsc(o.precio||0)}" oninput="updAjMovField(${idx},'precio',this.value)"></td>
                             <td><select id="ajm-i-${idx}-status" class="form-select" style="font-size:12px" onchange="updAjMovField(${idx},'status',this.value)">${stOpts}</select></td>
                             <td>${ubicCell}</td>
@@ -5164,14 +5164,32 @@ function confirmGuardarAjusteMov() {
     if (!_ajMovItems.length || !_ajMovHeader) { alert('No hay un movimiento cargado.'); return; }
     _readAjMovHeaderFromForm();
     _readAjMovItemsFromForm();
+    // Cantidad = 0 se acepta: la línea queda registrada pero sin efecto en stock
+    // (permite "eliminar" un item del documento). Solo se bloquean cantidades
+    // negativas y, si la cantidad es > 0, se sigue exigiendo lote.
+    const lineasEliminadas = [];
     for (const it of _ajMovItems) {
         const q = parseFloat(it.editado.cantidad) || 0;
-        if (q <= 0) { alert(`La cantidad debe ser mayor a 0 (SKU ${it.editado.sku}).`); return; }
-        if (!it.editado.lote) { alert(`El lote es obligatorio (SKU ${it.editado.sku}).`); return; }
+        if (q < 0) { alert(`La cantidad no puede ser negativa (SKU ${it.editado.sku}).`); return; }
+        if (q === 0) {
+            lineasEliminadas.push(it);
+            continue; // línea sin efecto: no exigimos lote
+        }
+        if (!it.editado.lote) { alert(`El lote es obligatorio para líneas con cantidad > 0 (SKU ${it.editado.sku}). Si desea eliminar esta línea del documento, deje la cantidad en 0.`); return; }
     }
     if (!_ajMovHeader.bodega) { alert('Debe indicar la bodega.'); return; }
+    if (lineasEliminadas.length === _ajMovItems.length) {
+        // Todas las líneas en 0 → el documento queda sin efecto. Confirmar explícito.
+        if (!confirm(`Todas las ${_ajMovItems.length} líneas quedarán en cantidad 0. El documento no tendrá efecto sobre el stock.\n\n¿Continúa de todos modos?`)) return;
+    }
     const cambios = _resumeCambiosAjMov();
     if (!cambios.length) { alert('No hay cambios para guardar.'); return; }
+    const eliminadasBanner = lineasEliminadas.length
+        ? `<div style="margin-top:8px;padding:8px 10px;border-radius:6px;background:rgba(217,119,6,.12);border:1px solid rgba(217,119,6,.35);color:#B25E00;font-size:12px">
+              ⚠ <strong>${lineasEliminadas.length} línea(s)</strong> quedan con cantidad = 0 y no afectarán al stock:
+              <div style="margin-top:4px;color:var(--text2)">${lineasEliminadas.map(it => `${_ajmEsc(it.editado.sku)} · lote ${_ajmEsc(it.editado.lote||'—')}`).join(' · ')}</div>
+           </div>`
+        : '';
     showConfirm(
         'Confirmar ajuste de movimiento',
         `Documento ${_ajMovHeader.documentoId}`,
@@ -5179,6 +5197,7 @@ function confirmGuardarAjusteMov() {
          <div style="margin-top:6px;max-height:200px;overflow:auto;font-size:12px;color:var(--text2);background:var(--bg2);padding:8px;border-radius:6px">
             ${cambios.map(c => `• ${_ajmEsc(c)}`).join('<br>')}
          </div>
+         ${eliminadasBanner}
          <div style="margin-top:8px;font-size:12px;color:var(--text2)">El stock se recalculará automáticamente y se generará un nuevo PDF.</div>`,
         'Guardar ajustes',
         'btn-primary',
