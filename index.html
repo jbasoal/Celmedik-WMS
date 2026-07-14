@@ -3323,9 +3323,11 @@ function calcAlertas() {
         const pendMap = _pendientePorSKUFactura(f);
         const skusPendientes = Object.entries(pendMap).filter(([, p]) => p.pendiente > 0);
         if (!skusPendientes.length) return;
+        // La bodega de consumo (o fallback a items[0].bodega) acota el stock.
+        const bodegaFacAlerta = f.bodegaConsumo || (f.items || []).map(it => it.bodega).find(Boolean) || '';
         const hayStock = skusPendientes.some(([sku, p]) => {
             if (f.conReserva) return true; // reserva activa
-            return _stockDisponibleSKU(sku) >= p.pendiente;
+            return _stockDisponibleSKU(sku, bodegaFacAlerta) >= p.pendiente;
         });
         if (!hayStock) return;
         const skusTxt = skusPendientes.map(([sku]) => sku).join(', ');
@@ -8295,10 +8297,17 @@ function _pendientePorSKUFactura(factura) {
 
 // Cantidad reservada por SKU (para calcular "stock disponible" y validaciones
 // simples). Considera despachos parciales: reserva efectiva = original - despachado.
-function _reservasPorSKU() {
+// Si se pasa `bodega`, sólo cuenta reservas de facturas cuya bodegaConsumo
+// (o items[0].bodega en registros antiguos) coincida con la bodega dada.
+function _reservasPorSKU(bodega) {
     const map = {};
+    const bd = (bodega || '').trim();
     Object.values(data.facturasPorDespachar || {}).forEach(f => {
         if (!_facturaAbierta(f) || !f.conReserva) return;
+        if (bd) {
+            const bFac = f.bodegaConsumo || (f.items || []).map(it => it.bodega).find(Boolean) || '';
+            if (bFac !== bd) return;
+        }
         const pend = _pendientePorSKUFactura(f);
         Object.entries(pend).forEach(([sku, p]) => {
             if (p.pendiente > 0) map[sku] = (map[sku] || 0) + p.pendiente;
@@ -8325,21 +8334,27 @@ function _reservasPorLote() {
     });
     return map;
 }
-// Stock total (todas las bodegas) del SKU, sumando lotes en estado Aprobado.
-function _stockAprobadoSKU(sku) {
+// Stock aprobado del SKU. Si se pasa `bodega`, filtra a esa bodega; si no,
+// suma todas las bodegas.
+function _stockAprobadoSKU(sku, bodega) {
     const st = calcStock();
+    const bd = (bodega || '').trim();
     let total = 0;
     Object.values(st).forEach(s => {
-        if (s.sku === sku && (parseFloat(s.cantidad)||0) > 0 && getLoteStatus(s) === 'Aprobado') {
-            total += parseFloat(s.cantidad) || 0;
-        }
+        if (s.sku !== sku) return;
+        if ((parseFloat(s.cantidad)||0) <= 0) return;
+        if (getLoteStatus(s) !== 'Aprobado') return;
+        if (bd && (s.bodega || '') !== bd) return;
+        total += parseFloat(s.cantidad) || 0;
     });
     return total;
 }
-// Stock disponible = stock aprobado - reservado por facturas pendientes con reserva.
-function _stockDisponibleSKU(sku) {
-    const reservas = _reservasPorSKU();
-    return _stockAprobadoSKU(sku) - (reservas[sku] || 0);
+// Stock disponible = stock aprobado - reservado. Si se pasa `bodega`, ambos
+// componentes se acotan a esa bodega (así el disponible es específico de la
+// bodega de consumo). Sin bodega: se calcula globalmente (retro-compat).
+function _stockDisponibleSKU(sku, bodega) {
+    const reservas = _reservasPorSKU(bodega);
+    return _stockAprobadoSKU(sku, bodega) - (reservas[sku] || 0);
 }
 // Disponible en un lote específico (usado al reservar).
 function _stockDisponibleLote(sku, lote, bodega, ubicacion, excluyeFacturaId) {
@@ -8445,7 +8460,10 @@ function renderFacturasPorDespachar() {
             return `<div style="font-size:11px;margin-bottom:2px"><strong>${it.sku}</strong> · ${desc||'—'} · ${cantTxt}${loteInfo}</div>`;
         }).join('') || '<span style="color:var(--text3)">—</span>';
 
-        // Indicador de stock disponible por SKU (respetando lo aún pendiente).
+        // Indicador de stock disponible por SKU en la BODEGA DE CONSUMO de la
+        // factura (respetando lo aún pendiente). Para registros antiguos sin
+        // bodegaConsumo, se cae al primer item.bodega definido.
+        const bodegaFactura = f.bodegaConsumo || (f.items || []).map(it => it.bodega).find(Boolean) || '';
         let stockHTML;
         if (!abierta) {
             stockHTML = '<span style="color:var(--text3);font-size:11px">—</span>';
@@ -8455,7 +8473,7 @@ function renderFacturasPorDespachar() {
                 const pendSku = Math.max(0, orig - desp);
                 if (pendSku <= 0) return { sku, ok: true, done: true };
                 if (f.conReserva) return { sku, ok: true, reservado: true, qty: pendSku };
-                const disp = _stockDisponibleSKU(sku);
+                const disp = _stockDisponibleSKU(sku, bodegaFactura);
                 return { sku, ok: disp >= pendSku, disp, need: pendSku };
             });
             const todosOk = skuStates.every(s => s.ok);
@@ -8631,10 +8649,15 @@ function _fpdRefreshItemInfo() {
     if (!info) { return; }
     const sku = (document.getElementById('fpd-i-sku')?.value || '').trim().toUpperCase();
     const conReserva = document.getElementById('fpd-reserva').value === 'con';
+    const bodegaConsumo = (document.getElementById('fpd-bodega-consumo')?.value || '').trim();
     if (!sku) { info.textContent = ''; return; }
     if (!conReserva) {
-        const disp = _stockDisponibleSKU(sku);
-        info.innerHTML = `Stock disponible actual del SKU: <strong>${disp}</strong> unidades (aprobado - reservas pendientes).`;
+        if (!bodegaConsumo) {
+            info.textContent = 'Seleccione primero la bodega de consumo para ver la disponibilidad del SKU en esa bodega.';
+            return;
+        }
+        const disp = _stockDisponibleSKU(sku, bodegaConsumo);
+        info.innerHTML = `Stock disponible en <strong>${bodegaConsumo}</strong>: <strong>${disp}</strong> unidades (aprobado en esa bodega − reservas pendientes de esa bodega).`;
     } else {
         const bodega = document.getElementById('fpd-bodega-consumo')?.value || '';
         const lote   = document.getElementById('fpd-i-lote')?.value || '';
