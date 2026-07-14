@@ -918,6 +918,9 @@
                         </div>
                         <div class="filter-bar">
                             <input type="text" class="form-input" id="fFPDCliente" placeholder="Cliente..." oninput="renderFacturasPorDespachar()" style="max-width:220px">
+                            <select class="form-select" id="fFPDBodega" onchange="renderFacturasPorDespachar()" style="width:auto;min-width:200px" title="Bodega de consumo">
+                                <option value="">Todas las bodegas</option>
+                            </select>
                             <select class="form-select" id="fFPDEstatus" onchange="renderFacturasPorDespachar()" style="width:auto">
                                 <option value="ABIERTAS">Pendientes y parciales</option>
                                 <option value="Pendiente">Sólo pendientes (sin despacho)</option>
@@ -2340,6 +2343,9 @@
         </div>
 
         <div class="filter-bar" style="margin-bottom:12px">
+            <select class="form-select" id="fRSkuBodega" onchange="renderResumenSku()" style="width:auto;min-width:200px" title="Bodega de consumo">
+                <option value="">Todas las bodegas</option>
+            </select>
             <select class="form-select" id="fRSkuTipo" onchange="renderResumenSku()" style="width:auto;min-width:220px">
                 <option value="todos">Todas las pendientes (con y sin reserva)</option>
                 <option value="sinreserva">Sólo pendientes SIN reserva</option>
@@ -8391,14 +8397,45 @@ function _updateFPDBadge() {
 function clearFiltrosFPD() {
     _clearFields('fFPDCliente','fFPDDesde','fFPDHasta');
     const est = document.getElementById('fFPDEstatus'); if (est) est.value = 'ABIERTAS';
+    const bod = document.getElementById('fFPDBodega'); if (bod) bod.value = '';
     renderFacturasPorDespachar();
+}
+
+// Puebla un <select> con las bodegas permitidas al perfil actual, manteniendo
+// la primera opción (usualmente "Todas las bodegas") y preservando el valor
+// seleccionado si sigue siendo válido.
+function _populateBodegaFilterSelect(elId) {
+    const sel = document.getElementById(elId);
+    if (!sel) return;
+    const cur = sel.value;
+    const arrFijas = bodegasFijasActual();
+    const first = sel.querySelector('option'); // conserva "Todas las bodegas"
+    sel.innerHTML = '';
+    if (first) sel.appendChild(first);
+    const nombres = Object.values(data.bodegas || {})
+        .map(b => b.nombre)
+        .filter(Boolean)
+        .filter(n => !arrFijas || arrFijas.includes(n))
+        .sort((a, b) => a.localeCompare(b));
+    nombres.forEach(n => {
+        const o = document.createElement('option');
+        o.value = n; o.textContent = n;
+        sel.appendChild(o);
+    });
+    // Restaurar selección si sigue disponible
+    if (cur && nombres.includes(cur)) sel.value = cur;
+    // Auto-seleccionar cuando el perfil sólo tiene una bodega permitida
+    else if (arrFijas && arrFijas.length === 1) sel.value = arrFijas[0];
+    else sel.value = '';
 }
 
 function renderFacturasPorDespachar() {
     const tb = document.getElementById('tFacturasPorDespachar');
     if (!tb) return;
+    _populateBodegaFilterSelect('fFPDBodega');
     const fCli    = (document.getElementById('fFPDCliente')?.value || '').toLowerCase();
     const fEst    = document.getElementById('fFPDEstatus')?.value ?? 'Pendiente';
+    const fBod    = document.getElementById('fFPDBodega')?.value || '';
     const fDesde  = document.getElementById('fFPDDesde')?.value || '';
     const fHasta  = document.getElementById('fFPDHasta')?.value || '';
 
@@ -8413,6 +8450,15 @@ function renderFacturasPorDespachar() {
             if (f.bodegaConsumo) return arrFijas.includes(f.bodegaConsumo);
             if (f.items && f.items.some(it => arrFijas.includes(it.bodega || ''))) return true;
             return false;
+        });
+    }
+    // Filtro por bodega de consumo seleccionada en la barra superior. Se
+    // resuelve la bodega efectiva de la factura (bodegaConsumo con fallback al
+    // primer ítem con bodega, para registros antiguos).
+    if (fBod) {
+        rows = rows.filter(f => {
+            const bod = f.bodegaConsumo || (f.items || []).map(it => it.bodega).find(Boolean) || '';
+            return bod === fBod;
         });
     }
     if (fCli)   rows = rows.filter(f => (f.cliente || '').toLowerCase().includes(fCli));
@@ -8841,9 +8887,12 @@ function _findFacturaPendientePorNumero(num) {
 // bodegas permitidas del perfil (usa bodegaConsumo con fallback a items[].bodega
 // para registros antiguos). Devuelve un array de objetos con:
 //   { sku, descripcion, totalPendiente, facturas:[{numero, cliente, cantidad, conReserva}] }
-function _resumenSkuFacturasPendientes(tipo /* 'todos'|'sinreserva'|'conreserva' */) {
+// `bodegaFiltro` acota adicionalmente a la bodega de consumo indicada
+// (vacío = todas las bodegas permitidas al perfil).
+function _resumenSkuFacturasPendientes(tipo /* 'todos'|'sinreserva'|'conreserva' */, bodegaFiltro) {
     const arrFijas = bodegasFijasActual();
     const prods = data.productos || {};
+    const bodF = (bodegaFiltro || '').trim();
     const acc = {};
     Object.values(data.facturasPorDespachar || {}).forEach(f => {
         if (!_facturaAbierta(f)) return;    // Pendiente o Parcialmente despachada
@@ -8858,6 +8907,11 @@ function _resumenSkuFacturasPendientes(tipo /* 'todos'|'sinreserva'|'conreserva'
             } else {
                 return;
             }
+        }
+        // Filtro puntual por bodega de consumo (dropdown del modal)
+        if (bodF) {
+            const bodFactura = f.bodegaConsumo || (f.items || []).map(it => it.bodega).find(Boolean) || '';
+            if (bodFactura !== bodF) return;
         }
         // Descontamos lo ya despachado por SKU (despachos parciales).
         const pendienteMap = _pendientePorSKUFactura(f);
@@ -8885,17 +8939,20 @@ function _resumenSkuFacturasPendientes(tipo /* 'todos'|'sinreserva'|'conreserva'
 function openResumenSkuModal() {
     document.getElementById('fRSkuTipo').value = 'todos';
     document.getElementById('fRSkuBusqueda').value = '';
+    const bod = document.getElementById('fRSkuBodega'); if (bod) bod.value = '';
     openModal('resumenSkuModal');
     renderResumenSku();
 }
 
 function renderResumenSku() {
+    _populateBodegaFilterSelect('fRSkuBodega');
     const tipo = document.getElementById('fRSkuTipo')?.value || 'todos';
+    const bodF = document.getElementById('fRSkuBodega')?.value || '';
     const q = (document.getElementById('fRSkuBusqueda')?.value || '').toLowerCase().trim();
     const tb = document.getElementById('tResumenSku');
     const info = document.getElementById('rskuTotalInfo');
     if (!tb) return;
-    let rows = _resumenSkuFacturasPendientes(tipo);
+    let rows = _resumenSkuFacturasPendientes(tipo, bodF);
     if (q) rows = rows.filter(r => r.sku.toLowerCase().includes(q) || (r.descripcion || '').toLowerCase().includes(q));
     if (!rows.length) {
         tb.innerHTML = '<tr class="empty-row"><td colspan="6">Sin productos pendientes que coincidan con el filtro</td></tr>';
@@ -8904,10 +8961,17 @@ function renderResumenSku() {
     }
     const totalSKUs = rows.length;
     const totalUnidades = rows.reduce((a, r) => a + r.totalPendiente, 0);
-    if (info) info.innerHTML = `${totalSKUs} SKU(s) · Total pendiente: <strong>${totalUnidades}</strong> ud`;
+    const scopeTxt = bodF ? ` · Bodega: <strong>${bodF}</strong>` : '';
+    if (info) info.innerHTML = `${totalSKUs} SKU(s) · Total pendiente: <strong>${totalUnidades}</strong> ud${scopeTxt}`;
+
+    // Para "Todas las bodegas": suma stock disponible sobre todas las bodegas
+    // permitidas al perfil (o global si no hay restricción). Para bodega
+    // específica: solo esa bodega.
+    const arrFijas = bodegasFijasActual();
+    const bodegasParaStock = bodF ? [bodF] : (arrFijas ? arrFijas.slice() : [null]);
 
     tb.innerHTML = rows.map(r => {
-        const disp = _stockDisponibleSKU(r.sku);
+        const disp = bodegasParaStock.reduce((sum, b) => sum + _stockDisponibleSKU(r.sku, b || ''), 0);
         const pend = r.totalPendiente;
         // Cobertura: cuánto del pendiente puedo cubrir con stock disponible actual.
         // Nota: para facturas con reserva, el disp ya descuenta las propias reservas,
