@@ -896,8 +896,8 @@
                         </div>
                         <div class="table-wrap">
                             <table><thead><tr>
-                                <th>Fecha</th><th>Tipo</th><th>SKU</th><th>Descripción</th><th>Lote</th><th>Vence</th><th>Qty</th><th>Bodega</th><th>Ubicación</th><th>Proveedor/Cliente</th><th>Referencia</th><th>Status</th><th>Usuario</th><th>Obs.</th><th>PDF</th>
-                            </tr></thead><tbody id="tMovimientos"><tr class="empty-row"><td colspan="15">No hay movimientos registrados</td></tr></tbody></table>
+                                <th>N° Movimiento</th><th>Fecha</th><th>Tipo</th><th>SKU</th><th>Descripción</th><th>Lote</th><th>Vence</th><th>Qty</th><th>Bodega</th><th>Ubicación</th><th>Proveedor/Cliente</th><th>Referencia</th><th>Status</th><th>Usuario</th><th>Obs.</th><th>PDF</th>
+                            </tr></thead><tbody id="tMovimientos"><tr class="empty-row"><td colspan="16">No hay movimientos registrados</td></tr></tbody></table>
                         </div>
                         <div id="movPaginacionFooter"></div>
                     </div>
@@ -1610,7 +1610,7 @@
         <div class="form-row">
             <div class="form-group">
                 <label class="form-label">Tipo <span style="color:var(--danger)">*</span></label>
-                <select class="form-select" id="md-tipo" required onchange="_refreshMiStatusField(this.value)">
+                <select class="form-select" id="md-tipo" required onchange="_refreshMiStatusField(this.value); _refreshNumMovPreview()">
                     <option value="">Seleccionar...</option>
                     <option value="Entrada">Entrada</option>
                     <option value="Salida">Salida</option>
@@ -1618,9 +1618,10 @@
                     <option value="CambioUbicacion">Cambio de Ubicación</option>
                     <option value="Devolución">Devolución</option>
                 </select>
+                <div id="md-nummov-preview" style="display:none;margin-top:6px;font-size:11px;color:var(--text3);font-family:var(--mono,monospace)" title="El número definitivo se asigna al momento de guardar. Este es una estimación."></div>
             </div>
             <div class="form-group" id="md-numdoc-group">
-                <label class="form-label">N° Documento / Factura</label>
+                <label class="form-label">N° Documento / Factura <span style="color:var(--text3);font-weight:normal;font-size:11px">(opcional)</span></label>
                 <input type="text" class="form-input" id="md-numdoc" placeholder="Ej: FAC-2024-001" oninput="_checkNumDocDup()" onblur="_checkNumDocDup(); _autoFillFromFactura();">
                 <div id="md-numdoc-warn" style="display:none;margin-top:6px;font-size:12px;font-weight:600;color:var(--warning,#B25E00);background:rgba(217,119,6,.12);border:1px solid rgba(217,119,6,.35);border-radius:6px;padding:6px 10px"></div>
             </div>
@@ -4542,32 +4543,54 @@ function resetItemForm() {
     _refreshMiStatusField(tipo);
 }
 
-// Busca movimientos previos que ya usaron este N° de documento (como referencia
-// o documentoId). Devuelve un resumen o null si no hay coincidencias.
-function _findDocDuplicado(numDoc) {
+// Busca movimientos previos que ya usaron este N° de documento como referencia
+// (factura/guía) del MISMO tipo. Devuelve un resumen o null si no hay
+// coincidencias. Si `tipo` viene vacío, no filtra por tipo (fallback).
+function _findDocDuplicado(numDoc, tipo) {
     const n = (numDoc || '').trim().toLowerCase();
     if (!n) return null;
+    const tFilter = (tipo || '').trim();
     const matches = Object.values(data.movimientos || {}).filter(m => {
+        if (tFilter && m.tipo !== tFilter) return false;
         const ref = (m.referencia || '').trim().toLowerCase();
-        const did = (m.documentoId || '').trim().toLowerCase();
-        return (ref && ref === n) || (did && did === n);
+        return ref && ref === n;
     });
     if (!matches.length) return null;
-    const tipos = Array.from(new Set(matches.map(m => m.tipo).filter(Boolean))).join(', ');
     const fechas = matches.map(m => m.fecha).filter(Boolean).sort();
-    return { count: matches.length, tipos, ultima: fechas.length ? fechas[fechas.length - 1] : '' };
+    // Devuelve el N° interno del último movimiento coincidente para mostrarlo.
+    const ultimo = matches.slice().sort((a,b) => new Date(b.fecha) - new Date(a.fecha))[0] || {};
+    return {
+        count: matches.length,
+        tipo: tFilter || (matches[0] && matches[0].tipo) || '',
+        ultima: fechas.length ? fechas[fechas.length - 1] : '',
+        numeroMovimiento: ultimo.numeroMovimiento || '',
+        sku: ultimo.sku || '',
+        lote: ultimo.lote || ''
+    };
 }
 
-// Aviso en vivo bajo el campo N° Documento (solo Entrada/Salida).
+// Aviso en vivo bajo el campo N° Documento / Factura. Ahora:
+//  - Si está vacío → aviso informativo (no bloquea el guardado).
+//  - Si está duplicado dentro del mismo tipo → aviso con detalle del anterior.
 function _checkNumDocDup() {
     const warnEl = document.getElementById('md-numdoc-warn');
     if (!warnEl) return;
     const tipo = document.getElementById('md-tipo')?.value || '';
-    const numDoc = document.getElementById('md-numdoc')?.value || '';
-    const dup = (tipo === 'Entrada' || tipo === 'Salida') ? _findDocDuplicado(numDoc) : null;
+    const numDoc = (document.getElementById('md-numdoc')?.value || '').trim();
+    // Sin tipo aún seleccionado: no mostrar aviso.
+    if (!tipo) { warnEl.style.display = 'none'; warnEl.textContent = ''; return; }
+    if (!numDoc) {
+        warnEl.textContent = 'ℹ El N° de factura/guía está vacío. Podrá guardar de todos modos, pero se recomienda registrarlo para trazabilidad.';
+        warnEl.style.display = 'block';
+        return;
+    }
+    const dup = _findDocDuplicado(numDoc, tipo);
     if (!dup) { warnEl.style.display = 'none'; warnEl.textContent = ''; return; }
     const ultima = dup.ultima ? ` (último: ${fmtDate(dup.ultima.split('T')[0])})` : '';
-    warnEl.textContent = `⚠ El N° «${numDoc.trim()}» ya se usó en ${dup.count} movimiento(s) previo(s) [${dup.tipos}]${ultima}. Verifique que no esté duplicando.`;
+    const numMovTxt = dup.numeroMovimiento ? ` · N° interno: ${dup.numeroMovimiento}` : '';
+    const skuTxt = dup.sku ? ` · SKU ${dup.sku}` : '';
+    const loteTxt = dup.lote ? ` · Lote ${dup.lote}` : '';
+    warnEl.textContent = `⚠ El N° «${numDoc}» ya se usó en ${dup.count} movimiento(s) de tipo ${dup.tipo}${ultima}${numMovTxt}${skuTxt}${loteTxt}. Verifique que no esté duplicando.`;
     warnEl.style.display = 'block';
 }
 
@@ -4671,6 +4694,69 @@ function _autoFillFromFactura() {
     }
 }
 
+// ══ NÚMERO INTERNO DE MOVIMIENTO ══
+// Prefijos por tipo. La secuencia es independiente por prefijo y por año.
+// - Ajuste (cambio de status manual) y CambioEstado (subproducto de flujos)
+//   comparten prefijo CST porque conceptualmente son el mismo evento.
+const NUMMOV_PREFIJOS = {
+    'Entrada':          'ENT',
+    'Salida':           'SAL',
+    'Devolución':       'DEV',
+    'Ajuste':           'CST',
+    'CambioEstado':     'CST',
+    'CambioUbicacion':  'TRF',
+    'Destrucción':      'DES',
+    'AjusteInventario': 'AJU'
+};
+function _prefijoNumMov(tipo) { return NUMMOV_PREFIJOS[tipo] || 'MOV'; }
+
+// Devuelve el próximo N° del contador para preview (sin consumirlo). Se usa
+// para mostrar "Se asignará: XXX-YYYY-NNNNN (estimado)" en el modal.
+async function _peekNumeroMovimiento(tipo) {
+    const uid = rootUid || currentUser?.uid;
+    if (!uid || !tipo) return '';
+    const prefijo = _prefijoNumMov(tipo);
+    const año = new Date().getFullYear();
+    try {
+        const snap = await db.ref(`usuarios/${uid}/contadores/${prefijo}/${año}`).once('value');
+        const actual = snap.val() || 0;
+        return `${prefijo}-${año}-${String(actual + 1).padStart(5, '0')}`;
+    } catch (_) { return ''; }
+}
+
+// Muestra "Se asignará: XXX-YYYY-NNNNN (estimado)" bajo el select de tipo del
+// modal de nuevo movimiento. Es un preview: el N° definitivo se emite recién
+// dentro de la transacción al guardar.
+async function _refreshNumMovPreview() {
+    const el = document.getElementById('md-nummov-preview');
+    if (!el) return;
+    const tipo = document.getElementById('md-tipo')?.value || '';
+    if (!tipo) { el.style.display = 'none'; el.textContent = ''; return; }
+    const preview = await _peekNumeroMovimiento(tipo);
+    if (!preview) { el.style.display = 'none'; el.textContent = ''; return; }
+    el.textContent = `Se asignará: ${preview} (estimado)`;
+    el.style.display = 'block';
+    // Refrescar aviso duplicado/vacío: cambió el tipo, cambia el filtro.
+    try { _checkNumDocDup(); } catch(_) {}
+}
+
+// Genera el número interno consumiendo el contador de forma atómica. Se llama
+// una sola vez por documento (todas las líneas comparten el mismo número).
+async function generarNumeroMovimiento(tipo) {
+    const uid = rootUid || currentUser?.uid;
+    if (!uid) throw new Error('Usuario no identificado.');
+    const prefijo = _prefijoNumMov(tipo);
+    const año = new Date().getFullYear();
+    const ref = db.ref(`usuarios/${uid}/contadores/${prefijo}/${año}`);
+    let asignado = 0;
+    const res = await ref.transaction(cur => {
+        asignado = (cur || 0) + 1;
+        return asignado;
+    });
+    if (!res.committed) throw new Error('No se pudo asignar el N° de movimiento (transacción rechazada).');
+    return `${prefijo}-${año}-${String(asignado).padStart(5, '0')}`;
+}
+
 function saveDocumento() {
     if (userPerfil === 'Visualizador') { alert('Su perfil es de solo lectura.'); return; }
     const tipo = document.getElementById('md-tipo').value;
@@ -4711,13 +4797,19 @@ function saveDocumento() {
 
     const tipoLabel = tipo === 'CambioUbicacion' ? 'Cambio de Ubicación' : (tipo === 'Ajuste' ? 'Cambio de Status' : tipo);
     const isCambioUbic = tipo === 'CambioUbicacion';
-    const dupDoc = (tipo === 'Entrada' || tipo === 'Salida') ? _findDocDuplicado(numDoc) : null;
+    // Alerta de duplicado limitada al mismo tipo (Entrada con Entrada, etc.).
+    const dupDoc = numDoc ? _findDocDuplicado(numDoc, tipo) : null;
     const dupBanner = dupDoc ? `
         <div style="margin-bottom:10px;padding:8px 12px;border-radius:6px;background:rgba(217,119,6,.12);border:1px solid rgba(217,119,6,.4);color:#B25E00;font-weight:600">
-            ⚠ El N° «${documentoId}» ya se usó en ${dupDoc.count} movimiento(s) previo(s) [${dupDoc.tipos}]${dupDoc.ultima ? ` · último ${fmtDate(dupDoc.ultima.split('T')[0])}` : ''}.<br>
-            <span style="font-weight:500">Confirme solo si no se trata de un ingreso/salida duplicado.</span>
+            ⚠ El N° «${numDoc}» ya se usó en ${dupDoc.count} movimiento(s) de tipo ${dupDoc.tipo}${dupDoc.ultima ? ` · último ${fmtDate(dupDoc.ultima.split('T')[0])}` : ''}${dupDoc.numeroMovimiento ? ` · N° interno anterior: ${dupDoc.numeroMovimiento}` : ''}.<br>
+            <span style="font-weight:500">Confirme solo si no se trata de un ${tipo.toLowerCase()} duplicado.</span>
         </div>` : '';
-    const confirmBody = dupBanner + `
+    // Aviso si el N° de factura/guía quedó vacío (informativo, no bloquea).
+    const emptyRefBanner = !numDoc ? `
+        <div style="margin-bottom:10px;padding:8px 12px;border-radius:6px;background:rgba(8,84,160,.10);border:1px solid rgba(8,84,160,.35);color:#0854A0;font-weight:600">
+            ℹ El N° de factura/guía está vacío. El movimiento se guardará igual (se usará ID automático como documento).
+        </div>` : '';
+    const confirmBody = dupBanner + emptyRefBanner + `
         <strong>${tipoLabel}: ${movDocItems.length} producto(s)</strong><br>
         <span style="color:var(--text3)">Documento:</span> <strong>${documentoId}</strong><br>
         <span style="color:var(--text3)">Bodega:</span> ${bodega}<br>
@@ -4732,12 +4824,21 @@ function saveDocumento() {
         confirmBody,
         `Guardar ${tipoLabel}`,
         tipo === 'Salida' ? 'btn-danger' : 'btn-primary',
-        () => {
+        async () => {
             _setBtnLoading('btn-save-doc', true); // I1: spinner
+            // Un solo número interno por documento (todas las líneas lo comparten).
+            let numeroMovimiento = '';
+            try { numeroMovimiento = await generarNumeroMovimiento(tipo); }
+            catch (e) {
+                _setBtnLoading('btn-save-doc', false);
+                alert('No se pudo asignar el N° interno de movimiento: ' + (e.message || e));
+                return;
+            }
             const updates = {};
             const ts0 = Date.now();
             movDocItems.forEach((item, i) => {
                 const mov = {
+                    numeroMovimiento,
                     tipo, sku: item.sku, lote: item.lote,
                     descripcion: item.descripcion,
                     tipoProducto: item.tipo || '',
@@ -5713,7 +5814,7 @@ function _actualizarEstatusFacturaTrasAnulacion(docId, itemsAnulados, ahora, uid
     });
 }
 
-function confirmarAnularSalida() {
+async function confirmarAnularSalida() {
     if (userPerfil !== 'Maestro') { showFormError('anular-err', 'Solo el perfil Maestro puede anular salidas.'); return; }
     if (!_ajMovHeader || _ajMovHeader.tipo !== 'Salida' || !_ajMovItems.length) {
         showFormError('anular-err', 'No hay una salida cargada.'); return;
@@ -5723,6 +5824,10 @@ function confirmarAnularSalida() {
     const docId = _ajMovHeader.documentoId || '';
     const uid = rootUid || currentUser.uid;
     const ahora = new Date().toISOString();
+    // Un N° interno compartido por todas las líneas del ajuste de anulación.
+    let numeroMovimiento = '';
+    try { numeroMovimiento = await generarNumeroMovimiento('AjusteInventario'); }
+    catch (e) { showFormError('anular-err', 'No se pudo asignar el N° de movimiento: ' + (e.message || e)); return; }
     const updates = {};
     const ts0 = Date.now();
     let n = 0;
@@ -5731,6 +5836,7 @@ function confirmarAnularSalida() {
         const qty = parseFloat(o.cantidad) || 0;
         if (qty <= 0) return;
         updates[`usuarios/${uid}/movimientos/${ts0 + n}`] = {
+            numeroMovimiento,
             tipo: 'AjusteInventario', ajusteTipo: 'Positivo',
             sku: o.sku, lote: o.lote, vence: o.vence || '',
             descripcion: o.descripcion || (data.productos[o.sku]?.descripcion || ''),
@@ -5782,7 +5888,7 @@ function abrirAnularEntrada() {
     openModal('anularEntradaModal');
 }
 
-function confirmarAnularEntrada() {
+async function confirmarAnularEntrada() {
     if (userPerfil !== 'Maestro') { showFormError('anular-ent-err', 'Solo el perfil Maestro puede anular entradas.'); return; }
     if (!_ajMovHeader || _ajMovHeader.tipo !== 'Entrada' || !_ajMovItems.length) {
         showFormError('anular-ent-err', 'No hay una entrada cargada.'); return;
@@ -5792,6 +5898,9 @@ function confirmarAnularEntrada() {
     const docId = _ajMovHeader.documentoId || '';
     const uid = rootUid || currentUser.uid;
     const ahora = new Date().toISOString();
+    let numeroMovimiento = '';
+    try { numeroMovimiento = await generarNumeroMovimiento('AjusteInventario'); }
+    catch (e) { showFormError('anular-ent-err', 'No se pudo asignar el N° de movimiento: ' + (e.message || e)); return; }
     const updates = {};
     const ts0 = Date.now();
     let n = 0;
@@ -5800,6 +5909,7 @@ function confirmarAnularEntrada() {
         const qty = parseFloat(o.cantidad) || 0;
         if (qty <= 0) return;
         updates[`usuarios/${uid}/movimientos/${ts0 + n}`] = {
+            numeroMovimiento,
             tipo: 'AjusteInventario', ajusteTipo: 'Negativo',
             sku: o.sku, lote: o.lote, vence: o.vence || '',
             descripcion: o.descripcion || (data.productos[o.sku]?.descripcion || ''),
@@ -5960,7 +6070,7 @@ function renderMovimientos(preservePage) {
     const footer = document.getElementById('movPaginacionFooter');
     const tb = document.getElementById('tMovimientos');
     if (!total) {
-        tb.innerHTML = '<tr class="empty-row"><td colspan="15">No hay movimientos</td></tr>';
+        tb.innerHTML = '<tr class="empty-row"><td colspan="16">No hay movimientos</td></tr>';
         if (footer) footer.innerHTML = '';
         return;
     }
@@ -5985,7 +6095,11 @@ function renderMovimientos(preservePage) {
                 pdfCell = `<span style="color:var(--text3);font-size:10px">${m.documentoId}</span>`;
             }
         }
+        const numMovCell = m.numeroMovimiento
+            ? `<span class="text-mono" style="color:var(--accent);font-weight:600;font-size:11px">${m.numeroMovimiento}</span>`
+            : '<span class="text-muted" style="font-size:11px">—</span>';
         return `<tr>
+            <td>${numMovCell}</td>
             <td class="text-mono" style="font-size:11px">${fmtDateTime(m.fecha)}</td>
             <td><span class="badge ${tC}">${tipoLabel}</span></td>
             <td class="text-mono" style="color:var(--accent2)">${m.sku}</td>
@@ -6348,7 +6462,7 @@ function _cecToggleMotivo() {
     if (grp) grp.style.display = (document.getElementById('cec-status')?.value === 'Rechazado') ? '' : 'none';
 }
 
-function confirmarCambioEstatusCuar() {
+async function confirmarCambioEstatusCuar() {
     const key = _cuarChangeKey; if (!key) return;
     const [sku, lote, bodega] = key.split('|');
     const nuevo  = document.getElementById('cec-status').value;
@@ -6364,6 +6478,9 @@ function confirmarCambioEstatusCuar() {
     const stock = calcStock();
     const grupo = Object.values(stock).filter(s => s.sku===sku && s.lote===lote && (s.bodega||'')===(bodega||'') && getLoteStatus(s)==='Cuarentena' && (parseFloat(s.cantidad)||0)>0);
     if (!grupo.length) { showFormError('cec-err', 'El lote ya no está en cuarentena.'); return; }
+    let numeroMovimiento = '';
+    try { numeroMovimiento = await generarNumeroMovimiento('CambioEstado'); }
+    catch (e) { showFormError('cec-err', 'No se pudo asignar el N° de movimiento: ' + (e.message || e)); return; }
     const detalle = nuevo === 'Rechazado'
         ? `Rechazado desde cuarentena. Motivo: ${motivo}.${obs?' '+obs:''}`
         : `Liberado de cuarentena → Aprobado.${obs?' '+obs:''}`;
@@ -6371,6 +6488,7 @@ function confirmarCambioEstatusCuar() {
     const ts0 = Date.now();
     grupo.forEach((s, i) => {
         updates[`usuarios/${uid}/movimientos/${ts0 + i}`] = {
+            numeroMovimiento,
             tipo: 'CambioEstado', sku, lote,
             descripcion: data.productos[sku]?.descripcion || '',
             cantidad: parseFloat(s.cantidad)||0, vence: s.vence || '',
@@ -6394,17 +6512,21 @@ function liberarCuarentena(id) {
         `SKU: ${q.sku} · Lote: ${q.lote}`,
         `<strong>¿Confirmar liberación?</strong><br>El lote quedará en estado <span style="color:var(--success);font-weight:600">APROBADO</span> y podrá despacharse normalmente.<br><span style="color:var(--text3);font-size:12px">Se registrará un evento de cambio de estado en trazabilidad.</span>`,
         'Confirmar liberación', 'btn-success-sm',
-        () => {
+        async () => {
             const uid = rootUid || currentUser.uid;
             const ahora = new Date().toISOString();
             const stock = calcStock();
             const stockItem = Object.values(stock).find(s => s.sku === q.sku && s.lote === q.lote);
+            let numeroMovimiento = '';
+            try { numeroMovimiento = await generarNumeroMovimiento('CambioEstado'); }
+            catch (e) { alert('No se pudo asignar el N° de movimiento: ' + (e.message || e)); return; }
             const updates = {};
             updates[`usuarios/${uid}/cuarentena/${id}/status`] = 'Liberado';
             updates[`usuarios/${uid}/cuarentena/${id}/fechaLiberacion`] = ahora;
             updates[`usuarios/${uid}/cuarentena/${id}/usuarioLibera`] = currentUser.email;
             // CambioEstado movement for trazabilidad
             updates[`usuarios/${uid}/movimientos/${Date.now()}`] = {
+                numeroMovimiento,
                 tipo: 'CambioEstado', sku: q.sku, lote: q.lote,
                 descripcion: q.descripcion || data.productos[q.sku]?.descripcion || '',
                 cantidad: q.cantidad, vence: stockItem?.vence || '',
@@ -6431,7 +6553,7 @@ function abrirRechazoCuarentena(id) {
     openModal('rechazarCuarModal');
 }
 
-function confirmarRechazoCuarentena() {
+async function confirmarRechazoCuarentena() {
     const id = document.getElementById('rcq-id').value;
     const motivo = document.getElementById('rcq-motivo').value;
     const resp = document.getElementById('rcq-resp').value.trim();
@@ -6443,6 +6565,9 @@ function confirmarRechazoCuarentena() {
     const ahora = new Date().toISOString();
     const stock = calcStock();
     const stockItem = Object.values(stock).find(s => s.sku === q.sku && s.lote === q.lote);
+    let numeroMovimiento = '';
+    try { numeroMovimiento = await generarNumeroMovimiento('CambioEstado'); }
+    catch (e) { alert('No se pudo asignar el N° de movimiento: ' + (e.message || e)); return; }
     const updates = {};
     updates[`usuarios/${uid}/cuarentena/${id}/status`] = 'Rechazado';
     updates[`usuarios/${uid}/cuarentena/${id}/motivoRechazo`] = motivo;
@@ -6452,6 +6577,7 @@ function confirmarRechazoCuarentena() {
     updates[`usuarios/${uid}/cuarentena/${id}/usuarioRechazo`] = currentUser.email;
     // CambioEstado movement
     updates[`usuarios/${uid}/movimientos/${Date.now()}`] = {
+        numeroMovimiento,
         tipo: 'CambioEstado', sku: q.sku, lote: q.lote,
         descripcion: q.descripcion || data.productos[q.sku]?.descripcion || '',
         cantidad: q.cantidad, vence: stockItem?.vence || '',
@@ -6489,7 +6615,7 @@ function abrirDestruccionCuarentena(id) {
 }
 
 // ══ DESTRUCCIÓN ISP ══
-function saveDestruccion() {
+async function saveDestruccion() {
     const sku      = document.getElementById('dest-sku').value.trim();
     const lote     = document.getElementById('dest-lote').value.trim();
     const estado   = document.getElementById('dest-estado').value.trim();
@@ -6519,7 +6645,20 @@ function saveDestruccion() {
     const stockItem = Object.values(stock).find(s => s.sku === sku && s.lote === lote);
     const documentoId = `DEST-${acta}-${Date.now()}`;
 
+    // Un N° de destrucción y opcionalmente un N° de cambio de estado para
+    // el stock residual (destrucción parcial). Se generan por adelantado para
+    // que ambos queden inmutables si la escritura falla.
+    let numDestruccion = '', numCambioEstadoRes = '';
+    try { numDestruccion = await generarNumeroMovimiento('Destrucción'); }
+    catch (e) { showFormError('dest-err', 'No se pudo asignar el N° de movimiento: ' + (e.message || e)); return; }
+    const remaining = (stockItem?.cantidad || 0) - qty;
+    if (remaining > 0) {
+        try { numCambioEstadoRes = await generarNumeroMovimiento('CambioEstado'); }
+        catch (e) { showFormError('dest-err', 'No se pudo asignar el N° del cambio de estado residual: ' + (e.message || e)); return; }
+    }
+
     const mov = {
+        numeroMovimiento: numDestruccion,
         tipo: 'Destrucción', sku, lote,
         descripcion: data.productos[sku]?.descripcion || '',
         cantidad: qty, vence: stockItem?.vence || '',
@@ -6547,9 +6686,9 @@ function saveDestruccion() {
     }
 
     // CambioEstado: mark remaining stock as Rechazado if partial destruction
-    const remaining = (stockItem?.cantidad || 0) - qty;
     if (remaining > 0) {
         updates[`usuarios/${uid}/movimientos/${Date.now() + 1}`] = {
+            numeroMovimiento: numCambioEstadoRes,
             tipo: 'CambioEstado', sku, lote,
             descripcion: data.productos[sku]?.descripcion || '',
             cantidad: remaining, vence: stockItem?.vence || '',
@@ -6696,11 +6835,15 @@ function openDevModal() {
     openModal('devModal');
 }
 
-function saveDevolucion(e) {
+async function saveDevolucion(e) {
     e.preventDefault();
     if (userPerfil === 'Visualizador') { alert('Su perfil es de solo lectura.'); return; }
     const sku = document.getElementById('d-sku').value.trim().toUpperCase();
+    let numeroMovimiento = '';
+    try { numeroMovimiento = await generarNumeroMovimiento('Devolución'); }
+    catch (err) { alert('No se pudo asignar el N° de movimiento: ' + (err.message || err)); return; }
     const dev = {
+        numeroMovimiento,
         sku, lote: document.getElementById('d-lote').value.trim(),
         cantidad: parseFloat(document.getElementById('d-qty').value),
         motivo: document.getElementById('d-motivo').value,
@@ -6711,7 +6854,7 @@ function saveDevolucion(e) {
         usuario: currentUser.email
     };
     db.ref(`usuarios/${rootUid || currentUser.uid}/devoluciones`).push(dev)
-        .then(() => { logAudit('Devolución', 'Devoluciones', sku, dev.lote, dev.motivo); closeModal('devModal'); });
+        .then(() => { logAudit('Devolución', 'Devoluciones', sku, dev.lote, `${numeroMovimiento} · ${dev.motivo}`); closeModal('devModal'); });
 }
 
 // ══ AJUSTE DE INVENTARIO ══
@@ -6963,14 +7106,18 @@ function saveAjuste() {
          <span style="color:var(--text3)">Motivo:</span> ${obs}`,
         'Confirmar Ajuste',
         ajusteTipo === 'Positivo' ? 'btn-primary' : 'btn-danger',
-        () => {
+        async () => {
             // Cierre optimista: el listener de RTDB refrescará Movimientos/Stock/Ajustes
             closeModal('ajusteModal');
             const saveBtn = document.getElementById('btn-save-ajuste');
             if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = 'Guardar Ajuste'; }
+            let numeroMovimiento = '';
+            try { numeroMovimiento = await generarNumeroMovimiento('AjusteInventario'); }
+            catch (e) { alert('No se pudo asignar el N° de movimiento: ' + (e.message || e)); return; }
+            mov.numeroMovimiento = numeroMovimiento;
             db.ref(`usuarios/${rootUid || currentUser.uid}/movimientos/${Date.now()}`).set(mov)
                 .then(() => {
-                    logAudit(`Ajuste ${ajusteTipo}`, 'AjusteInventario', sku, lote, `${ajusteTipo==='Positivo'?'+':'−'}${qty} ud. · ${obs}`);
+                    logAudit(`Ajuste ${ajusteTipo}`, 'AjusteInventario', sku, lote, `${numeroMovimiento} · ${ajusteTipo==='Positivo'?'+':'−'}${qty} ud. · ${obs}`);
                 })
                 .catch(e => { alert('Error al guardar el ajuste: ' + e.message); });
         }
@@ -7034,14 +7181,14 @@ function ejecutarRetiro() {
         </div>
         <div class="card" style="margin-bottom:12px">
             <div class="card-header"><div class="card-title">Entradas (${entradas.length})</div></div>
-            ${entradas.length ? `<div class="table-wrap"><table><thead><tr><th>Fecha</th><th>SKU</th><th>Qty</th><th>Bodega</th><th>Proveedor</th><th>Referencia</th><th>Usuario</th></tr></thead><tbody>
-                ${entradas.map(m => `<tr><td class="text-mono" style="font-size:11px">${fmtDateTime(m.fecha)}</td><td>${m.sku}</td><td style="font-weight:600">${m.cantidad}</td><td>${m.bodega||'—'}</td><td>${m.proveedor||'—'}</td><td>${m.referencia||'—'}</td><td style="font-size:11px">${m.usuario||'—'}</td></tr>`).join('')}
+            ${entradas.length ? `<div class="table-wrap"><table><thead><tr><th>N° Movimiento</th><th>Fecha</th><th>SKU</th><th>Qty</th><th>Bodega</th><th>Proveedor</th><th>Referencia</th><th>Usuario</th></tr></thead><tbody>
+                ${entradas.map(m => `<tr><td class="text-mono" style="color:var(--accent);font-weight:600;font-size:11px">${m.numeroMovimiento||'—'}</td><td class="text-mono" style="font-size:11px">${fmtDateTime(m.fecha)}</td><td>${m.sku}</td><td style="font-weight:600">${m.cantidad}</td><td>${m.bodega||'—'}</td><td>${m.proveedor||'—'}</td><td>${m.referencia||'—'}</td><td style="font-size:11px">${m.usuario||'—'}</td></tr>`).join('')}
             </tbody></table></div>` : '<p class="text-muted text-sm">Sin entradas</p>'}
         </div>
         <div class="card">
             <div class="card-header"><div class="card-title">Salidas / Distribución (${salidas.length})</div></div>
-            ${salidas.length ? `<div class="table-wrap"><table><thead><tr><th>Fecha</th><th>SKU</th><th>Qty</th><th>Destino</th><th>Referencia</th><th>Usuario</th></tr></thead><tbody>
-                ${salidas.map(m => `<tr><td class="text-mono" style="font-size:11px">${fmtDateTime(m.fecha)}</td><td>${m.sku}</td><td style="font-weight:600;color:var(--danger)">${m.cantidad}</td><td>${m.proveedor||'—'}</td><td>${m.referencia||'—'}</td><td style="font-size:11px">${m.usuario||'—'}</td></tr>`).join('')}
+            ${salidas.length ? `<div class="table-wrap"><table><thead><tr><th>N° Movimiento</th><th>Fecha</th><th>SKU</th><th>Qty</th><th>Destino</th><th>Referencia</th><th>Usuario</th></tr></thead><tbody>
+                ${salidas.map(m => `<tr><td class="text-mono" style="color:var(--accent);font-weight:600;font-size:11px">${m.numeroMovimiento||'—'}</td><td class="text-mono" style="font-size:11px">${fmtDateTime(m.fecha)}</td><td>${m.sku}</td><td style="font-weight:600;color:var(--danger)">${m.cantidad}</td><td>${m.proveedor||'—'}</td><td>${m.referencia||'—'}</td><td style="font-size:11px">${m.usuario||'—'}</td></tr>`).join('')}
             </tbody></table></div>` : '<p class="text-muted text-sm">Sin salidas registradas — producto aún en bodega</p>'}
         </div>`;
 
@@ -7098,10 +7245,10 @@ function verTrazabilidadLote(sku, lote) {
                 meta = `Ref: ${m.referencia||'—'} | Proveedor/Cliente: ${m.proveedor||'—'} | Status: ${m.status}`;
                 clase = m.tipo === 'Salida' ? 'salida' : m.tipo === 'Ajuste' ? 'ajuste' : '';
             }
-            return { fecha: m.fecha, tipo: m.tipo, desc, meta, usuario: m.usuario, clase };
+            return { fecha: m.fecha, tipo: m.tipo, desc, meta, usuario: m.usuario, clase, numMov: m.numeroMovimiento || '' };
         }),
-        ...cuars.map(q => ({ fecha: q.fechaIngreso, tipo: 'Cuarentena', desc: `Ingreso a cuarentena: ${q.cantidad} ud.`, meta: `Motivo: ${q.motivo} | Status: ${q.status}${q.motivoRechazo?' | Rechazo: '+q.motivoRechazo:''}`, usuario: q.usuario, clase: 'ajuste' })),
-        ...devs.map(d => ({ fecha: d.fecha, tipo: 'Devolución', desc: `Devolución: ${d.cantidad} ud.`, meta: `Motivo: ${d.motivo} | Status: ${d.status}`, usuario: d.usuario, clase: 'salida' })),
+        ...cuars.map(q => ({ fecha: q.fechaIngreso, tipo: 'Cuarentena', desc: `Ingreso a cuarentena: ${q.cantidad} ud.`, meta: `Motivo: ${q.motivo} | Status: ${q.status}${q.motivoRechazo?' | Rechazo: '+q.motivoRechazo:''}`, usuario: q.usuario, clase: 'ajuste', numMov: q.numeroMovimiento || '' })),
+        ...devs.map(d => ({ fecha: d.fecha, tipo: 'Devolución', desc: `Devolución: ${d.cantidad} ud.`, meta: `Motivo: ${d.motivo} | Status: ${d.status}`, usuario: d.usuario, clase: 'salida', numMov: d.numeroMovimiento || '' })),
     ].sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
 
     const prod = sku ? data.productos[sku] : null;
@@ -7111,12 +7258,17 @@ function verTrazabilidadLote(sku, lote) {
         </div>
         <div class="card">
             <ul class="lot-timeline">
-                ${items.map(it => `
+                ${items.map(it => {
+                    const numTag = it.numMov
+                        ? ` · <span class="text-mono" style="color:var(--accent);font-weight:600;font-size:10.5px">${it.numMov}</span>`
+                        : '';
+                    return `
                     <li class="lot-timeline-item ${it.clase}">
-                        <div class="lot-timeline-date">${fmtDateTime(it.fecha)} — <span class="badge badge-${it.tipo==='Destrucción'?'danger':it.tipo==='CambioEstado'?'purple':it.clase==='salida'?'danger':it.clase==='ajuste'?'warning':'success'}" style="font-size:10px">${it.tipo}</span></div>
+                        <div class="lot-timeline-date">${fmtDateTime(it.fecha)} — <span class="badge badge-${it.tipo==='Destrucción'?'danger':it.tipo==='CambioEstado'?'purple':it.clase==='salida'?'danger':it.clase==='ajuste'?'warning':'success'}" style="font-size:10px">${it.tipo}</span>${numTag}</div>
                         <div class="lot-timeline-desc">${it.desc}</div>
                         <div class="lot-timeline-meta">${it.meta} | Usuario: ${it.usuario||'—'}</div>
-                    </li>`).join('')}
+                    </li>`;
+                }).join('')}
             </ul>
         </div>`;
 }
@@ -7183,8 +7335,8 @@ function rptMovimientos() {
         fTipo ? `Tipo: ${fTipo}` : ''
     ].filter(Boolean).join(' · ');
 
-    const rows = movs.map(m => [fmtDate(m.fecha), m.tipo, m.sku, m.descripcion||'—', m.lote||'—', m.cantidad, m.bodega||'—', m.proveedor||'—', m.referencia||'—', m.status||'—', m.usuario||'—']);
-    rptTable('Reporte de Movimientos', ['Fecha','Tipo','SKU','Descripción','Lote','Qty','Bodega','Prov/Cliente','Referencia','Status','Usuario'], rows, subtitle);
+    const rows = movs.map(m => [m.numeroMovimiento||'—', fmtDate(m.fecha), m.tipo, m.sku, m.descripcion||'—', m.lote||'—', m.cantidad, m.bodega||'—', m.proveedor||'—', m.referencia||'—', m.status||'—', m.usuario||'—']);
+    rptTable('Reporte de Movimientos', ['N° Movimiento','Fecha','Tipo','SKU','Descripción','Lote','Qty','Bodega','Prov/Cliente','Referencia','Status','Usuario'], rows, subtitle);
 }
 
 function rptCuarentena() {
@@ -7406,6 +7558,8 @@ function resetMovModal() {
         ndWarn.style.background = '';
         ndWarn.style.borderColor = '';
     }
+    const nmPrev = document.getElementById('md-nummov-preview');
+    if (nmPrev) { nmPrev.style.display = 'none'; nmPrev.textContent = ''; }
     const bodegaEl = document.getElementById('md-bodega'); if (bodegaEl) bodegaEl.value = '';
     const ubicWrap = document.getElementById('mi-ubic-wrap');
     if (ubicWrap) ubicWrap.innerHTML = '<input type="text" class="form-input" id="mi-ubic" placeholder="Ej: Estante A-1">';
