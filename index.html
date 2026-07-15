@@ -4829,6 +4829,20 @@ function saveDocumento() {
     );
 }
 
+// Devuelve la metadata de cliente asociada a una bodega, o null si la bodega
+// no es una sub-bodega de cliente. Se usa para inyectar la razón social del
+// cliente en el encabezado de los PDFs (movimientos, acta, OT).
+function _bodegaInfoCliente(nombreBodega) {
+    if (!nombreBodega) return null;
+    const b = Object.values(data.bodegas || {}).find(x => x && x.nombre === nombreBodega);
+    if (!b || !b.esClienteBodega) return null;
+    return {
+        clienteOwner: b.clienteOwner || '',
+        clienteRut:   b.clienteRut || '',
+        parentBodega: b.parentBodega || ''
+    };
+}
+
 function generatePDF(docData, opts) {
     opts = opts || {};
     const porUbicacion = !!opts.porUbicacion; // PDF adicional con detalle por ubicación
@@ -4902,6 +4916,14 @@ function generatePDF(docData, opts) {
         addInfo('Fecha de despacho:', docData.fechaDespacho ? fmtDate(docData.fechaDespacho) : '—', col2, y, 38);
     }
     y += 6;
+    // Bodega de cliente (3PL): se muestra sólo cuando la bodega es sub-bodega
+    // de un cliente externo (dentro de una bodega física de Celmedik).
+    const _infoCli = _bodegaInfoCliente(docData.bodega);
+    if (_infoCli) {
+        const clienteTxt = _infoCli.clienteRut ? `${_infoCli.clienteOwner} · RUT ${_infoCli.clienteRut}` : _infoCli.clienteOwner;
+        addInfo('Bodega de cliente:', clienteTxt, margin, y, 35);
+        y += 6;
+    }
     const usuarioLabel = docData.usuarioPerfil
         ? `${docData.usuario || '—'}  ·  ${docData.usuarioPerfil}`
         : (docData.usuario || '—');
@@ -6532,7 +6554,7 @@ function saveDestruccion() {
 
     db.ref().update(updates).then(() => {
         logAudit('Destrucción', 'Movimientos', sku, lote, `Acta: ${acta} · ${qty} ud · Motivo: ${motivo} · Empresa: ${empresa}`);
-        const actaData = { documentoId, sku, lote, descripcion: data.productos[sku]?.descripcion||'', qty, estado, motivo, empresa, acta, fechaDest, resp, obs, fecha: ahora, usuario: currentUser.email };
+        const actaData = { documentoId, sku, lote, descripcion: data.productos[sku]?.descripcion||'', qty, estado, motivo, empresa, acta, fechaDest, resp, obs, fecha: ahora, usuario: currentUser.email, bodega: stockItem?.bodega || '' };
         closeModal('destruccionModal');
         closeModal('movModal');
         generateActaPDF(actaData);
@@ -6589,6 +6611,14 @@ function generateActaPDF(d) {
     y += 12;
     addField('Estado al destruir', d.estado, margin, y); addField('Cantidad destruida', d.qty + ' unidades', col2, y);
     y += 14;
+    // Bodega de cliente (3PL): sólo si el stock destruido está en sub-bodega de cliente.
+    const _actaCli = _bodegaInfoCliente(d.bodega);
+    if (_actaCli) {
+        const clienteTxt = _actaCli.clienteRut ? `${_actaCli.clienteOwner} · RUT ${_actaCli.clienteRut}` : _actaCli.clienteOwner;
+        addField('Bodega de cliente (3PL)', clienteTxt, margin, y);
+        addField('Bodega física', d.bodega, col2, y);
+        y += 14;
+    }
 
     // Destrucción
     doc.setFillColor(245, 245, 245); doc.rect(margin, y - 4, pageW - margin * 2, 8, 'F');
@@ -8218,6 +8248,12 @@ function generatePDFOrdenTransporte(ot) {
     addInfo('Fecha de envío:', fmtDate(ot.fechaEnvio), margin, y, 28);
     addInfo('Bodega origen:', ot.bodega || 'Celmedik Los Angeles', col2, y, 30);
     y += 6;
+    const _otCli = _bodegaInfoCliente(ot.bodega);
+    if (_otCli) {
+        const clienteTxt = _otCli.clienteRut ? `${_otCli.clienteOwner} · RUT ${_otCli.clienteRut}` : _otCli.clienteOwner;
+        addInfo('Bodega de cliente:', clienteTxt, margin, y, 32);
+        y += 6;
+    }
     addInfo('Empresa transporte:', ot.empresaTransporte, margin, y, 38);
     y += 6;
     addInfo('Destino:', ot.destino, margin, y, 18);
