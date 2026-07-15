@@ -608,7 +608,7 @@
             </a>
 
             <div class="nav-section">Inventario</div>
-            <a class="nav-link" data-page="productos">
+            <a class="nav-link" data-page="productos" id="nav-productos">
                 <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></span>
                 Productos Maestro
             </a>
@@ -616,7 +616,7 @@
                 <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></span>
                 Stock Actual
             </a>
-            <a class="nav-link" data-page="bodegas">
+            <a class="nav-link" data-page="bodegas" id="nav-bodegas">
                 <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>
                 Bodegas
             </a>
@@ -626,7 +626,7 @@
                 <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></span>
                 Movimientos
             </a>
-            <a class="nav-link" data-page="facturasPorDespachar">
+            <a class="nav-link" data-page="facturasPorDespachar" id="nav-fpd">
                 <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></span>
                 Facturas por Despachar
                 <span id="fpdBadge" class="badge badge-warning" style="margin-left:auto;font-size:10px;display:none">0</span>
@@ -667,7 +667,7 @@
             </a>
 
             <div class="nav-section">Comercial</div>
-            <a class="nav-link" data-page="dashComercial">
+            <a class="nav-link" data-page="dashComercial" id="nav-dashComercial">
                 <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>
                 Dashboard Comercial
             </a>
@@ -679,11 +679,11 @@
             </a>
 
             <div class="nav-section">Reportes</div>
-            <a class="nav-link" data-page="reportes">
+            <a class="nav-link" data-page="reportes" id="nav-reportes">
                 <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></span>
                 Reportes ISP
             </a>
-            <a class="nav-link" data-page="auditoria">
+            <a class="nav-link" data-page="auditoria" id="nav-auditoria">
                 <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
                 Auditoría
             </a>
@@ -1115,16 +1115,22 @@
                             </div>
                             <div class="form-group">
                                 <label class="form-label">Perfil <span style="color:var(--danger)">*</span></label>
-                                <select class="form-select" id="adm-perfil">
+                                <select class="form-select" id="adm-perfil" onchange="_admOnPerfilChange()">
                                     <option value="">Seleccionar...</option>
                                     <option value="Maestro">Maestro — Acceso completo</option>
                                     <option value="Farmacéutico">Farmacéutico — Cambios de estado + movimientos</option>
                                     <option value="Operador">Operador — Entradas/Salidas/Devoluciones (cuarentena)</option>
-                                    <option value="Operador Los Angeles">Operador Los Angeles — Solo Bodega Celmedik Los Angeles</option>
+                                    <option value="Operador Los Angeles">Operador Los Angeles — Bodega Celmedik Los Angeles y sub-bodegas de cliente</option>
                                     <option value="Operario Santiago">Operario Santiago — Bodegas Celmedik Biodial y Externa</option>
                                     <option value="Visualizador">Visualizador — Solo lectura</option>
+                                    <option value="Cliente">Cliente — Solo lectura, sub-bodega asignada</option>
                                     <option value="Transportista">Transportista — App móvil de despachos</option>
                                 </select>
+                            </div>
+                            <div class="form-group" id="adm-cliente-wrap" style="display:none">
+                                <label class="form-label">Cliente asignado <span style="color:var(--danger)">*</span></label>
+                                <select class="form-select" id="adm-cliente-owner"><option value="">Seleccionar cliente...</option></select>
+                                <div style="font-size:11px;color:var(--text3);margin-top:4px">El usuario verá solo las sub-bodegas asociadas a este cliente.</div>
                             </div>
                             <button class="btn btn-primary" id="adm-btn" onclick="handleRegisterAdmin()">Crear cuenta</button>
                         </div>
@@ -1136,6 +1142,8 @@
                                 <div><strong>Operador:</strong> Entradas a cuarentena, salidas de aprobados, devoluciones a cuarentena.</div>
                                 <div><strong>Operador Los Angeles:</strong> Mismas atribuciones del Operador, restringido a movimientos en <em>Bodega Celmedik Los Angeles</em>.</div>
                                 <div><strong>Operario Santiago:</strong> Mismas atribuciones del Operador, restringido a movimientos en <em>Bodega Celmedik Biodial</em> y <em>Bodega Externa</em>.</div>
+                                <div><strong>Operador Los Angeles:</strong> Adicionalmente opera todas las sub-bodegas de cliente registradas dentro de <em>Celmedik Los Angeles</em>.</div>
+                                <div><strong>Cliente:</strong> Solo lectura de las sub-bodegas asignadas a su razón social (stock, movimientos, cuarentena, devoluciones, retiro y trazabilidad).</div>
                                 <div><strong>Visualizador:</strong> Solo lectura, sin modificaciones.</div>
                                 <div><strong>Transportista:</strong> Solo acceso a la app móvil de conductor (conductor.html). No accede al WMS.</div>
                             </div>
@@ -1553,6 +1561,32 @@
                 <div class="form-group">
                     <label class="form-label">Capacidad (m³)</label>
                     <input type="number" class="form-input" id="b-cap" min="1">
+                </div>
+            </div>
+            <div style="margin-top:10px;padding:12px;border:1px dashed var(--border);border-radius:6px;background:var(--bg2)">
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;color:var(--text)">
+                    <input type="checkbox" id="b-esCliente" onchange="_bodegaToggleClienteFields()" style="width:16px;height:16px;cursor:pointer">
+                    Es bodega de cliente (3PL)
+                </label>
+                <div style="font-size:11px;color:var(--text3);margin-top:4px;margin-left:24px">Sub-bodega para almacenamiento de productos de un cliente externo, ubicada dentro de una bodega física propia.</div>
+                <div id="b-cliente-fields" style="display:none;margin-top:12px">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Bodega padre <span style="color:var(--danger)">*</span></label>
+                            <select class="form-select" id="b-parent"><option value="">Seleccionar...</option></select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Cliente (razón social) <span style="color:var(--danger)">*</span></label>
+                            <input type="text" class="form-input" id="b-cliente-owner" placeholder="Ej: EMIMED SPA">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">RUT cliente</label>
+                            <input type="text" class="form-input" id="b-cliente-rut" placeholder="Ej: 76.170.501-6">
+                        </div>
+                        <div class="form-group"></div>
+                    </div>
                 </div>
             </div>
             <div class="btn-row">
@@ -2397,17 +2431,44 @@ let currentUser = null, userPerfil = null, rootUid = null;
 // solo pueden registrar/ver movimientos asociados a una o varias bodegas
 // específicas. Un perfil puede tener asignada más de una bodega (ej. Operario
 // Santiago con "CELMEDIK BIODIAL" + "Bodega Externa").
+// Bodegas base (sin considerar sub-bodegas de cliente). La lista efectiva se
+// calcula en runtime en bodegasFijasPerfil(): a las bodegas padre se les
+// agregan todas sus sub-bodegas de cliente registradas en data.bodegas.
 const OPERADOR_BODEGA_FIJA = {
     'Operador Los Angeles': ['CELMEDIK LOS ANGELES'],
     'Operario Santiago':    ['CELMEDIK BIODIAL', 'Bodega Externa']
 };
+// Datos del perfil actual asociados a un cliente (razón social). Se poblan
+// desde el nodo Firebase del usuario al iniciar sesión (loadProfile).
+let userClienteOwner = null;
+
 function isOperadorRole(p) {
     return p === 'Operador' || Object.prototype.hasOwnProperty.call(OPERADOR_BODEGA_FIJA, p);
 }
+// Devuelve un array de nombres de bodegas permitidas al perfil, o null si el
+// perfil no tiene restricción (Maestro, Farmacéutico, Operador, Visualizador).
+// Para perfil "Cliente" se resuelve por clienteOwner del usuario.
+// Para los perfiles Operador con bodegas fijas se agregan también todas las
+// sub-bodegas de cliente cuya bodega padre esté en la lista base.
 function bodegasFijasPerfil(p) {
+    if (p === 'Cliente') {
+        const owner = userClienteOwner;
+        if (!owner) return [];  // Cliente sin owner asignado: no ve nada
+        return Object.values(data.bodegas || {})
+            .filter(b => b.esClienteBodega && b.clienteOwner === owner)
+            .map(b => b.nombre)
+            .filter(Boolean);
+    }
     const v = OPERADOR_BODEGA_FIJA[p];
     if (!v) return null;
-    return Array.isArray(v) ? v.slice() : [v]; // tolera formato antiguo (string)
+    const base = Array.isArray(v) ? v.slice() : [v]; // tolera formato antiguo
+    // Agrega sub-bodegas de cliente cuya bodega padre esté en la base.
+    Object.values(data.bodegas || {}).forEach(b => {
+        if (b.esClienteBodega && b.parentBodega && base.includes(b.parentBodega) && !base.includes(b.nombre)) {
+            base.push(b.nombre);
+        }
+    });
+    return base;
 }
 function bodegasFijasActual() { return bodegasFijasPerfil(userPerfil); }
 // Retrocompat: usado como marcador booleano y (cuando hay una sola) como
@@ -2498,13 +2559,13 @@ function _resetAppMemoryState() {
     try {
         data = { productos:{}, bodegas:{}, movimientos:{}, cuarentena:{}, devoluciones:{}, auditoria:{}, ajustesMovimiento:{}, facturasPorDespachar:{} };
         movDocItems = [];
-        userPerfil = null; rootUid = null;
+        userPerfil = null; rootUid = null; userClienteOwner = null;
         _stockCache = null;
         _ajMovItems = []; _ajMovHeader = null;
         // Limpia campos del login para que el siguiente usuario no vea el correo previo
         const e = document.getElementById('loginEmail'); if (e) e.value = '';
         const p = document.getElementById('loginPassword'); if (p) p.value = '';
-        document.body.classList.remove('perfil-visualizador','perfil-operador','perfil-operador-bodega','perfil-operador-multi-bodega','perfil-farmaceutico','perfil-maestro');
+        document.body.classList.remove('perfil-visualizador','perfil-operador','perfil-operador-bodega','perfil-operador-multi-bodega','perfil-farmaceutico','perfil-maestro','perfil-cliente');
     } catch(_) {}
 }
 
@@ -2531,6 +2592,8 @@ function loadProfile() {
             // Guardar email si no estaba guardado (ayuda a identificar usuarios antiguos)
             if (!info.email) db.ref(`usuarios/${currentUser.uid}/email`).set(currentUser.email).catch(()=>{});
         }
+        // Cliente asignado (solo para perfil Cliente)
+        userClienteOwner = (userPerfil === 'Cliente') ? (info.clienteOwner || null) : null;
         // rootUid: uid dueño de los datos. Maestro usa su propio uid; hijos usan maestroUid.
         rootUid = (userPerfil === 'Maestro') ? currentUser.uid : (info.maestroUid || currentUser.uid);
         document.getElementById('userRole').textContent = `Perfil: ${userPerfil}`;
@@ -2551,6 +2614,7 @@ function loadProfile() {
             _initResponsive();
             return;
         }
+        const isCliente = userPerfil === 'Cliente';
         const navAjustes = document.getElementById('nav-ajustes');
         if (navAjustes) navAjustes.style.display = userPerfil === 'Maestro' ? '' : 'none';
         const navAjusteMov = document.getElementById('nav-ajuste-mov');
@@ -2566,6 +2630,12 @@ function loadProfile() {
             const perfilesOT = ['Maestro','Farmacéutico','Operador','Operador Los Angeles'];
             navOT.style.display = perfilesOT.includes(userPerfil) ? '' : 'none';
         }
+        // Perfil Cliente: oculta módulos administrativos/comerciales que no debe ver.
+        const _ocultosCliente = ['nav-productos','nav-bodegas','nav-fpd','nav-dashComercial','nav-reportes','nav-auditoria'];
+        _ocultosCliente.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = isCliente ? 'none' : '';
+        });
         applyPerfilUI();
         showScreen('app');
         attachListeners();
@@ -2585,8 +2655,10 @@ function applyPerfilUI() {
     const isOperador      = isOperadorRole(userPerfil);
     const isOperadorBodega = !!bodegaFijaActual();
     const isVisualizador  = userPerfil === 'Visualizador';
-    // Visualizador: solo lectura (oculta botones con clase data-accion)
-    document.body.classList.toggle('perfil-visualizador', isVisualizador);
+    const isCliente       = userPerfil === 'Cliente';
+    // Visualizador y Cliente: solo lectura (oculta botones con clase need-write)
+    document.body.classList.toggle('perfil-visualizador', isVisualizador || isCliente);
+    document.body.classList.toggle('perfil-cliente', isCliente);
     document.body.classList.toggle('perfil-operador', isOperador);
     document.body.classList.toggle('perfil-operador-bodega', isOperadorBodega);
     // Operador con MÁS de una bodega permitida: se mantiene visible el filtro de bodega.
@@ -2657,12 +2729,18 @@ function handleRegisterAdmin() {
 
     if (!email || !pass || !perfil) { setMsg('error', 'Complete todos los campos.'); return; }
     if (pass.length < 6) { setMsg('error', 'La contraseña debe tener al menos 6 caracteres.'); return; }
-    const perfilesValidos = ['Farmacéutico', 'Operador', 'Operador Los Angeles', 'Operario Santiago', 'Visualizador', 'Transportista'];
+    const perfilesValidos = ['Farmacéutico', 'Operador', 'Operador Los Angeles', 'Operario Santiago', 'Visualizador', 'Cliente', 'Transportista'];
     if (!perfilesValidos.includes(perfil)) {
         setMsg('error', perfil === 'Maestro'
             ? 'Por seguridad, no se permite crear un Maestro directamente. Cree el usuario con perfil Operador/Farmacéutico y luego promuévalo desde el panel de Usuarios con «Cambiar perfil → Maestro».'
             : 'Seleccione un perfil válido.');
         return;
+    }
+    // Cliente requiere un owner asignado
+    let clienteOwnerNuevo = '';
+    if (perfil === 'Cliente') {
+        clienteOwnerNuevo = (document.getElementById('adm-cliente-owner')?.value || '').trim();
+        if (!clienteOwnerNuevo) { setMsg('error', 'Seleccione el cliente asignado a este usuario.'); return; }
     }
 
     if (btn) btn.disabled = true;
@@ -2688,6 +2766,8 @@ function handleRegisterAdmin() {
             };
             // Si el perfil no es Maestro, guardar el UID del Maestro dueño de los datos
             if (perfil !== 'Maestro') userData.maestroUid = maestroOwnerUid;
+            // Cliente: guarda la razón social del cliente que puede visualizar
+            if (perfil === 'Cliente') userData.clienteOwner = clienteOwnerNuevo;
             // Escribir con la app PRIMARIA (Maestro) para cumplir las reglas
             // RTDB. Si este write falla, revertir la creación en Auth para no
             // dejar cuentas huérfanas.
@@ -2713,6 +2793,30 @@ function handleRegisterAdmin() {
             }
         })
         .finally(() => { if (btn) btn.disabled = false; });
+}
+
+// Muestra/oculta el dropdown de cliente owner en el alta de usuario cuando el
+// perfil seleccionado es Cliente. Puebla la lista de clientes únicos de las
+// sub-bodegas registradas (data.bodegas con esClienteBodega=true).
+function _admOnPerfilChange() {
+    const perfil = document.getElementById('adm-perfil')?.value || '';
+    const wrap = document.getElementById('adm-cliente-wrap');
+    if (!wrap) return;
+    const on = (perfil === 'Cliente');
+    wrap.style.display = on ? '' : 'none';
+    if (!on) return;
+    const sel = document.getElementById('adm-cliente-owner');
+    if (!sel) return;
+    const owners = new Set();
+    Object.values(data.bodegas || {}).forEach(b => {
+        if (b.esClienteBodega && b.clienteOwner) owners.add(b.clienteOwner);
+    });
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">Seleccionar cliente...</option>';
+    Array.from(owners).sort((a,b) => a.localeCompare(b)).forEach(o => {
+        const op = document.createElement('option'); op.value = o; op.textContent = o; sel.appendChild(op);
+    });
+    if (cur && owners.has(cur)) sel.value = cur;
 }
 
 function handleLogout(reason) {
@@ -2818,7 +2922,7 @@ function renderUsuarios() {
             })
             .sort((a, b) => (a[1].email || a[0]).localeCompare(b[1].email || b[0]));
         if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="5">Sin usuarios</td></tr>'; return; }
-        const perfilOpts = (sel) => ['Farmacéutico','Operador','Operador Los Angeles','Operario Santiago','Visualizador','Maestro']
+        const perfilOpts = (sel) => ['Farmacéutico','Operador','Operador Los Angeles','Operario Santiago','Visualizador','Cliente','Maestro']
             .map(p => `<option value="${p}"${sel===p?' selected':''}>${p}</option>`).join('');
         tb.innerHTML = rows.map(([uid, u]) => {
             const esPropio   = uid === miUid;
@@ -2852,9 +2956,12 @@ function renderUsuarios() {
             }
             const emailTxt = u.email || `<span class="text-muted text-sm">uid: ${uid.slice(0,10)}…</span>`;
             const vinc = u.maestroUid ? (u.maestroUid === miUid ? '<span class="text-success">yo</span>' : `<span class="text-mono" style="font-size:10px">${u.maestroUid.slice(0,10)}…</span>`) : '<span class="text-muted">—</span>';
+            const perfilTxt = u.perfil === 'Cliente' && u.clienteOwner
+                ? `<span class="badge badge-blue" style="font-size:10px">Cliente</span><div style="font-size:10px;color:var(--text3);margin-top:2px">${u.clienteOwner}</div>`
+                : `<span class="badge badge-blue" style="font-size:10px">${u.perfil || '—'}</span>`;
             return `<tr>
                 <td>${emailTxt}</td>
-                <td><span class="badge badge-blue" style="font-size:10px">${u.perfil || '—'}</span></td>
+                <td>${perfilTxt}</td>
                 <td>${vinc}</td>
                 <td>${estadoHtml}</td>
                 <td>${accionHtml}</td>
@@ -2872,14 +2979,29 @@ function asignarPerfilYVincular(uid) {
     const sel = document.getElementById('perfilSel_' + uid);
     if (!sel) return;
     const perfil = sel.value;
-    if (!['Farmacéutico','Operador','Operador Los Angeles','Operario Santiago','Visualizador'].includes(perfil)) {
+    if (!['Farmacéutico','Operador','Operador Los Angeles','Operario Santiago','Visualizador','Cliente'].includes(perfil)) {
         _setUsrMsg('error', perfil === 'Maestro'
             ? 'Para crear un Maestro: primero asígnelo como Operador/Farmacéutico y luego promuévalo desde la tabla con «Cambiar perfil → Maestro».'
             : 'Seleccione un perfil válido.');
         return;
     }
+    // Cliente requiere seleccionar razón social (owner) desde un prompt.
+    let clienteOwnerAsig = '';
+    if (perfil === 'Cliente') {
+        const owners = Array.from(new Set(Object.values(data.bodegas || {})
+            .filter(b => b.esClienteBodega && b.clienteOwner)
+            .map(b => b.clienteOwner))).sort();
+        if (!owners.length) { _setUsrMsg('error','No hay sub-bodegas de cliente registradas. Cree primero una bodega de cliente.'); return; }
+        clienteOwnerAsig = prompt('Indique la razón social del cliente asignado.\nDebe coincidir exactamente con una sub-bodega registrada.\n\nClientes disponibles:\n- ' + owners.join('\n- '));
+        if (!clienteOwnerAsig || !owners.includes(clienteOwnerAsig.trim())) {
+            _setUsrMsg('error','Cliente inválido. Debe coincidir exactamente con uno de los registrados.'); return;
+        }
+        clienteOwnerAsig = clienteOwnerAsig.trim();
+    }
     if (!confirm(`¿Asignar perfil «${perfil}» y vincular este usuario a su cuenta Maestro?\n\nPodrá ver los datos según los permisos del perfil asignado.`)) return;
-    db.ref(`usuarios/${uid}`).update({ perfil: perfil, maestroUid: currentUser.uid })
+    const upd = { perfil: perfil, maestroUid: currentUser.uid };
+    if (perfil === 'Cliente') upd.clienteOwner = clienteOwnerAsig;
+    db.ref(`usuarios/${uid}`).update(upd)
         .then(() => {
             _setUsrMsg('success', `✓ Usuario vinculado con perfil «${perfil}». Ya puede ver los datos al iniciar sesión.`);
             logAudit('Vincular', 'Usuarios', uid, '', `perfil=${perfil} · maestroUid=${currentUser.email}`);
@@ -2893,7 +3015,20 @@ function cambiarPerfil(uid) {
     const sel = document.getElementById('perfilSel_' + uid);
     if (!sel) return;
     const perfil = sel.value;
-    if (!['Farmacéutico','Operador','Operador Los Angeles','Operario Santiago','Visualizador','Maestro'].includes(perfil)) { _setUsrMsg('error','Seleccione un perfil válido.'); return; }
+    if (!['Farmacéutico','Operador','Operador Los Angeles','Operario Santiago','Visualizador','Cliente','Maestro'].includes(perfil)) { _setUsrMsg('error','Seleccione un perfil válido.'); return; }
+    // Cliente al hacer cambio de perfil requiere asignar razón social.
+    let clienteOwnerCambio = '';
+    if (perfil === 'Cliente') {
+        const owners = Array.from(new Set(Object.values(data.bodegas || {})
+            .filter(b => b.esClienteBodega && b.clienteOwner)
+            .map(b => b.clienteOwner))).sort();
+        if (!owners.length) { _setUsrMsg('error','No hay sub-bodegas de cliente registradas. Cree primero una bodega de cliente.'); return; }
+        clienteOwnerCambio = prompt('Indique la razón social del cliente asignado.\nDebe coincidir exactamente con una sub-bodega registrada.\n\nClientes disponibles:\n- ' + owners.join('\n- '));
+        if (!clienteOwnerCambio || !owners.includes(clienteOwnerCambio.trim())) {
+            _setUsrMsg('error','Cliente inválido. Debe coincidir exactamente con uno de los registrados.'); return;
+        }
+        clienteOwnerCambio = clienteOwnerCambio.trim();
+    }
     // Doble confirmación para promoción a Maestro: la operación es difícil de revertir
     // y otorga acceso administrativo completo a la organización.
     if (perfil === 'Maestro') {
@@ -2903,10 +3038,13 @@ function cambiarPerfil(uid) {
     } else {
         if (!confirm(`¿Cambiar el perfil de este usuario a «${perfil}»?`)) return;
     }
-    db.ref(`usuarios/${uid}/perfil`).set(perfil)
+    const upd = { perfil };
+    if (perfil === 'Cliente') upd.clienteOwner = clienteOwnerCambio;
+    else upd.clienteOwner = null; // limpia si venía como Cliente y ahora no lo es
+    db.ref(`usuarios/${uid}`).update(upd)
         .then(() => {
             _setUsrMsg('success', `✓ Perfil actualizado a «${perfil}».`);
-            logAudit('Modificar perfil', 'Usuarios', uid, '', `perfil=${perfil}` + (perfil === 'Maestro' ? ' · PROMOCIÓN A MAESTRO' : ''));
+            logAudit('Modificar perfil', 'Usuarios', uid, '', `perfil=${perfil}` + (perfil === 'Maestro' ? ' · PROMOCIÓN A MAESTRO' : '') + (perfil === 'Cliente' ? ` · Cliente=${clienteOwnerCambio}` : ''));
             renderUsuarios();
         })
         .catch(err => _setUsrMsg('error', 'Error: ' + err.message));
@@ -3133,7 +3271,13 @@ function _scheduleRender(...names) {
 function attachListeners() {
     const uid = rootUid || currentUser.uid;
     db.ref(`usuarios/${uid}/productos`).on('value', s => { data.productos = s.val()||{}; _scheduleRender('productos','stock','stats'); });
-    db.ref(`usuarios/${uid}/bodegas`).on('value', s => { data.bodegas = s.val()||{}; _scheduleRender('bodegas','stats'); });
+    db.ref(`usuarios/${uid}/bodegas`).on('value', s => {
+        data.bodegas = s.val()||{};
+        // Cliente / Operadores fijos con sub-bodegas: re-aplicar clases al perfil
+        // porque bodegasFijasActual depende de data.bodegas.
+        try { applyPerfilUI(); } catch(_) {}
+        _scheduleRender('bodegas','stats');
+    });
     db.ref(`usuarios/${uid}/movimientos`).on('value', s => { data.movimientos = s.val()||{}; _invalidateStockCache(); _invalidateBodegaFijaLoteCache(); _scheduleRender('movimientos','stock','cuarentena','facturasPorDespachar','stats'); });
     db.ref(`usuarios/${uid}/cuarentena`).on('value', s => { data.cuarentena = s.val()||{}; _scheduleRender('cuarentena','stats'); });
     db.ref(`usuarios/${uid}/devoluciones`).on('value', s => { data.devoluciones = s.val()||{}; _invalidateStockCache(); _invalidateBodegaFijaLoteCache(); _scheduleRender('devoluciones','stock','stats'); });
@@ -3442,9 +3586,36 @@ function editProducto(sku) {
 }
 
 // ══ BODEGAS ══
+// Muestra/oculta el bloque de campos de bodega-cliente y refresca el select
+// de bodega padre con las bodegas propias (no-cliente) disponibles.
+function _bodegaToggleClienteFields() {
+    const chk = document.getElementById('b-esCliente');
+    const wrap = document.getElementById('b-cliente-fields');
+    if (!chk || !wrap) return;
+    const on = chk.checked;
+    wrap.style.display = on ? '' : 'none';
+    if (on) {
+        const sel = document.getElementById('b-parent');
+        if (sel) {
+            const cur = sel.value;
+            sel.innerHTML = '<option value="">Seleccionar...</option>';
+            Object.values(data.bodegas || {})
+                .filter(b => !b.esClienteBodega)     // padres son bodegas propias
+                .map(b => b.nombre)
+                .filter(Boolean)
+                .sort((a,b) => a.localeCompare(b))
+                .forEach(n => {
+                    const o = document.createElement('option'); o.value = n; o.textContent = n; sel.appendChild(o);
+                });
+            if (cur) sel.value = cur;
+        }
+    }
+}
+
 function saveBodega(e) {
     e.preventDefault();
     if (userPerfil !== 'Maestro') { alert('Solo el perfil Maestro puede administrar bodegas.'); return; }
+    const esCliente = !!document.getElementById('b-esCliente')?.checked;
     const b = {
         nombre: document.getElementById('b-nombre').value.trim(),
         tipo: document.getElementById('b-tipo').value,
@@ -3452,23 +3623,47 @@ function saveBodega(e) {
         capacidad: document.getElementById('b-cap').value||'',
         fecha: new Date().toISOString()
     };
+    if (esCliente) {
+        const parent = document.getElementById('b-parent')?.value.trim() || '';
+        const owner  = document.getElementById('b-cliente-owner')?.value.trim() || '';
+        const rut    = document.getElementById('b-cliente-rut')?.value.trim() || '';
+        if (!parent) { alert('Debe seleccionar la bodega padre.'); return; }
+        if (!owner)  { alert('Debe indicar la razón social del cliente.'); return; }
+        b.esClienteBodega = true;
+        b.parentBodega    = parent;
+        b.clienteOwner    = owner;
+        if (rut) b.clienteRut = rut;
+    }
     db.ref(`usuarios/${rootUid || currentUser.uid}/bodegas/${Date.now()}`).set(b)
-        .then(() => { logAudit('Crear', 'Bodegas', '', '', b.nombre); closeModal('bodegaModal'); });
+        .then(() => {
+            const detalle = esCliente ? `${b.nombre} · Cliente: ${b.clienteOwner} @ ${b.parentBodega}` : b.nombre;
+            logAudit('Crear', 'Bodegas', '', '', detalle);
+            // Reset campos cliente para el próximo alta
+            const chk = document.getElementById('b-esCliente'); if (chk) chk.checked = false;
+            _bodegaToggleClienteFields();
+            _clearFields('b-cliente-owner','b-cliente-rut');
+            closeModal('bodegaModal');
+        });
 }
 
 function renderBodegas() {
     const tb = document.getElementById('tBodegas');
     const rows = Object.entries(data.bodegas||{});
     if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="6">No hay bodegas registradas</td></tr>'; return; }
-    tb.innerHTML = rows.map(([id, b]) => `
+    tb.innerHTML = rows.map(([id, b]) => {
+        const badgeCliente = b.esClienteBodega
+            ? `<div style="margin-top:3px"><span class="badge badge-blue" style="font-size:10px" title="Sub-bodega dentro de ${b.parentBodega||'—'}">🏢 Cliente: ${b.clienteOwner||'—'}</span></div>`
+            : '';
+        return `
         <tr>
-            <td style="color:var(--text);font-weight:500">${b.nombre}</td>
+            <td style="color:var(--text);font-weight:500">${b.nombre}${badgeCliente}</td>
             <td>${b.ubicacion}</td>
             <td>${b.capacidad ? b.capacidad + ' m³' : '—'}</td>
             <td><span class="badge ${b.tipo === 'Cuarentena' ? 'badge-warning' : b.tipo === 'Rechazados' ? 'badge-danger' : 'badge-success'}">${b.tipo||'General'}</span></td>
             <td><span class="badge badge-success">Activa</span></td>
             <td>${userPerfil === 'Maestro' ? `<button class="btn btn-sm btn-danger-sm" onclick="deleteBodega('${id}')">Eliminar</button>` : '<span class="text-muted">—</span>'}</td>
-        </tr>`).join('');
+        </tr>`;
+    }).join('');
 }
 
 function deleteBodega(id) {
