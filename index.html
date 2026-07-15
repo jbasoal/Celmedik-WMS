@@ -628,7 +628,7 @@
             </a>
             <a class="nav-link" data-page="facturasPorDespachar" id="nav-fpd">
                 <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></span>
-                Facturas por Despachar
+                Productos por Despachar
                 <span id="fpdBadge" class="badge badge-warning" style="margin-left:auto;font-size:10px;display:none">0</span>
             </a>
             <a class="nav-link" data-page="ordenTransporte" id="nav-orden-transporte" style="display:none">
@@ -909,8 +909,8 @@
                         <div class="card-header">
                             <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
                                 <div>
-                                    <div class="card-title">Facturas por Despachar</div>
-                                    <div class="card-subtitle">Facturas pendientes de despacho · Con o sin reserva de stock</div>
+                                    <div class="card-title">Productos por Despachar</div>
+                                    <div class="card-subtitle">Productos pendientes de despacho registrados por factura · Con o sin reserva de stock</div>
                                 </div>
                                 <button class="btn btn-primary btn-sm need-write" onclick="openFacturaModal()">+ Nueva Factura</button>
                                 <button class="btn btn-ghost btn-sm" onclick="openResumenSkuModal()" title="Ver totales de productos pendientes agrupados por SKU">📊 Resumen por SKU</button>
@@ -2370,7 +2370,7 @@
     <div class="modal-box" style="max-width:1000px;width:96vw;max-height:92vh;overflow-y:auto">
         <div class="modal-header">
             <div>
-                <div class="modal-title">Resumen por SKU · Facturas por Despachar</div>
+                <div class="modal-title">Resumen por SKU · Productos por Despachar</div>
                 <div class="modal-subtitle">Totales de productos pendientes agrupados por SKU</div>
             </div>
             <button class="modal-close" onclick="closeModal('resumenSkuModal')">✕</button>
@@ -3202,7 +3202,7 @@ function navigateTo(page) {
     if (pg) pg.classList.add('active');
     const lnk = document.querySelector(`.nav-link[data-page="${page}"]`);
     if (lnk) lnk.classList.add('active');
-    const titles = { dashboard:'Dashboard', productos:'Productos Maestro', stock:'Stock Actual', bodegas:'Bodegas', movimientos:'Movimientos', facturasPorDespachar:'Facturas por Despachar', ordenTransporte:'Orden de Transporte', ajusteMov:'Ajuste de Movimiento', cuarentena:'Cuarentena', devoluciones:'Devoluciones', retiro:'Retiro de Mercado', ajustes:'Ajuste de Inventario', trazabilidad:'Trazabilidad de Lotes', alertas:'Alertas', reportes:'Reportes ISP', auditoria:'Auditoría', dashComercial:'Dashboard Comercial' };
+    const titles = { dashboard:'Dashboard', productos:'Productos Maestro', stock:'Stock Actual', bodegas:'Bodegas', movimientos:'Movimientos', facturasPorDespachar:'Productos por Despachar', ordenTransporte:'Orden de Transporte', ajusteMov:'Ajuste de Movimiento', cuarentena:'Cuarentena', devoluciones:'Devoluciones', retiro:'Retiro de Mercado', ajustes:'Ajuste de Inventario', trazabilidad:'Trazabilidad de Lotes', alertas:'Alertas', reportes:'Reportes ISP', auditoria:'Auditoría', dashComercial:'Dashboard Comercial' };
     document.getElementById('pageTitle').textContent = titles[page] || page;
     if (page === 'ordenTransporte') {
         const perfilesOT = ['Maestro','Farmacéutico','Operador','Operador Los Angeles'];
