@@ -3276,6 +3276,10 @@ function attachListeners() {
         // Cliente / Operadores fijos con sub-bodegas: re-aplicar clases al perfil
         // porque bodegasFijasActual depende de data.bodegas.
         try { applyPerfilUI(); } catch(_) {}
+        // La caché SKU|LOTE por bodega permitida depende de bodegasFijasActual,
+        // que a su vez lee data.bodegas: invalidar para que trazabilidad,
+        // cuarentena y devoluciones reflejen las sub-bodegas recién agregadas.
+        _invalidateBodegaFijaLoteCache();
         _scheduleRender('bodegas','stats');
     });
     db.ref(`usuarios/${uid}/movimientos`).on('value', s => { data.movimientos = s.val()||{}; _invalidateStockCache(); _invalidateBodegaFijaLoteCache(); _scheduleRender('movimientos','stock','cuarentena','facturasPorDespachar','stats'); });
@@ -3648,8 +3652,13 @@ function saveBodega(e) {
 
 function renderBodegas() {
     const tb = document.getElementById('tBodegas');
-    const rows = Object.entries(data.bodegas||{});
-    if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="6">No hay bodegas registradas</td></tr>'; return; }
+    // Filtra por bodegas permitidas al perfil (Operador Los Angeles con sus
+    // sub-bodegas de cliente, Operario Santiago, Cliente). Perfiles sin
+    // restricción (Maestro, Farmacéutico, Operador, Visualizador) ven todas.
+    const arrFijas = bodegasFijasActual();
+    let rows = Object.entries(data.bodegas||{});
+    if (arrFijas) rows = rows.filter(([, b]) => arrFijas.includes(b.nombre));
+    if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="6">No hay bodegas visibles para su perfil</td></tr>'; return; }
     tb.innerHTML = rows.map(([id, b]) => {
         const badgeCliente = b.esClienteBodega
             ? `<div style="margin-top:3px"><span class="badge badge-blue" style="font-size:10px" title="Sub-bodega dentro de ${b.parentBodega||'—'}">🏢 Cliente: ${b.clienteOwner||'—'}</span></div>`
