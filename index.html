@@ -1170,6 +1170,24 @@
                         <div id="usrMsg" class="status-msg" style="display:none;margin-top:12px"></div>
                     </div>
 
+                    <!-- Migración de N° movimiento retroactivo (una sola vez) -->
+                    <div class="card" style="margin-top:16px;max-width:720px">
+                        <div class="card-header">
+                            <div>
+                                <div class="card-title">Asignar N° movimiento retroactivo</div>
+                                <div class="card-subtitle">Recorre movimientos y devoluciones sin N° interno, los agrupa por (tipo, documento) y les asigna un N° respetando el orden cronológico. Operación segura, solo agrega el campo.</div>
+                            </div>
+                        </div>
+                        <div style="display:flex;flex-direction:column;gap:12px">
+                            <div id="migNumMovInfo" style="padding:10px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;font-size:12px;color:var(--text2)">Pulse «Escanear» para ver cuántos registros están sin N°.</div>
+                            <div style="display:flex;gap:8px;flex-wrap:wrap">
+                                <button class="btn btn-ghost btn-sm" onclick="escanearNumMovFaltantes()">🔎 Escanear</button>
+                                <button class="btn btn-primary" id="btn-mig-nummov" onclick="ejecutarMigracionNumMov()" disabled>▶ Ejecutar migración</button>
+                            </div>
+                            <div id="migNumMovMsg" class="status-msg" style="display:none"></div>
+                        </div>
+                    </div>
+
                     <!-- Google Drive: configurar endpoint del Apps Script -->
                     <div class="card" style="margin-top:16px;max-width:720px">
                         <div class="card-header">
@@ -1621,8 +1639,8 @@
                 <div id="md-nummov-preview" style="display:none;margin-top:6px;font-size:11px;color:var(--text3);font-family:var(--mono,monospace)" title="El número definitivo se asigna al momento de guardar. Este es una estimación."></div>
             </div>
             <div class="form-group" id="md-numdoc-group">
-                <label class="form-label">N° Documento / Factura <span style="color:var(--text3);font-weight:normal;font-size:11px">(opcional)</span></label>
-                <input type="text" class="form-input" id="md-numdoc" placeholder="Ej: FAC-2024-001" oninput="_checkNumDocDup()" onblur="_checkNumDocDup(); _autoFillFromFactura();">
+                <label class="form-label">N° Documento / Factura <span id="md-numdoc-req-hint"><span style="color:var(--text3);font-weight:normal;font-size:11px">(opcional)</span></span></label>
+                <input type="text" class="form-input" id="md-numdoc" placeholder="Ej: FAC-2024-001" oninput="_checkNumDocDup(); _refreshNumMovPreview()" onblur="_checkNumDocDup(); _autoFillFromFactura(); _refreshNumMovPreview();">
                 <div id="md-numdoc-warn" style="display:none;margin-top:6px;font-size:12px;font-weight:600;color:var(--warning,#B25E00);background:rgba(217,119,6,.12);border:1px solid rgba(217,119,6,.35);border-radius:6px;padding:6px 10px"></div>
             </div>
         </div>
@@ -2071,6 +2089,10 @@
                 </div>
             </div>
             <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">N° Documento / Factura <span style="color:var(--danger)">*</span></label>
+                    <input type="text" class="form-input" id="d-numdoc" placeholder="Ej: FAC-2024-001" required>
+                </div>
                 <div class="form-group">
                     <label class="form-label">Status</label>
                     <select class="form-select" id="d-status">
@@ -3061,6 +3083,136 @@ function desvincularUsuario(uid) {
             renderUsuarios();
         })
         .catch(err => _setUsrMsg('error', 'Error: ' + err.message));
+}
+
+// ══ MIGRACIÓN RETROACTIVA DE N° MOVIMIENTO ══
+// Asigna numeroMovimiento a movimientos históricos que no lo tienen. Agrupa
+// por (tipo, documentoId) para que las líneas de un mismo documento compartan
+// el N°. Devoluciones se procesan aparte (nodo propio, comparten prefijo DEV).
+// Sube los contadores de contadores/{prefijo}/{año} al máximo asignado.
+function _setMigMsg(type, txt) {
+    const el = document.getElementById('migNumMovMsg');
+    if (!el) return;
+    el.className = 'status-msg ' + (type || '');
+    el.innerHTML = txt || '';
+    el.style.display = txt ? 'block' : 'none';
+}
+
+// Analiza cuántos registros están sin numeroMovimiento y cuántos grupos únicos
+// se generarían. Sin escribir nada. Habilita el botón "Ejecutar" si hay algo.
+function escanearNumMovFaltantes() {
+    if (userPerfil !== 'Maestro') { _setMigMsg('error', 'Solo el perfil Maestro puede ejecutar esta operación.'); return; }
+    const movs = Object.entries(data.movimientos || {})
+        .filter(([, m]) => m && !m.numeroMovimiento);
+    const devs = Object.entries(data.devoluciones || {})
+        .filter(([, d]) => d && !d.numeroMovimiento);
+    const grupos = new Set();
+    movs.forEach(([, m]) => {
+        const g = `${m.tipo || 'MOV'}|${m.documentoId || m.referencia || ('mov-' + (m.fecha || ''))}`;
+        grupos.add(g);
+    });
+    devs.forEach(([, d]) => {
+        const g = `Devolución|${d.referencia || ('dev-' + (d.fecha || ''))}`;
+        grupos.add(g);
+    });
+    const info = document.getElementById('migNumMovInfo');
+    if (info) {
+        info.innerHTML = movs.length || devs.length
+            ? `📊 Registros sin N°: <strong>${movs.length}</strong> movimientos + <strong>${devs.length}</strong> devoluciones. Se agruparán en <strong>${grupos.size}</strong> documento(s) y se asignará un N° por grupo.`
+            : `✓ Todos los registros ya tienen N° movimiento asignado. No hay migración pendiente.`;
+    }
+    const btn = document.getElementById('btn-mig-nummov');
+    if (btn) btn.disabled = !(movs.length || devs.length);
+    _setMigMsg('', '');
+}
+
+async function ejecutarMigracionNumMov() {
+    if (userPerfil !== 'Maestro') { _setMigMsg('error', 'Solo el perfil Maestro puede ejecutar esta operación.'); return; }
+    if (!confirm('¿Ejecutar la migración de N° movimiento retroactivo?\n\nSe asignará un N° a cada movimiento/devolución sin él, agrupando por documento. Los contadores subirán al máximo asignado por prefijo+año. Esta operación es segura pero no se puede revertir automáticamente.')) return;
+    const btn = document.getElementById('btn-mig-nummov');
+    if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Migrando…'; }
+    _setMigMsg('', '');
+    const uid = rootUid || currentUser.uid;
+    try {
+        // 1) Reunir registros sin N°, agruparlos.
+        const movs = Object.entries(data.movimientos || {}).filter(([, m]) => m && !m.numeroMovimiento);
+        const devs = Object.entries(data.devoluciones || {}).filter(([, d]) => d && !d.numeroMovimiento);
+        // Grupos: { tipo, año, key, fechaMin, items:[{node,key,idx}] }
+        const grupos = new Map();
+        const keyOf = (tipo, m) => `${tipo}|${m.documentoId || m.referencia || ('mov-' + (m.fecha || ''))}`;
+        const añoDe = (iso) => {
+            const y = new Date(iso || '').getFullYear();
+            return isNaN(y) ? new Date().getFullYear() : y;
+        };
+        movs.forEach(([key, m]) => {
+            const tipo = m.tipo || 'MOV';
+            const gk = keyOf(tipo, m);
+            const año = añoDe(m.fecha);
+            if (!grupos.has(gk)) grupos.set(gk, { tipo, año, key: gk, fechaMin: m.fecha || '', nodo: 'movimientos', items: [] });
+            const g = grupos.get(gk);
+            g.items.push({ nodo: 'movimientos', key, orden: new Date(m.fecha || 0).getTime() });
+            if (!g.fechaMin || (m.fecha && m.fecha < g.fechaMin)) g.fechaMin = m.fecha || g.fechaMin;
+        });
+        devs.forEach(([key, d]) => {
+            const gk = `Devolución|${d.referencia || ('dev-' + (d.fecha || ''))}`;
+            const año = añoDe(d.fecha);
+            if (!grupos.has(gk)) grupos.set(gk, { tipo: 'Devolución', año, key: gk, fechaMin: d.fecha || '', nodo: 'devoluciones', items: [] });
+            const g = grupos.get(gk);
+            g.items.push({ nodo: 'devoluciones', key, orden: new Date(d.fecha || 0).getTime() });
+            if (!g.fechaMin || (d.fecha && d.fecha < g.fechaMin)) g.fechaMin = d.fecha || g.fechaMin;
+        });
+
+        // 2) Ordenar grupos cronológicamente para que el N° respete la línea de tiempo.
+        const gruposArr = Array.from(grupos.values()).sort((a, b) =>
+            new Date(a.fechaMin || 0) - new Date(b.fechaMin || 0)
+        );
+
+        // 3) Asignar N°: llevar contador por (prefijo, año).
+        const cont = {}; // "prefijo|año" -> siguiente
+        // Precargar valor actual del contador para no colisionar.
+        for (const g of gruposArr) {
+            const prefijo = _prefijoNumMov(g.tipo);
+            const ck = `${prefijo}|${g.año}`;
+            if (!(ck in cont)) {
+                const snap = await db.ref(`usuarios/${uid}/contadores/${prefijo}/${g.año}`).once('value');
+                cont[ck] = snap.val() || 0;
+            }
+            cont[ck] += 1;
+            const num = `${prefijo}-${g.año}-${String(cont[ck]).padStart(5, '0')}`;
+            g.numeroAsignado = num;
+        }
+
+        // 4) Escribir todo en un solo update batch.
+        const updates = {};
+        let totalItems = 0;
+        for (const g of gruposArr) {
+            g.items.forEach(it => {
+                updates[`usuarios/${uid}/${it.nodo}/${it.key}/numeroMovimiento`] = g.numeroAsignado;
+                totalItems++;
+            });
+        }
+        // 5) Actualizar contadores en Firebase para que los futuros N° partan tras el máximo asignado.
+        Object.entries(cont).forEach(([ck, val]) => {
+            const [prefijo, año] = ck.split('|');
+            updates[`usuarios/${uid}/contadores/${prefijo}/${año}`] = val;
+        });
+
+        if (!totalItems) {
+            _setMigMsg('success', '✓ No hay registros pendientes de migrar.');
+            if (btn) { btn.disabled = true; btn.innerHTML = '▶ Ejecutar migración'; }
+            return;
+        }
+
+        await db.ref().update(updates);
+        logAudit('Migración N° movimiento', 'Admin', '', '', `Grupos: ${gruposArr.length} · Items: ${totalItems}`);
+        _setMigMsg('success', `✓ Migración aplicada: <strong>${totalItems}</strong> registros actualizados en <strong>${gruposArr.length}</strong> documento(s). Contadores sincronizados.`);
+        // Refrescar escaneo.
+        setTimeout(escanearNumMovFaltantes, 500);
+    } catch (e) {
+        _setMigMsg('error', 'Error durante la migración: ' + (e.message || e));
+    } finally {
+        if (btn) { btn.innerHTML = '▶ Ejecutar migración'; btn.disabled = false; }
+    }
 }
 
 // ══ CONFIGURACIÓN GOOGLE DRIVE (Apps Script) ══
@@ -4710,11 +4862,14 @@ const NUMMOV_PREFIJOS = {
 };
 function _prefijoNumMov(tipo) { return NUMMOV_PREFIJOS[tipo] || 'MOV'; }
 
-// Devuelve el próximo N° del contador para preview (sin consumirlo). Se usa
-// para mostrar "Se asignará: XXX-YYYY-NNNNN (estimado)" en el modal.
-async function _peekNumeroMovimiento(tipo) {
+// Devuelve el próximo N° del contador para preview (sin consumirlo). Si se
+// pasa `referencia` y ya existe un movimiento del mismo tipo con esa
+// referencia y numeroMovimiento asignado, devuelve ese en vez del preview.
+async function _peekNumeroMovimiento(tipo, referencia) {
     const uid = rootUid || currentUser?.uid;
     if (!uid || !tipo) return '';
+    const existente = _numMovExistente(tipo, referencia);
+    if (existente) return existente;
     const prefijo = _prefijoNumMov(tipo);
     const año = new Date().getFullYear();
     try {
@@ -4724,27 +4879,82 @@ async function _peekNumeroMovimiento(tipo) {
     } catch (_) { return ''; }
 }
 
-// Muestra "Se asignará: XXX-YYYY-NNNNN (estimado)" bajo el select de tipo del
-// modal de nuevo movimiento. Es un preview: el N° definitivo se emite recién
-// dentro de la transacción al guardar.
+// Busca en memoria (data.movimientos + data.devoluciones) si ya hay un
+// movimiento del mismo tipo con la misma referencia y numeroMovimiento
+// asignado. Devuelve el número o '' si no hay coincidencia.
+function _numMovExistente(tipo, referencia) {
+    const r = (referencia || '').trim().toLowerCase();
+    if (!r || !tipo) return '';
+    let hit = Object.values(data.movimientos || {}).find(m =>
+        m && m.tipo === tipo && m.numeroMovimiento && (m.referencia || '').trim().toLowerCase() === r
+    );
+    if (hit) return hit.numeroMovimiento;
+    // Devoluciones viven en su propio nodo pero comparten prefijo DEV.
+    if (tipo === 'Devolución') {
+        hit = Object.values(data.devoluciones || {}).find(d =>
+            d && d.numeroMovimiento && (d.referencia || '').trim().toLowerCase() === r
+        );
+        if (hit) return hit.numeroMovimiento;
+    }
+    return '';
+}
+
+// Muestra "Se asignará: XXX-YYYY-NNNNN" bajo el select de tipo del modal. Si
+// el N° documento ingresado coincide con un movimiento previo del mismo tipo,
+// muestra el número existente que se REUTILIZARÁ (sin "(estimado)").
 async function _refreshNumMovPreview() {
     const el = document.getElementById('md-nummov-preview');
     if (!el) return;
     const tipo = document.getElementById('md-tipo')?.value || '';
     if (!tipo) { el.style.display = 'none'; el.textContent = ''; return; }
-    const preview = await _peekNumeroMovimiento(tipo);
-    if (!preview) { el.style.display = 'none'; el.textContent = ''; return; }
-    el.textContent = `Se asignará: ${preview} (estimado)`;
-    el.style.display = 'block';
-    // Refrescar aviso duplicado/vacío: cambió el tipo, cambia el filtro.
+    const numDoc = (document.getElementById('md-numdoc')?.value || '').trim();
+    const existente = _numMovExistente(tipo, numDoc);
+    if (existente) {
+        el.textContent = `Se reutilizará: ${existente} (mismo N° de factura ya usado en ${tipo})`;
+        el.style.color = 'var(--accent)';
+        el.style.display = 'block';
+    } else {
+        const preview = await _peekNumeroMovimiento(tipo);
+        if (!preview) { el.style.display = 'none'; el.textContent = ''; return; }
+        el.textContent = `Se asignará: ${preview} (estimado)`;
+        el.style.color = 'var(--text3)';
+        el.style.display = 'block';
+    }
+    // Refrescar aviso duplicado/vacío/obligatorio: cambió el tipo o el N° doc.
     try { _checkNumDocDup(); } catch(_) {}
+    // Ajustar label del N° documento a obligatorio/opcional según tipo.
+    _refreshNumDocRequiredHint();
 }
 
-// Genera el número interno consumiendo el contador de forma atómica. Se llama
-// una sola vez por documento (todas las líneas comparten el mismo número).
-async function generarNumeroMovimiento(tipo) {
+// Ajusta el hint * / (opcional) del label del campo N° documento según tipo.
+function _refreshNumDocRequiredHint() {
+    const hint = document.getElementById('md-numdoc-req-hint');
+    if (!hint) return;
+    const tipo = document.getElementById('md-tipo')?.value || '';
+    if (_numDocRequerido(tipo)) {
+        hint.textContent = '';
+        hint.innerHTML = '<span style="color:var(--danger)">*</span>';
+    } else {
+        hint.innerHTML = '<span style="color:var(--text3);font-weight:normal;font-size:11px">(opcional)</span>';
+    }
+}
+
+// Reglas de negocio: N° factura/guía es obligatorio para Entrada, Salida y
+// Devolución. Ajuste, CambioUbicacion y AjusteInventario siguen opcionales.
+function _numDocRequerido(tipo) {
+    return tipo === 'Entrada' || tipo === 'Salida' || tipo === 'Devolución';
+}
+
+// Genera el número interno consumiendo el contador de forma atómica. Si se
+// pasa `referencia` y ya existe un movimiento previo del mismo tipo con esa
+// referencia y numeroMovimiento asignado, ese número se REUTILIZA (no consume
+// contador). Esto ata el N° movimiento al N° documento comercial: dos
+// despachos parciales de la misma factura comparten el mismo N° movimiento.
+async function generarNumeroMovimiento(tipo, referencia) {
     const uid = rootUid || currentUser?.uid;
     if (!uid) throw new Error('Usuario no identificado.');
+    const existente = _numMovExistente(tipo, referencia);
+    if (existente) return existente;
     const prefijo = _prefijoNumMov(tipo);
     const año = new Date().getFullYear();
     const ref = db.ref(`usuarios/${uid}/contadores/${prefijo}/${año}`);
@@ -4770,6 +4980,12 @@ function saveDocumento() {
     const obs = document.getElementById('md-obs').value.trim();
 
     if (!tipo) { showFormError('movModal-err', 'Seleccione el tipo de movimiento.'); return; }
+    // N° factura/guía obligatorio para Entrada, Salida y Devolución.
+    if (_numDocRequerido(tipo) && !numDoc) {
+        showFormError('movModal-err', `Debe ingresar el N° de factura/guía. Es obligatorio para movimientos de tipo ${tipo}.`);
+        try { document.getElementById('md-numdoc')?.focus(); } catch(_) {}
+        return;
+    }
     if (!bodega) { showFormError('movModal-err', 'Seleccione la bodega.'); return; }
     const _arrFijasMov = bodegasFijasActual();
     if (_arrFijasMov && !_arrFijasMov.includes(bodega)) {
@@ -4826,9 +5042,11 @@ function saveDocumento() {
         tipo === 'Salida' ? 'btn-danger' : 'btn-primary',
         async () => {
             _setBtnLoading('btn-save-doc', true); // I1: spinner
-            // Un solo número interno por documento (todas las líneas lo comparten).
+            // Un solo número interno por documento. Si la referencia ya se usó
+            // antes en el mismo tipo (ej. despachos parciales), se reutiliza
+            // el N° previo en vez de consumir un correlativo nuevo.
             let numeroMovimiento = '';
-            try { numeroMovimiento = await generarNumeroMovimiento(tipo); }
+            try { numeroMovimiento = await generarNumeroMovimiento(tipo, numDoc); }
             catch (e) {
                 _setBtnLoading('btn-save-doc', false);
                 alert('No se pudo asignar el N° interno de movimiento: ' + (e.message || e));
@@ -6649,11 +6867,11 @@ async function saveDestruccion() {
     // el stock residual (destrucción parcial). Se generan por adelantado para
     // que ambos queden inmutables si la escritura falla.
     let numDestruccion = '', numCambioEstadoRes = '';
-    try { numDestruccion = await generarNumeroMovimiento('Destrucción'); }
+    try { numDestruccion = await generarNumeroMovimiento('Destrucción', acta); }
     catch (e) { showFormError('dest-err', 'No se pudo asignar el N° de movimiento: ' + (e.message || e)); return; }
     const remaining = (stockItem?.cantidad || 0) - qty;
     if (remaining > 0) {
-        try { numCambioEstadoRes = await generarNumeroMovimiento('CambioEstado'); }
+        try { numCambioEstadoRes = await generarNumeroMovimiento('CambioEstado', acta); }
         catch (e) { showFormError('dest-err', 'No se pudo asignar el N° del cambio de estado residual: ' + (e.message || e)); return; }
     }
 
@@ -6839,11 +7057,14 @@ async function saveDevolucion(e) {
     e.preventDefault();
     if (userPerfil === 'Visualizador') { alert('Su perfil es de solo lectura.'); return; }
     const sku = document.getElementById('d-sku').value.trim().toUpperCase();
+    const numDoc = (document.getElementById('d-numdoc')?.value || '').trim();
+    if (!numDoc) { alert('Debe ingresar el N° de factura/guía. Es obligatorio para las devoluciones.'); return; }
     let numeroMovimiento = '';
-    try { numeroMovimiento = await generarNumeroMovimiento('Devolución'); }
+    try { numeroMovimiento = await generarNumeroMovimiento('Devolución', numDoc); }
     catch (err) { alert('No se pudo asignar el N° de movimiento: ' + (err.message || err)); return; }
     const dev = {
         numeroMovimiento,
+        referencia: numDoc,
         sku, lote: document.getElementById('d-lote').value.trim(),
         cantidad: parseFloat(document.getElementById('d-qty').value),
         motivo: document.getElementById('d-motivo').value,
@@ -6854,7 +7075,7 @@ async function saveDevolucion(e) {
         usuario: currentUser.email
     };
     db.ref(`usuarios/${rootUid || currentUser.uid}/devoluciones`).push(dev)
-        .then(() => { logAudit('Devolución', 'Devoluciones', sku, dev.lote, `${numeroMovimiento} · ${dev.motivo}`); closeModal('devModal'); });
+        .then(() => { logAudit('Devolución', 'Devoluciones', sku, dev.lote, `${numeroMovimiento} · ${numDoc} · ${dev.motivo}`); closeModal('devModal'); });
 }
 
 // ══ AJUSTE DE INVENTARIO ══
