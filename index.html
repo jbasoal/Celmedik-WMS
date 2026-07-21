@@ -8,6 +8,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
@@ -896,8 +897,8 @@
                         </div>
                         <div class="table-wrap">
                             <table><thead><tr>
-                                <th>N° Movimiento</th><th>Fecha</th><th>Tipo</th><th>SKU</th><th>Descripción</th><th>Lote</th><th>Vence</th><th>Qty</th><th>Bodega</th><th>Ubicación</th><th>Proveedor/Cliente</th><th>Referencia</th><th>Status</th><th>Usuario</th><th>Obs.</th><th>PDF</th>
-                            </tr></thead><tbody id="tMovimientos"><tr class="empty-row"><td colspan="16">No hay movimientos registrados</td></tr></tbody></table>
+                                <th>N° Movimiento</th><th>Fecha</th><th>Tipo</th><th>SKU</th><th>Descripción</th><th>Lote</th><th>Vence</th><th>Qty</th><th>Bodega</th><th>Ubicación</th><th>Proveedor/Cliente</th><th>Referencia</th><th>Status</th><th>Usuario</th><th>Obs.</th><th>PDF</th><th>Adjuntos</th>
+                            </tr></thead><tbody id="tMovimientos"><tr class="empty-row"><td colspan="17">No hay movimientos registrados</td></tr></tbody></table>
                         </div>
                         <div id="movPaginacionFooter"></div>
                     </div>
@@ -1999,9 +2000,14 @@
             <label class="form-label">Observaciones</label>
             <textarea class="form-textarea" id="cec-obs" placeholder="Detalle adicional..."></textarea>
         </div>
+        <div class="form-group" style="background:var(--bg2);border:1px dashed var(--border);border-radius:6px;padding:10px 12px">
+            <label class="form-label" style="margin-bottom:6px">Adjuntar documentos <span style="color:var(--text3);font-weight:400;font-size:11px">(opcional — cert. de análisis, actas, informes)</span></label>
+            <div id="cec-adj-list"></div>
+            <button type="button" class="btn btn-sm btn-ghost" onclick="_cecAddAdjRow()" style="margin-top:6px">+ Añadir documento</button>
+        </div>
         <div class="btn-row">
             <button type="button" class="btn btn-ghost" onclick="closeModal('cambioEstatusCuarModal')">Cancelar</button>
-            <button type="button" class="btn btn-primary" onclick="confirmarCambioEstatusCuar()">Confirmar cambio</button>
+            <button type="button" class="btn btn-primary" id="cec-btn-confirmar" onclick="confirmarCambioEstatusCuar()">Confirmar cambio</button>
         </div>
     </div>
 </div>
@@ -2446,6 +2452,33 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.database();
+const storage = firebase.storage();
+
+// Sube uno o varios archivos a Firebase Storage y devuelve la lista de
+// metadatos { tipo, nombre, url, path, mime, tamano } para persistir en un
+// movimiento. `tipo` describe el documento (ej. "Cert. Análisis"). Los archivos
+// se organizan bajo usuarios/{uid}/adjuntos/{contexto}/{ts}_{filename}.
+async function uploadAdjuntos(files, tipo, contexto) {
+    const uid = rootUid || currentUser.uid;
+    const ctx = (contexto || 'general').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const out = [];
+    for (const f of files) {
+        const safeName = f.name.replace(/[^\w.\-]/g, '_');
+        const path = `usuarios/${uid}/adjuntos/${ctx}/${Date.now()}_${safeName}`;
+        const ref = storage.ref(path);
+        const snap = await ref.put(f, { contentType: f.type || 'application/octet-stream' });
+        const url = await snap.ref.getDownloadURL();
+        out.push({
+            tipo: tipo || 'Documento',
+            nombre: f.name,
+            mime: f.type || '',
+            tamano: f.size || 0,
+            url,
+            path
+        });
+    }
+    return out;
+}
 
 let currentUser = null, userPerfil = null, rootUid = null;
 
@@ -6368,7 +6401,7 @@ function renderMovimientos(preservePage) {
     const footer = document.getElementById('movPaginacionFooter');
     const tb = document.getElementById('tMovimientos');
     if (!total) {
-        tb.innerHTML = '<tr class="empty-row"><td colspan="16">No hay movimientos</td></tr>';
+        tb.innerHTML = '<tr class="empty-row"><td colspan="17">No hay movimientos</td></tr>';
         if (footer) footer.innerHTML = '';
         return;
     }
@@ -6396,6 +6429,17 @@ function renderMovimientos(preservePage) {
         const numMovCell = m.numeroMovimiento
             ? `<span class="text-mono" style="color:var(--accent);font-weight:600;font-size:11px">${m.numeroMovimiento}</span>`
             : '<span class="text-muted" style="font-size:11px">—</span>';
+        // Adjuntos: uno o varios documentos subidos a Storage al registrar el
+        // movimiento (por ahora usados en Cambio de Estado desde Cuarentena).
+        let adjCell = '<span style="color:var(--text3);font-size:11px">—</span>';
+        if (Array.isArray(m.adjuntos) && m.adjuntos.length) {
+            adjCell = m.adjuntos.map(a => {
+                const safeUrl = (a.url||'').replace(/"/g,'&quot;');
+                const safeName = (a.nombre||'documento').replace(/"/g,'&quot;');
+                const label = a.tipo ? `${a.tipo}` : 'Doc';
+                return `<a href="${safeUrl}" target="_blank" rel="noopener" download="${safeName}" class="btn btn-sm btn-icon" title="${safeName}" style="font-size:10px;white-space:nowrap;text-decoration:none">📎 ${label}</a>`;
+            }).join('<br>');
+        }
         return `<tr>
             <td>${numMovCell}</td>
             <td class="text-mono" style="font-size:11px">${fmtDateTime(m.fecha)}</td>
@@ -6413,6 +6457,7 @@ function renderMovimientos(preservePage) {
             <td style="font-size:11px;color:var(--text3)">${m.usuario||'—'}</td>
             <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.observaciones||'—'}</td>
             <td>${pdfCell}</td>
+            <td>${adjCell}</td>
         </tr>`;
     }).join('');
     if (footer) {
@@ -6751,8 +6796,39 @@ function abrirCambioEstatusCuar(keyEnc) {
     document.getElementById('cec-resp').value = '';
     document.getElementById('cec-obs').value = '';
     document.getElementById('cec-err').style.display = 'none';
+    // Limpiar y dejar una fila vacía en el bloque de adjuntos
+    const adjList = document.getElementById('cec-adj-list');
+    if (adjList) adjList.innerHTML = '';
     _cecToggleMotivo();
     openModal('cambioEstatusCuarModal');
+}
+
+// Tipos de documento sugeridos para los adjuntos del cambio de estatus.
+const _CEC_TIPOS_DOC = [
+    'Certificado de Análisis',
+    'Acta de Rechazo',
+    'Acta de Destrucción',
+    'Informe QA',
+    'Alerta ISP',
+    'Otro'
+];
+
+// Añade una fila (tipo + archivo) al bloque de adjuntos del modal.
+function _cecAddAdjRow() {
+    const list = document.getElementById('cec-adj-list');
+    if (!list) return;
+    const idx = list.children.length;
+    const opts = _CEC_TIPOS_DOC.map(t => `<option value="${t}">${t}</option>`).join('');
+    const row = document.createElement('div');
+    row.className = 'cec-adj-row';
+    row.style.cssText = 'display:grid;grid-template-columns:1fr 1.6fr auto;gap:8px;align-items:center;margin-bottom:6px';
+    row.innerHTML = `
+        <select class="form-select cec-adj-tipo" data-idx="${idx}">
+            ${opts}
+        </select>
+        <input type="file" class="form-input cec-adj-file" data-idx="${idx}" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx">
+        <button type="button" class="btn btn-sm btn-ghost" onclick="this.parentElement.remove()" title="Quitar">✕</button>`;
+    list.appendChild(row);
 }
 
 function _cecToggleMotivo() {
@@ -6776,16 +6852,42 @@ async function confirmarCambioEstatusCuar() {
     const stock = calcStock();
     const grupo = Object.values(stock).filter(s => s.sku===sku && s.lote===lote && (s.bodega||'')===(bodega||'') && getLoteStatus(s)==='Cuarentena' && (parseFloat(s.cantidad)||0)>0);
     if (!grupo.length) { showFormError('cec-err', 'El lote ya no está en cuarentena.'); return; }
+
+    // Recolectar adjuntos del modal: para cada fila con archivo cargado,
+    // subir a Storage y anexar la referencia al movimiento generado.
+    const adjRows = Array.from(document.querySelectorAll('#cec-adj-list .cec-adj-row'));
+    const adjPending = adjRows
+        .map(r => ({ tipo: r.querySelector('.cec-adj-tipo')?.value || 'Documento', file: r.querySelector('.cec-adj-file')?.files?.[0] || null }))
+        .filter(x => x.file);
+
+    const btn = document.getElementById('cec-btn-confirmar');
+    if (btn) { btn.disabled = true; btn.textContent = adjPending.length ? 'Subiendo documentos…' : 'Guardando…'; }
+
+    let adjuntos = [];
+    try {
+        for (const a of adjPending) {
+            const uploaded = await uploadAdjuntos([a.file], a.tipo, `cuarentena/${sku}_${lote}`);
+            adjuntos = adjuntos.concat(uploaded);
+        }
+    } catch (e) {
+        if (btn) { btn.disabled = false; btn.textContent = 'Confirmar cambio'; }
+        showFormError('cec-err', 'Error al subir el documento: ' + (e.message || e));
+        return;
+    }
+
     let numeroMovimiento = '';
     try { numeroMovimiento = await generarNumeroMovimiento('CambioEstado'); }
-    catch (e) { showFormError('cec-err', 'No se pudo asignar el N° de movimiento: ' + (e.message || e)); return; }
+    catch (e) {
+        if (btn) { btn.disabled = false; btn.textContent = 'Confirmar cambio'; }
+        showFormError('cec-err', 'No se pudo asignar el N° de movimiento: ' + (e.message || e)); return;
+    }
     const detalle = nuevo === 'Rechazado'
         ? `Rechazado desde cuarentena. Motivo: ${motivo}.${obs?' '+obs:''}`
         : `Liberado de cuarentena → Aprobado.${obs?' '+obs:''}`;
     const updates = {};
     const ts0 = Date.now();
     grupo.forEach((s, i) => {
-        updates[`usuarios/${uid}/movimientos/${ts0 + i}`] = {
+        const mov = {
             numeroMovimiento,
             tipo: 'CambioEstado', sku, lote,
             descripcion: data.productos[sku]?.descripcion || '',
@@ -6796,10 +6898,19 @@ async function confirmarCambioEstatusCuar() {
             observaciones: detalle,
             fecha: ahora, usuario: currentUser.email
         };
+        if (adjuntos.length) mov.adjuntos = adjuntos;
+        updates[`usuarios/${uid}/movimientos/${ts0 + i}`] = mov;
     });
     db.ref().update(updates)
-        .then(() => { logAudit('CambioEstado', 'Cuarentena', sku, lote, `Cuarentena → ${nuevo} · Resp: ${resp}`); closeModal('cambioEstatusCuarModal'); })
-        .catch(err => showFormError('cec-err', 'Error: ' + err.message));
+        .then(() => {
+            logAudit('CambioEstado', 'Cuarentena', sku, lote, `Cuarentena → ${nuevo} · Resp: ${resp}${adjuntos.length?` · ${adjuntos.length} adjunto(s)`:''}`);
+            if (btn) { btn.disabled = false; btn.textContent = 'Confirmar cambio'; }
+            closeModal('cambioEstatusCuarModal');
+        })
+        .catch(err => {
+            if (btn) { btn.disabled = false; btn.textContent = 'Confirmar cambio'; }
+            showFormError('cec-err', 'Error: ' + err.message);
+        });
 }
 
 function liberarCuarentena(id) {
