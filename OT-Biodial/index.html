@@ -156,13 +156,15 @@
         .noprint { }
         @media print { .noprint { display: none !important; } }
 
+        /* ── SIDEBAR overlay (fuera del media query — necesario para no ocupar
+           una celda de la grid en desktop, lo que causaba layout invertido) ── */
+        .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 55; }
+        .sidebar-overlay.visible { display: block; }
         /* ── SIDEBAR responsive ── */
         @media (max-width: 900px) {
             .app-shell { grid-template-columns: 1fr; }
             .sidebar { position: fixed; left: -260px; top: 0; height: 100vh; width: 260px; transition: left .25s; z-index: 60; }
             .sidebar.open { left: 0; }
-            .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 55; }
-            .sidebar-overlay.visible { display: block; }
         }
         .hamburger { display: none; background: none; border: none; font-size: 20px; cursor: pointer; }
         @media (max-width: 900px) { .hamburger { display: block; } }
@@ -1041,25 +1043,48 @@ function showConfirm(title, sub, body, okText, okClass, onOk) {
 }
 
 // ── Auth ──
+// Flag por-pestaña: solo cuando el usuario introduce credenciales EN ESTA
+// pestaña se considera autenticado en OT-Biodial. Esto evita que la sesión
+// compartida con el WMS (Firebase Auth es un mismo proyecto) autologuee al
+// abrir la URL: si viene de otra pestaña, verá la pantalla de login aunque
+// Firebase aún reconozca al usuario.
+function _otbAuthOK()      { return sessionStorage.getItem('otBiodialAuth') === 'yes'; }
+function _otbAuthSet()     { sessionStorage.setItem('otBiodialAuth', 'yes'); }
+function _otbAuthClear()   { sessionStorage.removeItem('otBiodialAuth'); }
 function doLogin(e) {
     e.preventDefault();
     const email = $('lg-email').value.trim();
     const pass  = $('lg-pass').value;
     const btn   = $('btn-login'); btn.disabled = true; btn.textContent = 'Ingresando…';
     auth.signInWithEmailAndPassword(email, pass)
+        .then(() => { _otbAuthSet(); /* onAuthStateChanged hará el redirect */ })
         .catch(err => {
             showFormError('loginErr', 'No se pudo ingresar: ' + (err.message || err));
             btn.disabled = false; btn.textContent = 'Ingresar';
         });
 }
-function doLogout() { auth.signOut(); }
+function doLogout() { _otbAuthClear(); auth.signOut(); }
 
 auth.onAuthStateChanged(async (u) => {
     if (!u) {
         currentUser = null; rootUid = null; userPerfil = null;
+        _otbAuthClear();
         $('loginScreen').style.display = 'flex';
         $('appShell').style.display = 'none';
         $('noAccessScreen').style.display = 'none';
+        return;
+    }
+    // Requerimos que la autenticación se haya realizado EN ESTA pestaña
+    // (flag en sessionStorage). Si es una sesión heredada del WMS o de otra
+    // pestaña, mostramos la pantalla de login sin autologuear.
+    if (!_otbAuthOK()) {
+        currentUser = null; rootUid = null; userPerfil = null;
+        $('loginScreen').style.display = 'flex';
+        $('appShell').style.display = 'none';
+        $('noAccessScreen').style.display = 'none';
+        // Prellenar el email para agilizar el login si el usuario quiere
+        // continuar con la misma cuenta.
+        const em = $('lg-email'); if (em && !em.value) em.value = u.email || '';
         return;
     }
     currentUser = { uid: u.uid, email: u.email };
