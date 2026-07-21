@@ -224,7 +224,7 @@
         <a data-page="dashboard" onclick="showPage('dashboard')"><span class="ico">📊</span> Dashboard</a>
 
         <div class="sidebar-section">Inventario</div>
-        <a data-page="insumos"      onclick="showPage('insumos')"><span class="ico">🧪</span> Insumos</a>
+        <a data-page="insumos"      onclick="showPage('insumos')"><span class="ico">🧪</span> Maestro de Insumos</a>
         <a data-page="bodegas"      onclick="showPage('bodegas')"><span class="ico">🏢</span> Bodegas</a>
         <a data-page="stock"        onclick="showPage('stock')"><span class="ico">📦</span> Stock Actual</a>
         <a data-page="movimientos"  onclick="showPage('movimientos')"><span class="ico">🔄</span> Movimientos</a>
@@ -282,11 +282,11 @@
                 </div>
             </div>
 
-            <!-- ── INSUMOS ── -->
+            <!-- ── MAESTRO DE INSUMOS ── -->
             <div id="page-insumos" class="page">
                 <div class="page-header">
-                    <div class="page-title">Insumos</div>
-                    <div class="page-subtitle">Maestro de materias primas, envases, cajas y otros</div>
+                    <div class="page-title">Maestro de Insumos</div>
+                    <div class="page-subtitle">Registro de materias primas y materiales de empaque · Ficha técnica y trazabilidad</div>
                 </div>
                 <div class="card">
                     <div class="card-header">
@@ -296,19 +296,22 @@
                         </div>
                     </div>
                     <div class="filter-bar">
-                        <input type="text" class="form-input" id="fIns" placeholder="Buscar SKU o descripción…" oninput="renderInsumos()" style="min-width:240px">
+                        <input type="text" class="form-input" id="fIns" placeholder="Buscar SKU / descripción / principio activo…" oninput="renderInsumos()" style="min-width:280px">
                         <select class="form-select" id="fInsCat" onchange="renderInsumos()">
-                            <option value="">Todas las categorías</option>
+                            <option value="">Todos los tipos</option>
                             <option value="Materia Prima">Materia Prima</option>
-                            <option value="Envase">Envase</option>
-                            <option value="Caja">Caja</option>
+                            <option value="Material de Empaque">Material de Empaque</option>
                             <option value="Etiqueta">Etiqueta</option>
                             <option value="Otro">Otro</option>
                         </select>
                     </div>
                     <div class="table-wrap"><table>
-                        <thead><tr><th>SKU</th><th>Descripción</th><th>Categoría</th><th>Unidad</th><th>Stock mín.</th><th>Stock actual</th><th></th></tr></thead>
-                        <tbody id="tInsumos"><tr class="empty-row"><td colspan="7">No hay insumos</td></tr></tbody>
+                        <thead><tr>
+                            <th>SKU</th><th>Descripción</th><th>Tipo</th><th>Presentación</th>
+                            <th>Unidad</th><th>Fabricante</th><th>Almacenamiento</th>
+                            <th>Stock mín.</th><th>Stock actual</th><th></th>
+                        </tr></thead>
+                        <tbody id="tInsumos"><tr class="empty-row"><td colspan="10">No hay insumos</td></tr></tbody>
                     </table></div>
                 </div>
             </div>
@@ -555,38 +558,71 @@
 </div>
 
 <!-- ═════════════════════ MODALES (se rellenan por módulo) ═════════════════════ -->
-<!-- ═ INSUMO ═ -->
+<!-- ═ MAESTRO DE INSUMOS ═ -->
 <div id="insumoModal" class="modal">
-    <div class="modal-box narrow">
+    <div class="modal-box wide">
         <div class="modal-header">
-            <div><div class="modal-title" id="insumoModal-title">Nuevo insumo</div></div>
+            <div><div class="modal-title" id="insumoModal-title">Nuevo insumo</div><div class="modal-subtitle">Ficha maestra del insumo — materias primas y materiales de empaque</div></div>
             <button class="modal-close" onclick="closeModal('insumoModal')">✕</button>
         </div>
         <form onsubmit="saveInsumo(event)">
             <div id="insumoModal-err" class="form-error-banner"></div>
+
+            <!-- IDENTIFICACIÓN -->
+            <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin:4px 0 8px;padding-bottom:4px;border-bottom:1px solid var(--border)">Identificación</div>
             <div class="form-row">
                 <div class="form-group">
-                    <label class="form-label">SKU <span style="color:var(--danger)">*</span></label>
-                    <input type="text" class="form-input text-mono" id="ins-sku" required>
+                    <label class="form-label">SKU interno <span style="color:var(--danger)">*</span></label>
+                    <input type="text" class="form-input text-mono" id="ins-sku" placeholder="Ej: MP-001" required>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Categoría <span style="color:var(--danger)">*</span></label>
-                    <select class="form-select" id="ins-cat" required>
+                    <label class="form-label">Código externo / proveedor</label>
+                    <input type="text" class="form-input text-mono" id="ins-codext" placeholder="Código del proveedor (opc.)">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Descripción / Nombre <span style="color:var(--danger)">*</span></label>
+                    <input type="text" class="form-input" id="ins-desc" placeholder="Ej: Cloruro de Sodio USP" required>
+                </div>
+            </div>
+
+            <!-- CLASIFICACIÓN -->
+            <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin:14px 0 8px;padding-bottom:4px;border-bottom:1px solid var(--border)">Clasificación</div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Tipo <span style="color:var(--danger)">*</span></label>
+                    <select class="form-select" id="ins-cat" required onchange="_insToggleCamposPorTipo()">
                         <option value="Materia Prima">Materia Prima</option>
-                        <option value="Envase">Envase</option>
-                        <option value="Caja">Caja</option>
+                        <option value="Material de Empaque">Material de Empaque</option>
                         <option value="Etiqueta">Etiqueta</option>
                         <option value="Otro">Otro</option>
                     </select>
                 </div>
-            </div>
-            <div class="form-row">
                 <div class="form-group">
-                    <label class="form-label">Descripción <span style="color:var(--danger)">*</span></label>
-                    <input type="text" class="form-input" id="ins-desc" required>
+                    <label class="form-label">Subtipo</label>
+                    <input type="text" class="form-input" id="ins-subtipo" placeholder="Ej: Sal · Ácido · Bidón · Bolsa · Caja · Tapa">
+                </div>
+                <div class="form-group" id="ins-grado-group">
+                    <label class="form-label">Grado / Calidad</label>
+                    <select class="form-select" id="ins-grado">
+                        <option value="">—</option>
+                        <option value="USP">USP</option>
+                        <option value="Farmacéutico">Farmacéutico</option>
+                        <option value="Analítico">Analítico</option>
+                        <option value="Alimentario">Alimentario</option>
+                        <option value="Industrial">Industrial</option>
+                    </select>
                 </div>
             </div>
+
+            <!-- PRESENTACIÓN Y UNIDADES -->
+            <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin:14px 0 8px;padding-bottom:4px;border-bottom:1px solid var(--border)">Presentación y unidades</div>
             <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Presentación</label>
+                    <input type="text" class="form-input" id="ins-pres" placeholder="Ej: Bidón 25 kg · Bolsa 1 kg · Caja x 100 u">
+                </div>
                 <div class="form-group">
                     <label class="form-label">Unidad de medida <span style="color:var(--danger)">*</span></label>
                     <select class="form-select" id="ins-um" required>
@@ -597,26 +633,96 @@
                         <option value="unidad">unidad</option>
                         <option value="caja">caja</option>
                         <option value="rollo">rollo</option>
+                        <option value="pallet">pallet</option>
                     </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Factor de conversión</label>
+                    <input type="number" class="form-input no-spinner" id="ins-factor" min="0" step="any" placeholder="Ej: 25 (kg por bidón)">
+                </div>
+            </div>
+
+            <!-- COMPOSICIÓN (aplica principalmente a Materia Prima) -->
+            <div id="ins-composicion-block">
+                <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin:14px 0 8px;padding-bottom:4px;border-bottom:1px solid var(--border)">Composición y control</div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Principio activo / Composición</label>
+                        <input type="text" class="form-input" id="ins-principio" placeholder="Ej: NaCl 99,5%">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">CAS N°</label>
+                        <input type="text" class="form-input text-mono" id="ins-cas" placeholder="Ej: 7647-14-5">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Farmacopea / Norma de referencia</label>
+                        <input type="text" class="form-input" id="ins-farmacopea" placeholder="Ej: USP 44 · BP · Ph. Eur.">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Requiere Certificado de Análisis</label>
+                        <select class="form-select" id="ins-cerAn">
+                            <option value="Sí">Sí</option>
+                            <option value="No">No</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ALMACENAMIENTO -->
+            <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin:14px 0 8px;padding-bottom:4px;border-bottom:1px solid var(--border)">Almacenamiento y control</div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Condición de almacenamiento</label>
+                    <select class="form-select" id="ins-almac">
+                        <option value="Temperatura Ambiente">Temperatura Ambiente (15-25°C)</option>
+                        <option value="Lugar fresco y seco">Lugar fresco y seco (≤20°C)</option>
+                        <option value="Refrigerado">Refrigerado (2-8°C)</option>
+                        <option value="Congelado">Congelado (-20°C)</option>
+                        <option value="Protegido de luz">Protegido de luz</option>
+                        <option value="Área controlada">Área controlada (higiene/humedad)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Vida útil (meses)</label>
+                    <input type="number" class="form-input no-spinner" id="ins-vidautil" min="0" step="1" placeholder="Ej: 24">
                 </div>
                 <div class="form-group">
                     <label class="form-label">Stock mínimo</label>
                     <input type="number" class="form-input no-spinner" id="ins-stmin" min="0" step="any" value="0">
                 </div>
-                <div class="form-group">
-                    <label class="form-label">Fabricante / Proveedor</label>
-                    <input type="text" class="form-input" id="ins-prov">
-                </div>
             </div>
+
+            <!-- PROVEEDORES / ECONÓMICO -->
+            <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin:14px 0 8px;padding-bottom:4px;border-bottom:1px solid var(--border)">Proveedor y valorización</div>
             <div class="form-row">
                 <div class="form-group">
-                    <label class="form-label">Notas</label>
-                    <textarea class="form-textarea" id="ins-notas" rows="2"></textarea>
+                    <label class="form-label">Fabricante</label>
+                    <input type="text" class="form-input" id="ins-fab" placeholder="Ej: Merck">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Proveedor / Distribuidor</label>
+                    <input type="text" class="form-input" id="ins-prov" placeholder="Ej: Sigma-Aldrich Chile">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Precio referencial</label>
+                    <input type="number" class="form-input no-spinner" id="ins-precioRef" min="0" step="any" placeholder="0">
                 </div>
             </div>
+
+            <!-- NOTAS -->
+            <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin:14px 0 8px;padding-bottom:4px;border-bottom:1px solid var(--border)">Observaciones</div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Especificaciones / Notas</label>
+                    <textarea class="form-textarea" id="ins-notas" rows="2" placeholder="Ej: pH 5-7, humedad máx 0,5%, tamaño de partícula…"></textarea>
+                </div>
+            </div>
+
             <div class="btn-row">
                 <button type="button" class="btn btn-ghost" onclick="closeModal('insumoModal')">Cancelar</button>
-                <button type="submit" class="btn btn-primary">Guardar</button>
+                <button type="submit" class="btn btn-primary">Guardar insumo</button>
             </div>
         </form>
     </div>
@@ -1362,25 +1468,39 @@ async function guardarPerfilUsuario() {
 //  2) INSUMOS (maestro)
 // ══════════════════════════════════════════════════════════════
 let _editInsumoSku = null;
+// Campos del maestro que se leen y persisten
+const INSUMO_FIELDS = [
+    ['ins-sku','sku',''], ['ins-codext','codigoExterno',''],
+    ['ins-desc','descripcion',''],
+    ['ins-cat','categoria','Materia Prima'], ['ins-subtipo','subtipo',''], ['ins-grado','grado',''],
+    ['ins-pres','presentacion',''], ['ins-um','unidad','kg'], ['ins-factor','factorConversion',0],
+    ['ins-principio','principioActivo',''], ['ins-cas','cas',''], ['ins-farmacopea','farmacopea',''], ['ins-cerAn','requiereCA','Sí'],
+    ['ins-almac','almacenamiento','Temperatura Ambiente'], ['ins-vidautil','vidaUtilMeses',0], ['ins-stmin','stockMin',0],
+    ['ins-fab','fabricante',''], ['ins-prov','proveedor',''], ['ins-precioRef','precioReferencia',0],
+    ['ins-notas','notas','']
+];
+const INSUMO_NUM_FIELDS = new Set(['ins-factor','ins-vidautil','ins-stmin','ins-precioRef']);
+
+// Ajustes visuales según tipo (ej.: la sección Composición aplica sólo a
+// Materia Prima; para materiales de empaque la ocultamos).
+function _insToggleCamposPorTipo() {
+    const tipo = $('ins-cat').value;
+    const isMP = tipo === 'Materia Prima';
+    const compBlock = $('ins-composicion-block'); if (compBlock) compBlock.style.display = isMP ? '' : 'none';
+    const gradoGroup = $('ins-grado-group'); if (gradoGroup) gradoGroup.style.display = isMP ? '' : 'none';
+}
+
 function openInsumoModal(sku) {
     if (!canModifyFormulas()) { alert('Solo el Maestro puede modificar insumos.'); return; }
     _editInsumoSku = sku || null;
-    if (sku && data.insumos[sku]) {
-        const i = data.insumos[sku];
-        $('insumoModal-title').textContent = 'Editar insumo';
-        $('ins-sku').value  = sku; $('ins-sku').readOnly = true;
-        $('ins-desc').value = i.descripcion || '';
-        $('ins-cat').value  = i.categoria   || 'Materia Prima';
-        $('ins-um').value   = i.unidad      || 'kg';
-        $('ins-stmin').value= i.stockMin    || 0;
-        $('ins-prov').value = i.proveedor   || '';
-        $('ins-notas').value= i.notas       || '';
-    } else {
-        $('insumoModal-title').textContent = 'Nuevo insumo';
-        ['ins-sku','ins-desc','ins-prov','ins-notas'].forEach(id => $(id).value = '');
-        $('ins-sku').readOnly = false;
-        $('ins-cat').value = 'Materia Prima'; $('ins-um').value = 'kg'; $('ins-stmin').value = 0;
-    }
+    const i = (sku && data.insumos[sku]) ? data.insumos[sku] : null;
+    $('insumoModal-title').textContent = i ? 'Editar insumo' : 'Nuevo insumo';
+    INSUMO_FIELDS.forEach(([id, key, def]) => {
+        const el = $(id); if (!el) return;
+        el.value = (i && i[key] !== undefined && i[key] !== null) ? i[key] : def;
+    });
+    $('ins-sku').readOnly = !!i;
+    _insToggleCamposPorTipo();
     openModal('insumoModal');
 }
 async function saveInsumo(e) {
@@ -1388,20 +1508,19 @@ async function saveInsumo(e) {
     if (!canModifyFormulas()) { showFormError('insumoModal-err', 'Sin permisos'); return; }
     const sku  = $('ins-sku').value.trim().toUpperCase();
     const desc = $('ins-desc').value.trim();
-    if (!sku || !desc) { showFormError('insumoModal-err', 'SKU y descripción obligatorios'); return; }
-    const payload = {
-        sku,
-        descripcion: desc,
-        categoria: $('ins-cat').value,
-        unidad: $('ins-um').value,
-        stockMin: parseFloat($('ins-stmin').value) || 0,
-        proveedor: $('ins-prov').value.trim(),
-        notas: $('ins-notas').value.trim(),
-        fecha: new Date().toISOString()
-    };
+    if (!sku || !desc) { showFormError('insumoModal-err', 'SKU y descripción son obligatorios'); return; }
+    const payload = { fecha: new Date().toISOString(), usuario: currentUser.email };
+    INSUMO_FIELDS.forEach(([id, key]) => {
+        const el = $(id); if (!el) return;
+        let v = el.value;
+        if (INSUMO_NUM_FIELDS.has(id)) v = parseFloat(v) || 0;
+        else if (typeof v === 'string') v = v.trim();
+        payload[key] = v;
+    });
+    payload.sku = sku;
     try {
         await db.ref(`usuarios/${rootUid}/otBiodial/insumos/${sku}`).set(payload);
-        logAudit(_editInsumoSku ? 'Editar insumo' : 'Crear insumo', 'Insumos', sku, desc);
+        logAudit(_editInsumoSku ? 'Editar insumo' : 'Crear insumo', 'Insumos', sku, `${payload.categoria} · ${desc}`);
         closeModal('insumoModal');
     } catch (err) { showFormError('insumoModal-err', 'Error: ' + err.message); }
 }
@@ -1420,25 +1539,37 @@ function renderInsumos() {
     const fc = $('fInsCat')?.value || '';
     const stk = calcStock();
     const rows = Object.values(data.insumos || {})
-        .filter(i => !f || (i.sku||'').toLowerCase().includes(f) || (i.descripcion||'').toLowerCase().includes(f))
+        .filter(i => !f
+            || (i.sku||'').toLowerCase().includes(f)
+            || (i.descripcion||'').toLowerCase().includes(f)
+            || (i.principioActivo||'').toLowerCase().includes(f)
+            || (i.codigoExterno||'').toLowerCase().includes(f))
         .filter(i => !fc || i.categoria === fc)
         .sort((a,b) => (a.sku||'').localeCompare(b.sku||''));
     $('insumos-count').textContent = `${rows.length} insumo${rows.length===1?'':'s'}`;
-    if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="7">Sin resultados</td></tr>'; return; }
+    if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="10">Sin resultados</td></tr>'; return; }
     tb.innerHTML = rows.map(i => {
         const stock = Object.values(stk).filter(s => s.sku === i.sku && s.cantidad > 0).reduce((a,s) => a + s.cantidad, 0);
         const bajoMin = i.stockMin > 0 && stock < i.stockMin;
         const stockCell = bajoMin
             ? `<span style="color:var(--danger);font-weight:600">${fmtNum(stock)} ${i.unidad}</span>`
-            : `${fmtNum(stock)} ${i.unidad}`;
+            : `${fmtNum(stock)} ${i.unidad||''}`;
+        const catBadge = i.categoria === 'Materia Prima' ? 'badge-success'
+                      : i.categoria === 'Material de Empaque' ? 'badge-info'
+                      : i.categoria === 'Etiqueta' ? 'badge-warning' : 'badge-gray';
+        const descHtml = `<strong>${i.descripcion||'—'}</strong>`
+            + (i.principioActivo ? `<br><span style="font-size:11px;color:var(--text3)">${i.principioActivo}${i.grado ? ' · '+i.grado : ''}</span>` : '');
         return `<tr>
-            <td class="text-mono" style="color:var(--accent2)">${i.sku}</td>
-            <td>${i.descripcion || '—'}</td>
-            <td><span class="badge badge-info">${i.categoria||'—'}</span></td>
+            <td class="text-mono" style="color:var(--accent2)">${i.sku}${i.codigoExterno ? '<br><span style="font-size:10px;color:var(--text3)">'+i.codigoExterno+'</span>' : ''}</td>
+            <td>${descHtml}</td>
+            <td><span class="badge ${catBadge}">${i.categoria||'—'}</span>${i.subtipo ? '<br><span style="font-size:11px;color:var(--text3)">'+i.subtipo+'</span>' : ''}</td>
+            <td>${i.presentacion||'—'}</td>
             <td>${i.unidad||'—'}</td>
+            <td>${i.fabricante||'—'}${i.proveedor && i.proveedor!==i.fabricante ? '<br><span style="font-size:11px;color:var(--text3)">'+i.proveedor+'</span>' : ''}</td>
+            <td style="font-size:11px">${i.almacenamiento||'—'}${i.vidaUtilMeses ? '<br><span style="color:var(--text3)">'+i.vidaUtilMeses+' meses</span>' : ''}</td>
             <td>${fmtNum(i.stockMin||0)}</td>
             <td>${stockCell}</td>
-            <td>
+            <td style="white-space:nowrap">
                 ${userPerfil === 'Maestro' ? `<button class="btn btn-sm" onclick="openInsumoModal('${i.sku}')">Editar</button>
                 <button class="btn btn-sm btn-danger" onclick="eliminarInsumo('${i.sku}')">✕</button>` : ''}
             </td>
