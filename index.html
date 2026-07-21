@@ -8,7 +8,6 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
@@ -2452,32 +2451,79 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.database();
-const storage = firebase.storage();
 
-// Sube uno o varios archivos a Firebase Storage y devuelve la lista de
-// metadatos { tipo, nombre, url, path, mime, tamano } para persistir en un
-// movimiento. `tipo` describe el documento (ej. "Cert. Análisis"). Los archivos
-// se organizan bajo usuarios/{uid}/adjuntos/{contexto}/{ts}_{filename}.
-async function uploadAdjuntos(files, tipo, contexto) {
+// Máximo tamaño por archivo adjunto (bytes). RTDB tiene un límite práctico
+// por escritura, y base64 añade ~33% de overhead. 3 MB → ~4 MB en base64.
+const ADJUNTO_MAX_BYTES = 3 * 1024 * 1024;
+
+// Lee un File como base64 (dataURL) usando FileReader.
+function _fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onerror = () => reject(new Error('No se pudo leer el archivo'));
+        fr.onload  = () => resolve(fr.result);
+        fr.readAsDataURL(file);
+    });
+}
+
+// Persiste uno o varios archivos como base64 en Realtime DB bajo
+// usuarios/{uid}/adjuntosData/{adjId} y devuelve la lista de metadatos
+// { id, tipo, nombre, mime, tamano, fecha } que deben quedar referenciadas
+// dentro del movimiento (para que el listado de movimientos NO cargue los
+// blobs y siga siendo liviano).
+async function saveAdjuntosBase64(files, tipo) {
     const uid = rootUid || currentUser.uid;
-    const ctx = (contexto || 'general').replace(/[^a-zA-Z0-9_-]/g, '_');
     const out = [];
     for (const f of files) {
-        const safeName = f.name.replace(/[^\w.\-]/g, '_');
-        const path = `usuarios/${uid}/adjuntos/${ctx}/${Date.now()}_${safeName}`;
-        const ref = storage.ref(path);
-        const snap = await ref.put(f, { contentType: f.type || 'application/octet-stream' });
-        const url = await snap.ref.getDownloadURL();
-        out.push({
-            tipo: tipo || 'Documento',
+        if (f.size > ADJUNTO_MAX_BYTES) {
+            throw new Error(`"${f.name}" supera el tamaño máximo permitido (${Math.round(ADJUNTO_MAX_BYTES/1024/1024)} MB).`);
+        }
+        const dataUrl = await _fileToBase64(f);
+        const adjId = 'adj_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+        const meta = {
+            tipo:   tipo || 'Documento',
             nombre: f.name,
-            mime: f.type || '',
+            mime:   f.type || 'application/octet-stream',
             tamano: f.size || 0,
-            url,
-            path
+            fecha:  new Date().toISOString(),
+            usuario: currentUser?.email || ''
+        };
+        // Escribir blob + metadatos en el mismo nodo
+        await db.ref(`usuarios/${uid}/adjuntosData/${adjId}`).set({
+            ...meta,
+            data: dataUrl
         });
+        out.push({ id: adjId, ...meta });
     }
     return out;
+}
+
+// Descarga un adjunto: lee usuarios/{rootUid}/adjuntosData/{adjId}, construye
+// un Blob desde el dataURL y dispara la descarga en el navegador con el
+// nombre original del archivo.
+async function downloadAdjuntoRTDB(adjId, filenameHint) {
+    const uid = rootUid || currentUser.uid;
+    try {
+        const snap = await db.ref(`usuarios/${uid}/adjuntosData/${adjId}`).get();
+        const val = snap.val();
+        if (!val || !val.data) { alert('El adjunto no está disponible o fue eliminado.'); return; }
+        const dataUrl = val.data;
+        // dataUrl → Blob
+        const [prefix, b64] = dataUrl.split(',');
+        const mime = (prefix.match(/data:([^;]+);/) || [,'application/octet-stream'])[1];
+        const bin = atob(b64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        const blob = new Blob([bytes], { type: mime });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = val.nombre || filenameHint || 'documento';
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch (e) {
+        alert('No se pudo descargar el adjunto: ' + (e.message || e));
+    }
 }
 
 let currentUser = null, userPerfil = null, rootUid = null;
@@ -6429,15 +6475,17 @@ function renderMovimientos(preservePage) {
         const numMovCell = m.numeroMovimiento
             ? `<span class="text-mono" style="color:var(--accent);font-weight:600;font-size:11px">${m.numeroMovimiento}</span>`
             : '<span class="text-muted" style="font-size:11px">—</span>';
-        // Adjuntos: uno o varios documentos subidos a Storage al registrar el
-        // movimiento (por ahora usados en Cambio de Estado desde Cuarentena).
+        // Adjuntos: uno o varios documentos base64 guardados en RTDB al registrar
+        // el movimiento (por ahora usados en Cambio de Estado desde Cuarentena).
+        // Firebase puede deserializar el array como objeto → normalizamos.
+        const adjArr = Array.isArray(m.adjuntos) ? m.adjuntos : (m.adjuntos ? Object.values(m.adjuntos) : []);
         let adjCell = '<span style="color:var(--text3);font-size:11px">—</span>';
-        if (Array.isArray(m.adjuntos) && m.adjuntos.length) {
-            adjCell = m.adjuntos.map(a => {
-                const safeUrl = (a.url||'').replace(/"/g,'&quot;');
-                const safeName = (a.nombre||'documento').replace(/"/g,'&quot;');
+        if (adjArr.length) {
+            adjCell = adjArr.map(a => {
+                const safeId = (a.id||'').replace(/'/g,"\\'");
+                const safeName = (a.nombre||'documento').replace(/"/g,'&quot;').replace(/'/g,"\\'");
                 const label = a.tipo ? `${a.tipo}` : 'Doc';
-                return `<a href="${safeUrl}" target="_blank" rel="noopener" download="${safeName}" class="btn btn-sm btn-icon" title="${safeName}" style="font-size:10px;white-space:nowrap;text-decoration:none">📎 ${label}</a>`;
+                return `<button class="btn btn-sm btn-icon" title="${safeName}" style="font-size:10px;white-space:nowrap" onclick="downloadAdjuntoRTDB('${safeId}','${safeName}')">📎 ${label}</button>`;
             }).join('<br>');
         }
         return `<tr>
@@ -6866,12 +6914,12 @@ async function confirmarCambioEstatusCuar() {
     let adjuntos = [];
     try {
         for (const a of adjPending) {
-            const uploaded = await uploadAdjuntos([a.file], a.tipo, `cuarentena/${sku}_${lote}`);
+            const uploaded = await saveAdjuntosBase64([a.file], a.tipo);
             adjuntos = adjuntos.concat(uploaded);
         }
     } catch (e) {
         if (btn) { btn.disabled = false; btn.textContent = 'Confirmar cambio'; }
-        showFormError('cec-err', 'Error al subir el documento: ' + (e.message || e));
+        showFormError('cec-err', 'Error al guardar el documento: ' + (e.message || e));
         return;
     }
 
