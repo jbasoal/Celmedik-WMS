@@ -989,7 +989,7 @@
                             </div>
                         </div>
                         <div class="filter-bar">
-                            <input type="text" class="form-input" id="ajMovRef" placeholder="N° de referencia / documento (ej: FAC-2024-001)" style="flex:1;max-width:360px" onkeydown="if(event.key==='Enter') buscarMovAjuste()">
+                            <input type="text" class="form-input" id="ajMovRef" placeholder="N° Movimiento (ej: ENT-2026-000123)" style="flex:1;max-width:360px" onkeydown="if(event.key==='Enter') buscarMovAjuste()">
                             <button class="btn btn-primary btn-sm" onclick="buscarMovAjuste()">Buscar</button>
                             <button class="btn btn-ghost btn-sm" onclick="limpiarAjusteMov()">Limpiar</button>
                         </div>
@@ -1688,7 +1688,7 @@
                 <div class="form-group">
                     <label class="form-label">SKU <span style="color:var(--danger)">*</span></label>
                     <div class="sku-ac-wrap">
-                        <input type="text" class="form-input" id="mi-sku" oninput="skuAutocomplete(this,'mi-sku-dd')" onblur="setTimeout(()=>hideDropdown('mi-sku-dd'),200)" placeholder="SKU o nombre del producto..." autocomplete="off">
+                        <input type="text" class="form-input" id="mi-sku" oninput="skuAutocomplete(this,'mi-sku-dd')" onblur="setTimeout(()=>{hideDropdown('mi-sku-dd'); onMiSKUChange();},200)" placeholder="SKU o nombre del producto..." autocomplete="off">
                         <div id="mi-sku-dd" class="sku-dropdown" style="display:none"></div>
                     </div>
                 </div>
@@ -3954,11 +3954,11 @@ function onDocBodegaChange() {
         if (prevUbic) document.getElementById('mi-ubic').value = prevUbic; // I6: restaurar texto libre
     }
 
-    // Si en una Salida o Cambio de Ubicación el usuario cambia la bodega
-    // después de elegir un SKU, refrescar la lista de lotes para que refleje
-    // el stock de la nueva bodega.
+    // Si en una Salida, Cambio de Ubicación o Cambio de Status el usuario
+    // cambia la bodega después de elegir un SKU, refrescar la lista de lotes
+    // para que refleje el stock de la nueva bodega.
     const tipo = document.getElementById('md-tipo')?.value || '';
-    if (tipo === 'Salida' || tipo === 'CambioUbicacion') {
+    if (tipo === 'Salida' || tipo === 'CambioUbicacion' || tipo === 'Ajuste') {
         const sku = (document.getElementById('mi-sku')?.value || '').trim().toUpperCase();
         if (sku && data.productos[sku]) loadMiLotesDisponibles(sku);
     }
@@ -4166,8 +4166,15 @@ function _autoFillPalletsForSku() {
 }
 
 function onMiSKUChange() {
-    const sku = document.getElementById('mi-sku').value.trim().toUpperCase();
-    document.getElementById('mi-sku').value = sku;
+    const skuEl = document.getElementById('mi-sku');
+    const sku = skuEl.value.trim().toUpperCase();
+    skuEl.value = sku;
+    // Idempotencia: onblur puede dispararse tras click en una tarjeta de lote.
+    // Si el SKU no cambió desde la última vez, no re-rendericemos las tarjetas
+    // (perderíamos la selección de lote que el usuario acaba de hacer).
+    const lastSku = skuEl.dataset.lastProcessedSku || '';
+    if (sku && sku === lastSku) { _autoFillPalletsForSku(); return; }
+    skuEl.dataset.lastProcessedSku = sku;
     const prod = data.productos[sku];
     const info = document.getElementById('mi-sku-info');
     const descEl = document.getElementById('mi-desc');
@@ -4176,7 +4183,7 @@ function onMiSKUChange() {
         document.getElementById('mi-sku-info-text').innerHTML = `<strong style="color:var(--text)">${prod.descripcion}</strong> — ${prod.tipo} · ${prod.fabricante}${prod.registroSanitario ? ` · RS: <span class="rs-number">${prod.registroSanitario}</span>` : ''}`;
         info.style.display = 'block';
         const tipo = document.getElementById('md-tipo').value;
-        if (tipo === 'Salida' || tipo === 'CambioUbicacion') loadMiLotesDisponibles(sku);
+        if (tipo === 'Salida' || tipo === 'CambioUbicacion' || tipo === 'Ajuste') loadMiLotesDisponibles(sku);
         // Entrada: las opciones de estatus para el Operador dependen del tipo
         // de producto (medicamento vs dispositivo médico sin RS / insumo).
         if (tipo === 'Entrada') _refreshMiStatusField(tipo);
@@ -4224,6 +4231,7 @@ function loadMiLotesDisponibles(sku) {
         return;
     }
 
+    const isAjuste = tipoMov === 'Ajuste';
     let html = '<input type="hidden" id="mi-lote" value=""><input type="hidden" id="mi-lote-status" value=""><div class="lote-selector-list">';
     lotes.forEach(l => {
         const st = getLoteStatus(l);
@@ -4231,18 +4239,32 @@ function loadMiLotesDisponibles(sku) {
         const isCuarentena  = st === 'Cuarentena';
         const isDestruccion = st === 'Rechazado' || st === 'Vencido' || st === 'Retiro de mercado' || st === 'Falsificado';
         const cls = st === 'Aprobado' ? 'lote-ok' : isCuarentena ? 'lote-cuarentena' : 'lote-rechazado';
-        const disabledCls = isCuarentena ? 'lote-disabled' : '';
+        // En Cambio de Status cualquier lote es clickeable (justamente para cambiar su status).
+        const disabledCls = (!isAjuste && isCuarentena) ? 'lote-disabled' : '';
+        const ubicSafe = (l.ubicacion||'').replace(/'/g,"\\'");
         let onclick = '';
-        if (!isCuarentena) {
+        if (isAjuste) {
+            onclick = `onmousedown="selectLoteAjuste('${sku}','${l.lote}','${ubicSafe}','${l.vence||''}','${st}',${l.cantidad})"`;
+        } else if (!isCuarentena) {
             onclick = isDestruccion
                 ? `onmousedown="selectLoteDestruccion('${sku}','${l.lote}','${l.vence||''}','${st}',${l.cantidad})"`
                 : `onmousedown="selectLoteNormal('${l.lote}','${l.vence||''}','${st}',${l.cantidad})"`;
         }
         const diasLabel = dias !== null ? (dias < 0 ? '<span style="color:var(--danger);font-weight:600">VENCIDO</span>' : `${dias}d`) : '—';
-        // Mostrar cuántas ubicaciones tiene este lote
+        // En Cambio de Status mostramos siempre la ubicación específica del lote,
+        // ya que cada tarjeta corresponde a un stock (lote+ubicación+estado) puntual.
         const nUbic = Object.values(stock).filter(s => s.sku === sku && s.lote === l.lote && s.cantidad > 0).length;
-        const ubicLabel = nUbic > 1 ? `<span style="color:var(--accent);font-size:10px;font-weight:600">📍 ${nUbic} ubicaciones</span>` : (l.ubicacion ? `<span style="font-size:10px;color:var(--text3)">📍 ${l.ubicacion}</span>` : '');
-        html += `<div class="lote-selector-item ${cls} ${disabledCls}" ${onclick} id="lotecard-${l.lote.replace(/[^a-zA-Z0-9]/g,'_')}">
+        const ubicLabel = isAjuste
+            ? (l.ubicacion ? `<span style="font-size:10px;color:var(--text3)">📍 ${l.ubicacion}</span>` : '')
+            : (nUbic > 1 ? `<span style="color:var(--accent);font-size:10px;font-weight:600">📍 ${nUbic} ubicaciones</span>` : (l.ubicacion ? `<span style="font-size:10px;color:var(--text3)">📍 ${l.ubicacion}</span>` : ''));
+        // En Ajuste el id incluye la ubicación para poder resaltar la tarjeta
+        // exacta (mismo lote puede estar en varias ubicaciones con estados distintos).
+        // En Salida/CambioUbicación se conserva el id por sólo lote para no
+        // romper el highlight de selectLoteNormal.
+        const cardId = isAjuste
+            ? 'lotecard-' + (l.lote + '_' + (l.ubicacion||'')).replace(/[^a-zA-Z0-9]/g,'_')
+            : 'lotecard-' + l.lote.replace(/[^a-zA-Z0-9]/g,'_');
+        html += `<div class="lote-selector-item ${cls} ${disabledCls}" ${onclick} id="${cardId}">
             <div class="lote-sel-top">
                 <span class="text-mono" style="font-weight:600;font-size:13px">${l.lote}</span>
                 ${statusBadgeHTML(st)}
@@ -4250,8 +4272,8 @@ function loadMiLotesDisponibles(sku) {
             </div>
             <div class="lote-sel-meta">
                 Vence: ${l.vence ? fmtDate(l.vence) : '—'} (${diasLabel}) · Stock disponible: <strong>${l.cantidad}</strong>
-                ${isCuarentena ? '<div class="lote-warn-msg" style="color:var(--warning)">🔒 En cuarentena — No puede despacharse. Liberar o rechazar en módulo Cuarentena.</div>' : ''}
-                ${isDestruccion ? '<div class="lote-warn-msg" style="color:var(--danger)">⚠ Solo permite salida por destrucción — Click para registrar Acta de Destrucción ISP</div>' : ''}
+                ${(isCuarentena && !isAjuste) ? '<div class="lote-warn-msg" style="color:var(--warning)">🔒 En cuarentena — No puede despacharse. Liberar o rechazar en módulo Cuarentena.</div>' : ''}
+                ${(isDestruccion && !isAjuste) ? '<div class="lote-warn-msg" style="color:var(--danger)">⚠ Solo permite salida por destrucción — Click para registrar Acta de Destrucción ISP</div>' : ''}
             </div>
         </div>`;
     });
@@ -4290,6 +4312,58 @@ function selectLoteNormal(lote, vence, status, stock) {
     }
     // Mostrar ubicaciones disponibles para el lote seleccionado
     loadUbicacionesParaLote(sku, lote);
+}
+
+// Selección de lote específica para Cambio de Status (Ajuste).
+// Cada tarjeta representa un stock (lote+ubicación+estado actual) puntual,
+// por lo que fijamos ubicación y vencimiento directamente y filtramos el
+// selector de nuevo estado para excluir el estado actual.
+function selectLoteAjuste(sku, lote, ubicacion, vence, status, stock) {
+    const loteEl = document.getElementById('mi-lote');
+    const loteStEl = document.getElementById('mi-lote-status');
+    if (loteEl) loteEl.value = lote;
+    if (loteStEl) loteStEl.value = status;
+    const venceEl = document.getElementById('mi-vence');
+    if (venceEl && vence) venceEl.value = vence;
+    // Ocultar aviso FEFO si existiera (no aplica a cambios de status)
+    const fefoEl = document.getElementById('fefo-advisory');
+    if (fefoEl) fefoEl.style.display = 'none';
+    // Resaltar la tarjeta seleccionada
+    document.querySelectorAll('.lote-selector-item').forEach(el => el.classList.remove('lote-sel-active'));
+    const cardId = 'lotecard-' + (lote + '_' + (ubicacion||'')).replace(/[^a-zA-Z0-9]/g,'_');
+    const card = document.getElementById(cardId);
+    if (card) card.classList.add('lote-sel-active');
+    // Ubicación fija — corresponde exactamente al stock que se va a ajustar
+    const miUbicGroup = document.getElementById('mi-ubic-group');
+    const miUbicWrap  = document.getElementById('mi-ubic-wrap');
+    const miUbicLabel = document.getElementById('mi-ubic-label');
+    if (miUbicGroup) miUbicGroup.style.display = 'block';
+    if (miUbicLabel) miUbicLabel.innerHTML = 'Ubicación del lote';
+    if (miUbicWrap) {
+        miUbicWrap.innerHTML = `
+            <input type="hidden" id="mi-ubic" value="${(ubicacion||'').replace(/"/g,'&quot;')}">
+            <div class="alert-banner success" style="padding:7px 10px;margin:0">
+                <div class="alert-banner-text" style="font-size:12px">
+                    📍 <strong>${ubicacion || '(sin ubicación)'}</strong> · Vence: <strong>${vence ? fmtDate(vence) : '—'}</strong> · Estado actual: <strong>${status}</strong> · Stock: <strong>${stock}</strong>
+                </div>
+            </div>`;
+    }
+    // Cantidad por defecto = stock del lote (usuario puede reducirla si sólo cambia una parte)
+    const qtyEl = document.getElementById('mi-qty');
+    if (qtyEl && (!qtyEl.value || parseFloat(qtyEl.value) === 0)) qtyEl.value = stock;
+    // Filtrar el selector de nuevo estado: excluir el estado actual para
+    // que el cambio sea siempre a un estado distinto.
+    const miStatus = document.getElementById('mi-status');
+    if (miStatus) {
+        let firstAlt = '';
+        Array.from(miStatus.options).forEach(opt => {
+            const isSame = opt.value === status;
+            opt.disabled = isSame;
+            opt.hidden   = isSame;
+            if (!isSame && !firstAlt && opt.value) firstAlt = opt.value;
+        });
+        if (miStatus.value === status && firstAlt) miStatus.value = firstAlt;
+    }
 }
 
 function loadUbicacionesParaLote(sku, lote) {
@@ -4686,6 +4760,8 @@ function renderDocItems() {
 
 function resetItemForm() {
     _clearFields('mi-sku','mi-desc','mi-vence','mi-qty','mi-precio','mi-ubic','mi-pallet-qty','mi-ubic-dest');
+    // Reset del guard idempotente para que el próximo SKU vuelva a cargar lotes.
+    const skuEl = document.getElementById('mi-sku'); if (skuEl) delete skuEl.dataset.lastProcessedSku;
     document.getElementById('mi-lote-wrap').innerHTML = '<input type="text" class="form-input" id="mi-lote" placeholder="Número de lote">';
     const dist = document.getElementById('mi-pallet-dist'); if (dist) { dist.style.display = 'none'; dist.innerHTML = ''; }
     const info = document.getElementById('mi-sku-info'); if (info) info.style.display = 'none';
@@ -5518,24 +5594,28 @@ function buscarMovAjuste() {
     const c = document.getElementById('ajMovResults');
     if (!c) return;
     if (!refRaw) {
-        c.innerHTML = '<div class="alert-banner warning" style="margin:8px 0"><div class="alert-banner-icon">⚠</div><div><div class="alert-banner-title">Ingrese un número de referencia</div><div class="alert-banner-text">Escriba el N° de documento o referencia del movimiento a ajustar.</div></div></div>';
+        c.innerHTML = '<div class="alert-banner warning" style="margin:8px 0"><div class="alert-banner-icon">⚠</div><div><div class="alert-banner-title">Ingrese un N° de Movimiento</div><div class="alert-banner-text">Escriba el N° Movimiento a ajustar.</div></div></div>';
         return;
     }
     const refLc = refRaw.toLowerCase();
     const entries = Object.entries(data.movimientos || {});
-    // 1) match exacto por documentoId, 2) por referencia, 3) contiene
-    let found = entries.filter(([,m]) => (m.documentoId||'') === refRaw);
-    if (!found.length) found = entries.filter(([,m]) => (m.referencia||'') === refRaw);
-    if (!found.length) found = entries.filter(([,m]) => ((m.documentoId||'')+'').toLowerCase().includes(refLc) || ((m.referencia||'')+'').toLowerCase().includes(refLc));
+    // Búsqueda por N° Movimiento: 1) match exacto, 2) contiene
+    let found = entries.filter(([,m]) => (m.numeroMovimiento||'') === refRaw);
+    if (!found.length) found = entries.filter(([,m]) => ((m.numeroMovimiento||'')+'').toLowerCase().includes(refLc));
     if (!found.length) {
-        c.innerHTML = `<div class="alert-banner danger" style="margin:8px 0"><div class="alert-banner-icon">✕</div><div><div class="alert-banner-title">No se encontraron movimientos</div><div class="alert-banner-text">No hay registros con referencia «${_ajmEsc(refRaw)}». Verifique el número y reintente.</div></div></div>`;
+        c.innerHTML = `<div class="alert-banner danger" style="margin:8px 0"><div class="alert-banner-icon">✕</div><div><div class="alert-banner-title">No se encontraron movimientos</div><div class="alert-banner-text">No hay registros con N° Movimiento «${_ajmEsc(refRaw)}». Verifique el número y reintente.</div></div></div>`;
         _ajMovItems = []; _ajMovHeader = null;
         return;
     }
     const docs = Array.from(new Set(found.map(([,m]) => m.documentoId || ''))).filter(Boolean);
     if (docs.length > 1) {
-        const opts = docs.map(d => `<button class="btn btn-sm" style="margin:3px" onclick="cargarMovAjuste('${d.replace(/'/g,"\\'")}')">${_ajmEsc(d)}</button>`).join('');
-        c.innerHTML = `<div class="alert-banner warning" style="margin:8px 0"><div class="alert-banner-icon">ℹ</div><div><div class="alert-banner-title">Se encontraron ${docs.length} documentos coincidentes</div><div class="alert-banner-text">Seleccione cuál desea ajustar:</div><div style="margin-top:8px">${opts}</div></div></div>`;
+        const opts = docs.map(d => {
+            const m = found.find(([,mm]) => (mm.documentoId||'') === d);
+            const numMov = m ? (m[1].numeroMovimiento || '') : '';
+            const label = numMov ? `${numMov} · ${d}` : d;
+            return `<button class="btn btn-sm" style="margin:3px" onclick="cargarMovAjuste('${d.replace(/'/g,"\\'")}')">${_ajmEsc(label)}</button>`;
+        }).join('');
+        c.innerHTML = `<div class="alert-banner warning" style="margin:8px 0"><div class="alert-banner-icon">ℹ</div><div><div class="alert-banner-title">Se encontraron ${docs.length} movimientos coincidentes</div><div class="alert-banner-text">Seleccione cuál desea ajustar:</div><div style="margin-top:8px">${opts}</div></div></div>`;
         return;
     }
     cargarMovAjuste(docs[0] || (found[0][1].documentoId || ''));
