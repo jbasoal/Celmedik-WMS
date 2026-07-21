@@ -1241,53 +1241,1171 @@ async function downloadAdjuntoRTDB(adjId, filenameHint) {
 }
 
 // ══════════════════════════════════════════════════════════════
-//  Los módulos (insumos, bodegas, movimientos, formulas, OTs,
-//  reportes, auditoría, usuarios) están implementados a partir
-//  de aquí. Cada módulo define su render{X}, sus modales y sus
-//  saves. El scaffold ya delega los eventos.
+//  MÓDULOS
 // ══════════════════════════════════════════════════════════════
 
-// ── STUBS que quedarán completos en commits siguientes ──
-function renderInsumos()      { const tb = $('tInsumos');    if (tb) tb.innerHTML = '<tr class="empty-row"><td colspan="7">Módulo insumos — implementación en curso</td></tr>'; }
-function renderBodegas()      { const tb = $('tBodegas');    if (tb) tb.innerHTML = '<tr class="empty-row"><td colspan="4">Módulo bodegas — implementación en curso</td></tr>'; }
-function renderStock()        { const tb = $('tStock');      if (tb) tb.innerHTML = '<tr class="empty-row"><td colspan="8">Stock — implementación en curso</td></tr>'; }
-function renderMovimientos()  { const tb = $('tMovimientos');if (tb) tb.innerHTML = '<tr class="empty-row"><td colspan="14">Movimientos — implementación en curso</td></tr>'; }
-function renderFormulas()     { const tb = $('tFormulas');   if (tb) tb.innerHTML = '<tr class="empty-row"><td colspan="8">Fórmulas — implementación en curso</td></tr>'; }
-function renderOTs(tipo)      { const tb = $(tipo === 'Fabricacion' ? 'tOTF' : 'tOTE'); if (tb) tb.innerHTML = '<tr class="empty-row"><td colspan="10">OTs — implementación en curso</td></tr>'; }
-function renderAuditoria()    { const tb = $('tAuditoria');  if (tb) tb.innerHTML = '<tr class="empty-row"><td colspan="6">—</td></tr>'; }
-function renderUsuariosOT()   { const tb = $('tUsuarios');   if (tb) tb.innerHTML = '<tr class="empty-row"><td colspan="4">—</td></tr>'; }
-function renderDashboard()    { }
-function populateSelectores() { }
+// ══════════════════════════════════════════════════════════════
+//  1) USUARIOS / PERFILES (solo Maestro asigna)
+// ══════════════════════════════════════════════════════════════
+function renderUsuariosOT() {
+    const tb = $('tUsuarios'); if (!tb) return;
+    if (userPerfil !== 'Maestro') { tb.innerHTML = '<tr class="empty-row"><td colspan="4">Solo el Maestro puede gestionar perfiles</td></tr>'; return; }
+    const rows = Object.entries(data.usuarios || {});
+    if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="4">Sin usuarios</td></tr>'; return; }
+    tb.innerHTML = rows.map(([uid, u]) => {
+        const perfil = u.otBiodialPerfil || '<span class="text-muted">Sin acceso</span>';
+        const badge  = u.otBiodialPerfil ? `<span class="badge badge-info">${u.otBiodialPerfil}</span>` : '<span class="text-muted">—</span>';
+        const actual = u.otBiodialPerfilAt ? fmtDateTime(u.otBiodialPerfilAt) : '—';
+        return `<tr>
+            <td>${u.email || uid}</td>
+            <td>${badge}</td>
+            <td class="text-mono" style="font-size:11px">${actual}</td>
+            <td><button class="btn btn-sm" onclick="openAsignarPerfil('${uid}')">Editar</button></td>
+        </tr>`;
+    }).join('');
+}
 
-// Stubs de modales (se completan por módulo)
-function openInsumoModal()      { alert('Insumos: próximo commit'); }
-function saveInsumo(e)          { e.preventDefault(); }
-function openBodegaModal()      { alert('Bodegas: próximo commit'); }
-function saveBodega(e)          { e.preventDefault(); }
-function openMovModal(tipo)     { alert('Movimientos: próximo commit'); }
-function onMvSkuChange()        {}
-function addMvItem()            {}
-function saveMovDocumento()     {}
-function openFormulaModal()     { alert('Fórmulas: próximo commit'); }
-function fmAddItem()            {}
-function fmAddPaso()            {}
-function fmAddAdjRow()          {}
-function saveFormula()          {}
-function openOTModal(tipo)      { alert('OTs: próximo commit'); }
-function onOtFormulaChange()    {}
-function recalcOTItems()        {}
-function otAddAdjRow()          {}
-function emitirOT()             {}
-function openConsumoExtraModal(){ alert('Consumo extra: próximo commit'); }
-function registrarConsumoExtra(){}
-function cerrarOT()             {}
-function cancelarOT()           {}
-function generarPDFOT()         {}
-function openAsignarPerfil()    { alert('Perfiles: próximo commit'); }
-function guardarPerfilUsuario() {}
-function rptConsumo()           {}
-function rptConsumoExportCSV()  {}
-function rptTraza()             {}
+function openAsignarPerfil(uidPreset) {
+    if (userPerfil !== 'Maestro') { alert('Solo el Maestro puede asignar perfiles.'); return; }
+    const sel = $('p-usuario');
+    sel.innerHTML = Object.entries(data.usuarios || {})
+        .map(([uid, u]) => `<option value="${uid}">${u.email || uid}</option>`).join('');
+    if (uidPreset && data.usuarios[uidPreset]) {
+        sel.value = uidPreset;
+        $('p-perfil').value = data.usuarios[uidPreset].otBiodialPerfil || '';
+    } else {
+        $('p-perfil').value = 'Jefatura';
+    }
+    openModal('perfilModal');
+}
+async function guardarPerfilUsuario() {
+    const uid = $('p-usuario').value;
+    const perfil = $('p-perfil').value;
+    if (!uid) { showFormError('perfilModal-err', 'Seleccione un usuario.'); return; }
+    if (uid === currentUser.uid && userPerfil === 'Maestro' && perfil !== 'Maestro') {
+        if (!confirm('Se está degradando su propio perfil Maestro. ¿Continuar?')) return;
+    }
+    try {
+        const upd = {};
+        upd[`usuarios/${uid}/otBiodialPerfil`]   = perfil || null;
+        upd[`usuarios/${uid}/otBiodialPerfilAt`] = new Date().toISOString();
+        await db.ref().update(upd);
+        logAudit('Perfil OT-Biodial', 'Usuarios', uid, `${perfil || 'Sin acceso'}`);
+        closeModal('perfilModal');
+    } catch (e) { showFormError('perfilModal-err', 'Error: ' + e.message); }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  2) INSUMOS (maestro)
+// ══════════════════════════════════════════════════════════════
+let _editInsumoSku = null;
+function openInsumoModal(sku) {
+    if (!canModifyFormulas()) { alert('Solo el Maestro puede modificar insumos.'); return; }
+    _editInsumoSku = sku || null;
+    if (sku && data.insumos[sku]) {
+        const i = data.insumos[sku];
+        $('insumoModal-title').textContent = 'Editar insumo';
+        $('ins-sku').value  = sku; $('ins-sku').readOnly = true;
+        $('ins-desc').value = i.descripcion || '';
+        $('ins-cat').value  = i.categoria   || 'Materia Prima';
+        $('ins-um').value   = i.unidad      || 'kg';
+        $('ins-stmin').value= i.stockMin    || 0;
+        $('ins-prov').value = i.proveedor   || '';
+        $('ins-notas').value= i.notas       || '';
+    } else {
+        $('insumoModal-title').textContent = 'Nuevo insumo';
+        ['ins-sku','ins-desc','ins-prov','ins-notas'].forEach(id => $(id).value = '');
+        $('ins-sku').readOnly = false;
+        $('ins-cat').value = 'Materia Prima'; $('ins-um').value = 'kg'; $('ins-stmin').value = 0;
+    }
+    openModal('insumoModal');
+}
+async function saveInsumo(e) {
+    e.preventDefault();
+    if (!canModifyFormulas()) { showFormError('insumoModal-err', 'Sin permisos'); return; }
+    const sku  = $('ins-sku').value.trim().toUpperCase();
+    const desc = $('ins-desc').value.trim();
+    if (!sku || !desc) { showFormError('insumoModal-err', 'SKU y descripción obligatorios'); return; }
+    const payload = {
+        sku,
+        descripcion: desc,
+        categoria: $('ins-cat').value,
+        unidad: $('ins-um').value,
+        stockMin: parseFloat($('ins-stmin').value) || 0,
+        proveedor: $('ins-prov').value.trim(),
+        notas: $('ins-notas').value.trim(),
+        fecha: new Date().toISOString()
+    };
+    try {
+        await db.ref(`usuarios/${rootUid}/otBiodial/insumos/${sku}`).set(payload);
+        logAudit(_editInsumoSku ? 'Editar insumo' : 'Crear insumo', 'Insumos', sku, desc);
+        closeModal('insumoModal');
+    } catch (err) { showFormError('insumoModal-err', 'Error: ' + err.message); }
+}
+async function eliminarInsumo(sku) {
+    if (!canModifyFormulas()) return;
+    showConfirm('Eliminar insumo', sku,
+        `Se eliminará <strong>${sku}</strong> del maestro. Los movimientos históricos y OTs no se ven afectados.`,
+        'Eliminar', 'btn-danger', async () => {
+            await db.ref(`usuarios/${rootUid}/otBiodial/insumos/${sku}`).remove();
+            logAudit('Eliminar insumo', 'Insumos', sku, '');
+        });
+}
+function renderInsumos() {
+    const tb = $('tInsumos'); if (!tb) return;
+    const f = ($('fIns')?.value || '').toLowerCase();
+    const fc = $('fInsCat')?.value || '';
+    const stk = calcStock();
+    const rows = Object.values(data.insumos || {})
+        .filter(i => !f || (i.sku||'').toLowerCase().includes(f) || (i.descripcion||'').toLowerCase().includes(f))
+        .filter(i => !fc || i.categoria === fc)
+        .sort((a,b) => (a.sku||'').localeCompare(b.sku||''));
+    $('insumos-count').textContent = `${rows.length} insumo${rows.length===1?'':'s'}`;
+    if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="7">Sin resultados</td></tr>'; return; }
+    tb.innerHTML = rows.map(i => {
+        const stock = Object.values(stk).filter(s => s.sku === i.sku && s.cantidad > 0).reduce((a,s) => a + s.cantidad, 0);
+        const bajoMin = i.stockMin > 0 && stock < i.stockMin;
+        const stockCell = bajoMin
+            ? `<span style="color:var(--danger);font-weight:600">${fmtNum(stock)} ${i.unidad}</span>`
+            : `${fmtNum(stock)} ${i.unidad}`;
+        return `<tr>
+            <td class="text-mono" style="color:var(--accent2)">${i.sku}</td>
+            <td>${i.descripcion || '—'}</td>
+            <td><span class="badge badge-info">${i.categoria||'—'}</span></td>
+            <td>${i.unidad||'—'}</td>
+            <td>${fmtNum(i.stockMin||0)}</td>
+            <td>${stockCell}</td>
+            <td>
+                ${userPerfil === 'Maestro' ? `<button class="btn btn-sm" onclick="openInsumoModal('${i.sku}')">Editar</button>
+                <button class="btn btn-sm btn-danger" onclick="eliminarInsumo('${i.sku}')">✕</button>` : ''}
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+// ══════════════════════════════════════════════════════════════
+//  3) BODEGAS
+// ══════════════════════════════════════════════════════════════
+let _editBodegaId = null;
+function openBodegaModal(id) {
+    if (!canModifyFormulas()) { alert('Solo el Maestro puede modificar bodegas.'); return; }
+    _editBodegaId = id || null;
+    if (id && data.bodegas[id]) {
+        const b = data.bodegas[id];
+        $('bodegaModal-title').textContent = 'Editar bodega';
+        $('bod-nombre').value = b.nombre || '';
+        $('bod-tipo').value   = b.tipo   || 'Materia Prima';
+        $('bod-ubic').value   = b.ubicacion || '';
+    } else {
+        $('bodegaModal-title').textContent = 'Nueva bodega';
+        $('bod-nombre').value = ''; $('bod-tipo').value = 'Materia Prima'; $('bod-ubic').value = '';
+    }
+    openModal('bodegaModal');
+}
+async function saveBodega(e) {
+    e.preventDefault();
+    if (!canModifyFormulas()) return;
+    const nombre = $('bod-nombre').value.trim();
+    if (!nombre) { showFormError('bodegaModal-err', 'Nombre obligatorio'); return; }
+    const payload = { nombre, tipo: $('bod-tipo').value, ubicacion: $('bod-ubic').value.trim(), fecha: new Date().toISOString() };
+    try {
+        if (_editBodegaId) await db.ref(`usuarios/${rootUid}/otBiodial/bodegas/${_editBodegaId}`).set(payload);
+        else               await db.ref(`usuarios/${rootUid}/otBiodial/bodegas`).push(payload);
+        logAudit(_editBodegaId ? 'Editar bodega' : 'Crear bodega', 'Bodegas', nombre, '');
+        closeModal('bodegaModal');
+    } catch (err) { showFormError('bodegaModal-err', 'Error: ' + err.message); }
+}
+async function eliminarBodega(id) {
+    if (!canModifyFormulas()) return;
+    const b = data.bodegas[id]; if (!b) return;
+    showConfirm('Eliminar bodega', b.nombre,
+        'El histórico de movimientos no se ve afectado.',
+        'Eliminar', 'btn-danger', async () => {
+            await db.ref(`usuarios/${rootUid}/otBiodial/bodegas/${id}`).remove();
+            logAudit('Eliminar bodega', 'Bodegas', b.nombre, '');
+        });
+}
+function renderBodegas() {
+    const tb = $('tBodegas'); if (!tb) return;
+    const rows = Object.entries(data.bodegas || {});
+    if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="4">Sin bodegas</td></tr>'; return; }
+    tb.innerHTML = rows.map(([id, b]) => `<tr>
+        <td><strong>${b.nombre||'—'}</strong></td>
+        <td>${b.tipo||'—'}</td>
+        <td>${b.ubicacion||'—'}</td>
+        <td>${userPerfil === 'Maestro' ? `<button class="btn btn-sm" onclick="openBodegaModal('${id}')">Editar</button>
+            <button class="btn btn-sm btn-danger" onclick="eliminarBodega('${id}')">✕</button>` : ''}</td>
+    </tr>`).join('');
+}
+
+// ══════════════════════════════════════════════════════════════
+//  4) STOCK
+// ══════════════════════════════════════════════════════════════
+function statusBadgeHTML(st) {
+    const cls = st === 'Aprobado' ? 'badge-success'
+              : st === 'Cuarentena' ? 'badge-warning'
+              : st === 'Vencido' ? 'badge-danger'
+              : st === 'Rechazado' ? 'badge-danger'
+              : 'badge-gray';
+    return `<span class="badge ${cls}">${st}</span>`;
+}
+function renderStock() {
+    const tb = $('tStock'); if (!tb) return;
+    const f  = ($('fStk')?.value || '').toLowerCase();
+    const fb = $('fStkBodega')?.value || '';
+    const fs = $('fStkStatus')?.value || '';
+    const stk = calcStock();
+    let rows = Object.values(stk).filter(s => s.cantidad > 0);
+    if (fb) rows = rows.filter(s => s.bodega === fb);
+    if (fs) rows = rows.filter(s => getLoteStatus(s) === fs);
+    if (f)  rows = rows.filter(s => (s.sku||'').toLowerCase().includes(f) || (s.lote||'').toLowerCase().includes(f) || (s.bodega||'').toLowerCase().includes(f));
+    rows.sort((a,b) => (a.sku||'').localeCompare(b.sku||'') || (a.lote||'').localeCompare(b.lote||''));
+    if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="8">Sin stock</td></tr>'; return; }
+    tb.innerHTML = rows.map(s => {
+        const ins = data.insumos[s.sku] || {};
+        const st  = getLoteStatus(s);
+        return `<tr>
+            <td class="text-mono" style="color:var(--accent2)">${s.sku}</td>
+            <td>${ins.descripcion || '—'}</td>
+            <td class="text-mono" style="font-size:11px">${s.lote||'—'}</td>
+            <td>${fmtDate(s.vence)}</td>
+            <td>${s.bodega||'—'}</td>
+            <td>${s.ubicacion||'—'}</td>
+            <td><strong>${fmtNum(s.cantidad)}</strong> ${ins.unidad||''}</td>
+            <td>${statusBadgeHTML(st)}</td>
+        </tr>`;
+    }).join('');
+}
+
+// ══════════════════════════════════════════════════════════════
+//  5) MOVIMIENTOS (Entrada / Ajuste = Cambio de Status / Destrucción)
+// ══════════════════════════════════════════════════════════════
+let _mvTipo = 'Entrada';
+let _mvItems = [];    // items del documento actual
+function openMovModal(tipo) {
+    if (!canOperate()) { alert('Sin permisos'); return; }
+    _mvTipo = tipo;
+    _mvItems = [];
+    $('movModal-title').textContent = ({ 'Entrada': 'Nueva Entrada', 'Ajuste': 'Cambio de Status', 'Destrucción': 'Registrar Destrucción' })[tipo] || 'Movimiento';
+    $('movModal-sub').textContent   = ({ 'Entrada': 'Ingreso de insumos por documento', 'Ajuste': 'Transición Aprobado/Cuarentena/Rechazado', 'Destrucción': 'Baja de stock — genera acta' })[tipo] || '';
+    // Reset campos
+    ['mv-doc','mv-prov','mv-obs','mv-i-lote','mv-i-vence','mv-i-qty','mv-i-precio','mv-i-desc','mv-i-ubic'].forEach(id => { const el = $(id); if (el) el.value = ''; });
+    $('mv-fecha').value = new Date().toISOString().slice(0,10);
+    // Populate select bodega y sku
+    $('mv-bodega').innerHTML = '<option value="">Seleccione…</option>' + Object.values(data.bodegas || {}).map(b => `<option value="${b.nombre}">${b.nombre}</option>`).join('');
+    $('mv-i-sku').innerHTML  = '<option value="">Seleccione…</option>' + Object.values(data.insumos || {}).map(i => `<option value="${i.sku}">${i.sku} — ${i.descripcion}</option>`).join('');
+    // Mostrar/ocultar campos según tipo
+    $('mv-i-status').innerHTML = ({
+        'Entrada': '<option value="Aprobado">✓ Aprobado</option><option value="Cuarentena">🔒 Cuarentena</option>',
+        'Ajuste':  '<option value="Aprobado">✓ Aprobado</option><option value="Cuarentena">🔒 Cuarentena</option><option value="Rechazado">✕ Rechazado</option>',
+        'Destrucción': '<option value="Destruido">🗑 Destruido</option>'
+    })[tipo] || '';
+    $('mv-i-status-group').style.display = 'block';
+    $('mv-i-vence-group').style.display  = (tipo === 'Entrada') ? '' : 'none';
+    renderMvItems();
+    openModal('movModal');
+}
+function onMvSkuChange() {
+    const sku = $('mv-i-sku').value;
+    const ins = data.insumos[sku];
+    $('mv-i-desc').value = ins ? ins.descripcion : '';
+    if (_mvTipo === 'Ajuste' || _mvTipo === 'Destrucción') {
+        // Prellenar lote/qty desde stock disponible
+        const bodega = $('mv-bodega').value;
+        if (bodega) {
+            const stkList = stockDe(sku, bodega);
+            if (stkList.length === 1) {
+                $('mv-i-lote').value = stkList[0].lote || '';
+                $('mv-i-ubic').value = stkList[0].ubicacion || '';
+                $('mv-i-qty').value  = stkList[0].cantidad;
+            }
+        }
+    }
+}
+function addMvItem() {
+    const sku = $('mv-i-sku').value;
+    const ins = data.insumos[sku];
+    if (!ins) { showFormError('movModal-err', 'Seleccione un insumo válido'); return; }
+    const bodega = $('mv-bodega').value;
+    if (!bodega) { showFormError('movModal-err', 'Seleccione bodega'); return; }
+    const qty = parseFloat($('mv-i-qty').value);
+    if (!qty || qty <= 0) { showFormError('movModal-err', 'Cantidad inválida'); return; }
+    const lote  = $('mv-i-lote').value.trim();
+    const vence = $('mv-i-vence').value;
+    const ubic  = $('mv-i-ubic').value.trim();
+    const status= $('mv-i-status').value;
+    const precio= parseFloat($('mv-i-precio').value) || 0;
+    // Validar stock disponible para salidas
+    if (_mvTipo === 'Ajuste' || _mvTipo === 'Destrucción') {
+        const stkList = stockDe(sku, bodega);
+        const match = stkList.find(s => s.lote === lote && s.ubicacion === ubic);
+        if (!match) { showFormError('movModal-err', 'No hay stock para ese lote/ubicación en la bodega seleccionada'); return; }
+        if (qty > match.cantidad) { showFormError('movModal-err', `Cantidad excede el stock disponible (${match.cantidad})`); return; }
+        if (_mvTipo === 'Destrucción') { /* qty se descuenta */ }
+    }
+    _mvItems.push({ sku, descripcion: ins.descripcion, lote, vence, qty, ubic, status, precio, unidad: ins.unidad });
+    // Reset campos ítem
+    ['mv-i-lote','mv-i-vence','mv-i-qty','mv-i-precio','mv-i-desc','mv-i-ubic'].forEach(id => $(id).value = '');
+    $('mv-i-sku').value = '';
+    renderMvItems();
+}
+function removeMvItem(idx) { _mvItems.splice(idx, 1); renderMvItems(); }
+function renderMvItems() {
+    const wrap = $('mv-items-wrap'); const tb = $('tMvItems');
+    if (!_mvItems.length) { wrap.style.display = 'none'; return; }
+    wrap.style.display = 'block';
+    tb.innerHTML = _mvItems.map((it, idx) => `<tr>
+        <td class="text-mono">${it.sku}</td>
+        <td>${it.descripcion||'—'}</td>
+        <td class="text-mono" style="font-size:11px">${it.lote||'—'}</td>
+        <td>${fmtDate(it.vence)}</td>
+        <td>${fmtNum(it.qty)} ${it.unidad||''}</td>
+        <td>${it.ubic||'—'}</td>
+        <td>${statusBadgeHTML(it.status)}</td>
+        <td><button class="btn btn-sm btn-danger" onclick="removeMvItem(${idx})">✕</button></td>
+    </tr>`).join('');
+}
+async function saveMovDocumento() {
+    if (!canOperate()) return;
+    if (!_mvItems.length) { showFormError('movModal-err', 'Agregue al menos un ítem'); return; }
+    const bodega = $('mv-bodega').value;
+    const doc    = $('mv-doc').value.trim();
+    const prov   = $('mv-prov').value.trim();
+    const fecha  = $('mv-fecha').value || new Date().toISOString().slice(0,10);
+    const obs    = $('mv-obs').value.trim();
+    const btn    = $('btn-save-mov'); btn.disabled = true; btn.textContent = 'Guardando…';
+    try {
+        const prefix = ({ 'Entrada':'ENT','Ajuste':'CST','Destrucción':'DST' })[_mvTipo] || 'MOV';
+        const numero = await siguienteCorrelativo(prefix);
+        const documentoId = doc || `${prefix}-${Date.now()}`;
+        const ts = Date.now();
+        const updates = {};
+        _mvItems.forEach((it, i) => {
+            const mov = {
+                numero, tipo: _mvTipo, sku: it.sku,
+                descripcion: it.descripcion || '',
+                lote: it.lote || '', vence: it.vence || '',
+                cantidad: (_mvTipo === 'Destrucción' ? -1 : 1) * 0 + parseFloat(it.qty),
+                bodega, ubicacion: it.ubic || '',
+                status: it.status, statusAnterior: _mvTipo === 'Ajuste' ? 'Aprobado' : '',
+                precio: it.precio || 0, unidad: it.unidad || '',
+                documentoId, proveedor: prov,
+                fecha: new Date().toISOString(), fechaDocumento: fecha,
+                observaciones: obs, usuario: currentUser.email
+            };
+            updates[`usuarios/${rootUid}/otBiodial/movimientos/${ts + i}`] = mov;
+        });
+        await db.ref().update(updates);
+        logAudit(_mvTipo, 'Movimientos', numero, `${_mvItems.length} ítems · ${bodega}`);
+        _mvItems = [];
+        closeModal('movModal');
+        btn.disabled = false; btn.textContent = 'Finalizar y Guardar';
+    } catch (e) {
+        btn.disabled = false; btn.textContent = 'Finalizar y Guardar';
+        showFormError('movModal-err', 'Error: ' + e.message);
+    }
+}
+function renderMovimientos() {
+    const tb = $('tMovimientos'); if (!tb) return;
+    const ft = $('fMovTipo')?.value || '';
+    const fs = ($('fMovSku')?.value || '').toLowerCase();
+    const fl = ($('fMovLote')?.value || '').toLowerCase();
+    const fd = $('fMovDesde')?.value || '';
+    const fh = $('fMovHasta')?.value || '';
+    let rows = Object.values(data.movimientos || {});
+    if (ft) rows = rows.filter(m => m.tipo === ft);
+    if (fs) rows = rows.filter(m => (m.sku||'').toLowerCase().includes(fs));
+    if (fl) rows = rows.filter(m => (m.lote||'').toLowerCase().includes(fl));
+    if (fd) rows = rows.filter(m => (m.fecha||'').slice(0,10) >= fd);
+    if (fh) rows = rows.filter(m => (m.fecha||'').slice(0,10) <= fh);
+    rows.sort((a,b) => new Date(b.fecha) - new Date(a.fecha));
+    if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="14">Sin movimientos</td></tr>'; return; }
+    const seenDoc = new Set();
+    tb.innerHTML = rows.slice(0, 200).map(m => {
+        const tC = m.tipo === 'Entrada' ? 'badge-success' : m.tipo === 'Destrucción' ? 'badge-danger' : m.tipo === 'ConsumoOT' ? 'badge-info' : 'badge-gray';
+        const tipoLabel = m.tipo === 'Ajuste' ? 'Cambio de Status' : (m.tipo === 'ConsumoOT' ? 'Consumo OT' : m.tipo);
+        let pdfCell = '—';
+        if (m.documentoId && !seenDoc.has(m.documentoId)) {
+            seenDoc.add(m.documentoId);
+            pdfCell = `<button class="btn btn-sm" onclick="generarPDFMov('${m.documentoId.replace(/'/g,"\\'")}')">PDF</button>`;
+        }
+        const adjArr = Array.isArray(m.adjuntos) ? m.adjuntos : (m.adjuntos ? Object.values(m.adjuntos) : []);
+        const adjCell = adjArr.length
+            ? adjArr.map(a => `<button class="btn btn-sm btn-icon" style="font-size:10px" onclick="downloadAdjuntoRTDB('${a.id}','${(a.nombre||'').replace(/'/g,"\\'")}')">📎</button>`).join(' ')
+            : '—';
+        return `<tr>
+            <td class="text-mono" style="font-size:11px">${fmtDateTime(m.fecha)}</td>
+            <td><span class="badge ${tC}">${tipoLabel}</span></td>
+            <td class="text-mono" style="color:var(--accent2)">${m.sku}</td>
+            <td>${m.descripcion||'—'}</td>
+            <td class="text-mono" style="font-size:11px">${m.lote||'—'}</td>
+            <td>${fmtDate(m.vence)}</td>
+            <td><strong>${fmtNum(m.cantidad)}</strong> ${m.unidad||''}</td>
+            <td>${m.bodega||'—'}</td>
+            <td>${m.ubicacion||'—'}</td>
+            <td>${statusBadgeHTML(m.status || '—')}</td>
+            <td style="font-size:11px;color:var(--text3)">${m.usuario||'—'}</td>
+            <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.observaciones||'—'}</td>
+            <td>${pdfCell}</td>
+            <td>${adjCell}</td>
+        </tr>`;
+    }).join('');
+}
+
+// ══════════════════════════════════════════════════════════════
+//  6) FÓRMULAS (BOM + pasos + adjuntos)
+// ══════════════════════════════════════════════════════════════
+let _fmItems = [];   // [{sku, cantidad, unidad, orden, notas}]
+let _fmPasos = [];   // [{orden, titulo, instruccion, tiempo}]
+let _fmAdjs  = [];   // [{tipo, nombre, id?}]  se sube al guardar
+let _editFormulaId = null;
+function openFormulaModal(id) {
+    if (!canModifyFormulas()) { alert('Solo el Maestro puede modificar fórmulas.'); return; }
+    _editFormulaId = id || null;
+    _fmItems = []; _fmPasos = []; _fmAdjs = [];
+    if (id && data.formulas[id]) {
+        const f = data.formulas[id];
+        $('formulaModal-title').textContent = 'Editar fórmula';
+        $('fm-sku').value = f.sku; $('fm-sku').readOnly = true;
+        $('fm-desc').value = f.descripcion || '';
+        $('fm-tipo').value = f.tipo || 'Fabricacion';
+        $('fm-vol').value  = f.volumenBase || 1000;
+        $('fm-um').value   = f.unidadBase  || 'L';
+        _fmItems = (Array.isArray(f.items) ? f.items : Object.values(f.items||{}));
+        _fmPasos = (Array.isArray(f.pasos) ? f.pasos : Object.values(f.pasos||{}));
+        _fmAdjs  = (Array.isArray(f.adjuntos) ? f.adjuntos : Object.values(f.adjuntos||{}));
+    } else {
+        $('formulaModal-title').textContent = 'Nueva fórmula';
+        $('fm-sku').value = ''; $('fm-sku').readOnly = false;
+        $('fm-desc').value = ''; $('fm-tipo').value = 'Fabricacion'; $('fm-vol').value = 1000; $('fm-um').value = 'L';
+    }
+    fmRenderItems(); fmRenderPasos(); fmRenderAdjs();
+    openModal('formulaModal');
+}
+function fmRenderItems() {
+    const wrap = $('fm-items-wrap');
+    const opts = Object.values(data.insumos || {}).map(i => `<option value="${i.sku}">${i.sku} — ${i.descripcion}</option>`).join('');
+    wrap.innerHTML = _fmItems.map((it, idx) => `
+        <div style="display:grid;grid-template-columns:1.5fr 100px 90px 1fr auto;gap:8px;align-items:center;margin-bottom:6px">
+            <select class="form-select" onchange="_fmItems[${idx}].sku=this.value">${opts.replace(new RegExp(`value="${it.sku}"`),`value="${it.sku}" selected`)}</select>
+            <input type="number" class="form-input no-spinner" min="0" step="any" value="${it.cantidad||0}" oninput="_fmItems[${idx}].cantidad=parseFloat(this.value)||0">
+            <input type="text"   class="form-input" value="${it.unidad||''}" placeholder="unidad" oninput="_fmItems[${idx}].unidad=this.value">
+            <input type="text"   class="form-input" value="${it.notas||''}"  placeholder="notas"  oninput="_fmItems[${idx}].notas=this.value">
+            <button type="button" class="btn btn-sm btn-danger" onclick="_fmItems.splice(${idx},1);fmRenderItems()">✕</button>
+        </div>`).join('');
+}
+function fmAddItem() {
+    const primerSku = Object.keys(data.insumos || {})[0] || '';
+    const ins = data.insumos[primerSku];
+    _fmItems.push({ sku: primerSku, cantidad: 0, unidad: ins?.unidad || '', notas: '' });
+    fmRenderItems();
+}
+function fmRenderPasos() {
+    const wrap = $('fm-pasos-wrap');
+    wrap.innerHTML = _fmPasos.map((p, idx) => `
+        <div style="border:1px solid var(--border);border-radius:6px;padding:10px;margin-bottom:6px">
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+                <strong>Paso ${idx+1}</strong>
+                <input type="text" class="form-input" placeholder="Título" value="${p.titulo||''}" style="flex:1" oninput="_fmPasos[${idx}].titulo=this.value">
+                <input type="number" class="form-input no-spinner" placeholder="min" min="0" step="any" value="${p.tiempo||''}" style="width:80px" oninput="_fmPasos[${idx}].tiempo=parseFloat(this.value)||0">
+                <button type="button" class="btn btn-sm btn-danger" onclick="_fmPasos.splice(${idx},1);fmRenderPasos()">✕</button>
+            </div>
+            <textarea class="form-textarea" placeholder="Instrucción / detalle" rows="2" oninput="_fmPasos[${idx}].instruccion=this.value">${p.instruccion||''}</textarea>
+        </div>`).join('');
+}
+function fmAddPaso() {
+    _fmPasos.push({ titulo: '', instruccion: '', tiempo: 0 });
+    fmRenderPasos();
+}
+function fmRenderAdjs() {
+    const wrap = $('fm-adj-list');
+    wrap.innerHTML = _fmAdjs.map((a, idx) => `
+        <div style="display:grid;grid-template-columns:1fr 1.6fr auto;gap:8px;align-items:center;margin-bottom:6px">
+            <select class="form-select" onchange="_fmAdjs[${idx}].tipo=this.value">
+                ${['Fórmula Maestra','Hoja de Proceso','Ficha Técnica','Otro'].map(t => `<option value="${t}"${a.tipo===t?' selected':''}>${t}</option>`).join('')}
+            </select>
+            ${a.id
+                ? `<div style="font-size:12px">📎 ${a.nombre} <button type="button" class="btn btn-sm" onclick="downloadAdjuntoRTDB('${a.id}','${(a.nombre||'').replace(/'/g,"\\'")}')">↓</button></div>`
+                : `<input type="file" class="form-input" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx" onchange="_fmAdjs[${idx}]._file=this.files[0]">`}
+            <button type="button" class="btn btn-sm btn-danger" onclick="_fmAdjs.splice(${idx},1);fmRenderAdjs()">✕</button>
+        </div>`).join('');
+}
+function fmAddAdjRow() { _fmAdjs.push({ tipo: 'Fórmula Maestra' }); fmRenderAdjs(); }
+async function saveFormula() {
+    if (!canModifyFormulas()) return;
+    const sku = $('fm-sku').value.trim().toUpperCase();
+    const desc = $('fm-desc').value.trim();
+    if (!sku || !desc) { showFormError('formulaModal-err', 'SKU y descripción obligatorios'); return; }
+    if (!_fmItems.length) { showFormError('formulaModal-err', 'Agregue al menos un insumo'); return; }
+    const btn = $('btn-save-formula'); btn.disabled = true; btn.textContent = 'Guardando…';
+    try {
+        // Subir adjuntos nuevos
+        const adjFinales = [];
+        for (const a of _fmAdjs) {
+            if (a.id) { adjFinales.push({ id: a.id, tipo: a.tipo, nombre: a.nombre, mime: a.mime, tamano: a.tamano }); continue; }
+            if (a._file) {
+                const up = await saveAdjuntosBase64([a._file], a.tipo);
+                adjFinales.push(up[0]);
+            }
+        }
+        const payload = {
+            sku, descripcion: desc,
+            tipo: $('fm-tipo').value,
+            volumenBase: parseFloat($('fm-vol').value) || 0,
+            unidadBase: $('fm-um').value,
+            items: _fmItems.map((it, i) => ({ ...it, orden: i + 1 })),
+            pasos: _fmPasos.map((p, i) => ({ ...p, orden: i + 1 })),
+            adjuntos: adjFinales,
+            version: (_editFormulaId && data.formulas[_editFormulaId] ? (data.formulas[_editFormulaId].version || 0) : 0) + 1,
+            fecha: new Date().toISOString(),
+            usuario: currentUser.email
+        };
+        await db.ref(`usuarios/${rootUid}/otBiodial/formulas/${sku}`).set(payload);
+        logAudit(_editFormulaId ? 'Editar fórmula' : 'Crear fórmula', 'Fórmulas', sku, `v${payload.version}`);
+        btn.disabled = false; btn.textContent = 'Guardar fórmula';
+        closeModal('formulaModal');
+    } catch (e) {
+        btn.disabled = false; btn.textContent = 'Guardar fórmula';
+        showFormError('formulaModal-err', 'Error: ' + e.message);
+    }
+}
+async function eliminarFormula(sku) {
+    if (!canModifyFormulas()) return;
+    showConfirm('Eliminar fórmula', sku, '¿Está seguro?', 'Eliminar', 'btn-danger', async () => {
+        await db.ref(`usuarios/${rootUid}/otBiodial/formulas/${sku}`).remove();
+        logAudit('Eliminar fórmula', 'Fórmulas', sku, '');
+    });
+}
+function renderFormulas() {
+    const tb = $('tFormulas'); if (!tb) return;
+    const f  = ($('fForm')?.value || '').toLowerCase();
+    const ft = $('fFormTipo')?.value || '';
+    let rows = Object.values(data.formulas || {});
+    if (f)  rows = rows.filter(x => (x.sku||'').toLowerCase().includes(f) || (x.descripcion||'').toLowerCase().includes(f));
+    if (ft) rows = rows.filter(x => x.tipo === ft);
+    rows.sort((a,b) => (a.sku||'').localeCompare(b.sku||''));
+    $('formulas-count').textContent = `${rows.length} fórmula${rows.length===1?'':'s'}`;
+    if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="8">Sin fórmulas</td></tr>'; return; }
+    tb.innerHTML = rows.map(f => {
+        const items = Array.isArray(f.items) ? f.items : Object.values(f.items||{});
+        const pasos = Array.isArray(f.pasos) ? f.pasos : Object.values(f.pasos||{});
+        return `<tr>
+            <td class="text-mono" style="color:var(--accent2)">${f.sku}</td>
+            <td>${f.descripcion||'—'}</td>
+            <td><span class="badge ${f.tipo==='Envasado'?'badge-info':'badge-success'}">${f.tipo||'Fabricación'}</span></td>
+            <td>${fmtNum(f.volumenBase||0)} ${f.unidadBase||''}</td>
+            <td>${items.length}</td>
+            <td>${pasos.length}</td>
+            <td>v${f.version||1}</td>
+            <td>
+                ${userPerfil === 'Maestro' ? `<button class="btn btn-sm" onclick="openFormulaModal('${f.sku}')">Editar</button>
+                <button class="btn btn-sm btn-danger" onclick="eliminarFormula('${f.sku}')">✕</button>` : ''}
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+// ══════════════════════════════════════════════════════════════
+//  7) ÓRDENES DE TRABAJO (Fabricación / Envasado)
+// ══════════════════════════════════════════════════════════════
+let _otTipo = 'Fabricacion';
+let _otItemsCalc = [];   // items calculados con stock asignado por lote
+let _otAdjs = [];
+let _otDetalleId = null;
+function openOTModal(tipo) {
+    if (!canOperate()) { alert('Sin permisos'); return; }
+    _otTipo = tipo;
+    _otItemsCalc = []; _otAdjs = [];
+    $('otModal-title').textContent = tipo === 'Fabricacion' ? 'Emitir OT — Fabricación' : 'Emitir OT — Envasado';
+    $('otModal-sub').textContent   = tipo === 'Fabricacion'
+        ? 'Correlativo OTF-YYYY-NNNNNN · Descuenta stock al emitir'
+        : 'Correlativo OTE-YYYY-NNNNNN · Descuenta envases y cajas al emitir';
+    $('ot-vol-label').innerHTML = (tipo === 'Fabricacion' ? 'Volumen a preparar' : 'Unidades a acondicionar') + ' <span style="color:var(--danger)">*</span>';
+    $('ot-vol').value = ''; $('ot-lote').value = ''; $('ot-notas').value = ''; $('ot-fecha').value = new Date().toISOString().slice(0,10);
+    // Poblar fórmulas del tipo
+    $('ot-formula').innerHTML = '<option value="">Seleccione…</option>' +
+        Object.values(data.formulas || {}).filter(f => f.tipo === tipo).map(f => `<option value="${f.sku}">${f.sku} — ${f.descripcion}</option>`).join('');
+    $('ot-bodega').innerHTML = '<option value="">Seleccione…</option>' + Object.values(data.bodegas || {}).map(b => `<option value="${b.nombre}">${b.nombre}</option>`).join('');
+    $('tOtItems').innerHTML = '<tr class="empty-row"><td colspan="7">Seleccione fórmula y volumen</td></tr>';
+    $('ot-pasos-preview').innerHTML = '—';
+    otRenderAdjs();
+    openModal('otModal');
+}
+function onOtFormulaChange() {
+    const sku = $('ot-formula').value;
+    const f   = data.formulas[sku];
+    if (!f) return;
+    if (!$('ot-vol').value) $('ot-vol').value = f.volumenBase || 1000;
+    $('ot-vol-hint').textContent = `Fórmula base: ${fmtNum(f.volumenBase)} ${f.unidadBase}. Ingrese el volumen deseado.`;
+    const pasos = Array.isArray(f.pasos) ? f.pasos : Object.values(f.pasos||{});
+    $('ot-pasos-preview').innerHTML = pasos.length
+        ? '<ol style="margin-left:16px">' + pasos.map(p => `<li><strong>${p.titulo||'Paso'}</strong>${p.tiempo?` (${p.tiempo} min)`:''}<br><span style="color:var(--text3)">${(p.instruccion||'').replace(/\n/g,'<br>')}</span></li>`).join('') + '</ol>'
+        : '—';
+    recalcOTItems();
+}
+function recalcOTItems() {
+    const sku    = $('ot-formula').value;
+    const bodega = $('ot-bodega').value;
+    const vol    = parseFloat($('ot-vol').value) || 0;
+    const f      = data.formulas[sku];
+    const tb     = $('tOtItems');
+    if (!f || !vol) { tb.innerHTML = '<tr class="empty-row"><td colspan="7">Seleccione fórmula y volumen</td></tr>'; _otItemsCalc = []; return; }
+    const base = parseFloat(f.volumenBase) || 1;
+    const factor = vol / base;
+    const items = Array.isArray(f.items) ? f.items : Object.values(f.items||{});
+    _otItemsCalc = items.map(it => {
+        const requerido = (parseFloat(it.cantidad) || 0) * factor;
+        // Buscar stock aprobado disponible (FEFO)
+        const disp = stockDe(it.sku, bodega, 'Aprobado').sort((a,b) => new Date(a.vence||'9999') - new Date(b.vence||'9999'));
+        const total = disp.reduce((a,s) => a + s.cantidad, 0);
+        // Elegir el primer lote (FEFO) que cubra o el que tenga más stock
+        const elegido = disp[0] || null;
+        return {
+            sku: it.sku,
+            descripcion: (data.insumos[it.sku]?.descripcion) || '',
+            unidad: it.unidad || data.insumos[it.sku]?.unidad || '',
+            requerido,
+            loteMP: elegido?.lote || '',
+            ubicacion: elegido?.ubicacion || '',
+            bodega,
+            stockDisponible: total,
+            insuficiente: requerido > total
+        };
+    });
+    tb.innerHTML = _otItemsCalc.map((it, idx) => `<tr${it.insuficiente ? ' style="background:rgba(187,0,0,.08)"' : ''}>
+        <td class="text-mono">${it.sku}</td>
+        <td>${it.descripcion||'—'}</td>
+        <td><strong>${fmtNum(it.requerido)}</strong> ${it.unidad}</td>
+        <td class="text-mono" style="font-size:11px">${it.loteMP || '<span style="color:var(--danger)">SIN STOCK</span>'}</td>
+        <td>${it.ubicacion||'—'}</td>
+        <td>${fmtNum(it.stockDisponible)} ${it.unidad}</td>
+        <td>${it.insuficiente ? '<span class="badge badge-danger">INSUFICIENTE</span>' : '<span class="badge badge-success">OK</span>'}</td>
+    </tr>`).join('');
+}
+function otRenderAdjs() {
+    const wrap = $('ot-adj-list');
+    wrap.innerHTML = _otAdjs.map((a, idx) => `
+        <div style="display:grid;grid-template-columns:1fr 1.6fr auto;gap:8px;align-items:center;margin-bottom:6px">
+            <select class="form-select" onchange="_otAdjs[${idx}].tipo=this.value">
+                ${['Documento Ref.','Certificado de Análisis MP','Instrucción especial','Otro'].map(t => `<option value="${t}"${a.tipo===t?' selected':''}>${t}</option>`).join('')}
+            </select>
+            <input type="file" class="form-input" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx" onchange="_otAdjs[${idx}]._file=this.files[0]">
+            <button type="button" class="btn btn-sm btn-danger" onclick="_otAdjs.splice(${idx},1);otRenderAdjs()">✕</button>
+        </div>`).join('');
+}
+function otAddAdjRow() { _otAdjs.push({ tipo: 'Documento Ref.' }); otRenderAdjs(); }
+
+async function emitirOT() {
+    if (!canOperate()) return;
+    const sku = $('ot-formula').value;
+    const f = data.formulas[sku];
+    if (!f) { showFormError('otModal-err', 'Seleccione una fórmula'); return; }
+    const vol = parseFloat($('ot-vol').value) || 0;
+    if (!vol || vol <= 0) { showFormError('otModal-err', 'Volumen inválido'); return; }
+    const lote = $('ot-lote').value.trim();
+    if (!lote) { showFormError('otModal-err', 'Ingrese el lote a producir'); return; }
+    const bodega = $('ot-bodega').value;
+    if (!bodega) { showFormError('otModal-err', 'Seleccione bodega de insumos'); return; }
+    recalcOTItems();
+    if (_otItemsCalc.some(it => it.insuficiente)) { showFormError('otModal-err', 'Hay insumos con stock insuficiente'); return; }
+    if (!_otItemsCalc.length) { showFormError('otModal-err', 'La fórmula no tiene insumos'); return; }
+    const btn = $('btn-emitir-ot'); btn.disabled = true; btn.textContent = 'Emitiendo…';
+    try {
+        // Subir adjuntos
+        const adjFinales = [];
+        for (const a of _otAdjs) {
+            if (a._file) { const up = await saveAdjuntosBase64([a._file], a.tipo); adjFinales.push(up[0]); }
+        }
+        const prefix = _otTipo === 'Fabricacion' ? 'OTF' : 'OTE';
+        const numero = await siguienteCorrelativo(prefix);
+        const otId   = numero.replace(/-/g,'_');
+        const ahora  = new Date().toISOString();
+        const otData = {
+            numero, tipo: _otTipo,
+            skuProducto: sku, descripcionProducto: f.descripcion || '',
+            formulaVersion: f.version || 1,
+            volumen: vol, unidadBase: f.unidadBase || 'L',
+            lote,
+            bodega, fechaEmision: ahora, fechaDocumento: $('ot-fecha').value || ahora.slice(0,10),
+            usuario: currentUser.email, perfilUsuario: userPerfil,
+            estado: 'Emitida',
+            items: _otItemsCalc.map(it => ({
+                sku: it.sku, descripcion: it.descripcion,
+                requeridoTeorico: it.requerido, consumoTotal: it.requerido,
+                unidad: it.unidad, loteMP: it.loteMP, ubicacion: it.ubicacion, bodega: it.bodega
+            })),
+            pasos: (Array.isArray(f.pasos) ? f.pasos : Object.values(f.pasos||{})),
+            notas: $('ot-notas').value.trim(),
+            adjuntos: adjFinales
+        };
+        // Escritura atómica: guardar OT + generar movimientos de consumo
+        const updates = {};
+        updates[`usuarios/${rootUid}/otBiodial/ordenes/${otId}`] = otData;
+        const ts = Date.now();
+        _otItemsCalc.forEach((it, i) => {
+            const mov = {
+                numero, tipo: 'ConsumoOT',
+                sku: it.sku, descripcion: it.descripcion,
+                lote: it.loteMP, vence: '',
+                cantidad: it.requerido,
+                bodega: it.bodega, ubicacion: it.ubicacion,
+                status: 'Aprobado',
+                unidad: it.unidad,
+                documentoId: numero,
+                otId, otTipo: _otTipo, loteFabricado: lote,
+                fecha: ahora, usuario: currentUser.email,
+                observaciones: `Consumo por ${_otTipo === 'Fabricacion' ? 'fabricación' : 'envasado'} de ${sku} — lote ${lote}`
+            };
+            updates[`usuarios/${rootUid}/otBiodial/movimientos/${ts + i}`] = mov;
+        });
+        await db.ref().update(updates);
+        logAudit(`Emitir OT ${_otTipo}`, 'OTs', numero, `${sku} · ${vol} ${f.unidadBase} · Lote ${lote}`);
+        btn.disabled = false; btn.textContent = 'Emitir OT y descontar stock';
+        closeModal('otModal');
+        // Abrir PDF
+        try { generarPDFOTById(otId, otData); } catch (e) { console.warn('PDF error:', e); }
+    } catch (e) {
+        btn.disabled = false; btn.textContent = 'Emitir OT y descontar stock';
+        showFormError('otModal-err', 'Error: ' + e.message);
+    }
+}
+
+function renderOTs(tipo) {
+    const tb = $(tipo === 'Fabricacion' ? 'tOTF' : 'tOTE'); if (!tb) return;
+    const fEstado = $(tipo === 'Fabricacion' ? 'fOtfEstado' : 'fOteEstado')?.value || '';
+    const fNum    = ($(tipo === 'Fabricacion' ? 'fOtfNum' : 'fOteNum')?.value || '').toLowerCase();
+    const fLote   = ($(tipo === 'Fabricacion' ? 'fOtfLote' : 'fOteLote')?.value || '').toLowerCase();
+    let rows = Object.entries(data.ordenes || {}).filter(([, o]) => o.tipo === tipo).map(([id, o]) => ({ id, ...o }));
+    if (fEstado) rows = rows.filter(o => o.estado === fEstado);
+    if (fNum)    rows = rows.filter(o => (o.numero||'').toLowerCase().includes(fNum));
+    if (fLote)   rows = rows.filter(o => (o.lote||'').toLowerCase().includes(fLote));
+    rows.sort((a,b) => new Date(b.fechaEmision||0) - new Date(a.fechaEmision||0));
+    const countEl = $(tipo === 'Fabricacion' ? 'otf-count' : 'ote-count');
+    if (countEl) countEl.textContent = `${rows.length} OT${rows.length===1?'':'s'}`;
+    if (!rows.length) { tb.innerHTML = `<tr class="empty-row"><td colspan="10">Sin OTs de ${tipo}</td></tr>`; return; }
+    tb.innerHTML = rows.map(o => {
+        const estCls = o.estado === 'Emitida' ? 'badge-warning' : o.estado === 'Cerrada' ? 'badge-success' : 'badge-danger';
+        const adjArr = Array.isArray(o.adjuntos) ? o.adjuntos : (o.adjuntos ? Object.values(o.adjuntos) : []);
+        const adjCell = adjArr.length ? adjArr.map(a => `<button class="btn btn-sm btn-icon" style="font-size:10px" onclick="downloadAdjuntoRTDB('${a.id}','${(a.nombre||'').replace(/'/g,"\\'")}')">📎</button>`).join(' ') : '—';
+        return `<tr>
+            <td class="text-mono" style="color:var(--accent2)"><strong>${o.numero}</strong></td>
+            <td class="text-mono" style="font-size:11px">${fmtDateTime(o.fechaEmision)}</td>
+            <td><strong>${o.skuProducto}</strong><br><span style="font-size:11px;color:var(--text3)">${o.descripcionProducto||''}</span></td>
+            <td>${fmtNum(o.volumen)} ${o.unidadBase||''}</td>
+            <td class="text-mono">${o.lote}</td>
+            <td><span class="badge ${estCls}">${o.estado}</span></td>
+            <td style="font-size:11px;color:var(--text3)">${o.usuario||'—'}</td>
+            <td><button class="btn btn-sm" onclick="generarPDFOTById('${o.id}')">📄</button></td>
+            <td>${adjCell}</td>
+            <td><button class="btn btn-sm btn-primary" onclick="abrirDetalleOT('${o.id}')">Ver</button></td>
+        </tr>`;
+    }).join('');
+}
+
+function abrirDetalleOT(otId) {
+    const o = data.ordenes[otId]; if (!o) return;
+    _otDetalleId = otId;
+    const items = Array.isArray(o.items) ? o.items : Object.values(o.items||{});
+    const totItems = items.length;
+    const totQty = items.reduce((a,it) => a + (parseFloat(it.consumoTotal||it.requeridoTeorico)||0), 0);
+    $('otDet-title').textContent = `OT ${o.numero}`;
+    $('otDet-sub').textContent   = `${o.tipo} · ${o.skuProducto} · Lote ${o.lote}`;
+    const estCls = o.estado === 'Emitida' ? 'badge-warning' : o.estado === 'Cerrada' ? 'badge-success' : 'badge-danger';
+    $('otDet-info').innerHTML = `
+        <div class="stat-row">
+            <div class="stat-box"><div class="stat-label">Producto</div><div class="stat-value" style="font-size:16px">${o.skuProducto}</div><div class="stat-sub">${o.descripcionProducto||''}</div></div>
+            <div class="stat-box"><div class="stat-label">Volumen</div><div class="stat-value" style="font-size:16px">${fmtNum(o.volumen)} ${o.unidadBase||''}</div></div>
+            <div class="stat-box"><div class="stat-label">Lote</div><div class="stat-value text-mono" style="font-size:16px">${o.lote}</div></div>
+            <div class="stat-box"><div class="stat-label">Estado</div><div class="stat-value" style="font-size:14px"><span class="badge ${estCls}">${o.estado}</span></div></div>
+        </div>
+        <div class="card">
+            <div class="card-header"><div><div class="card-title">Consumos</div></div></div>
+            <div class="table-wrap"><table>
+                <thead><tr><th>SKU</th><th>Descripción</th><th>Teórico</th><th>Consumo actual</th><th>Δ</th><th>Lote MP</th><th>Ubicación</th></tr></thead>
+                <tbody>${items.map(it => {
+                    const teor = parseFloat(it.requeridoTeorico)||0;
+                    const cons = parseFloat(it.consumoTotal||teor)||0;
+                    const delta = cons - teor;
+                    const dPct = teor > 0 ? (delta/teor*100) : 0;
+                    const dCls = delta > 0 ? 'color:var(--warning)' : delta < 0 ? 'color:var(--danger)' : 'color:var(--text3)';
+                    return `<tr>
+                        <td class="text-mono">${it.sku}</td>
+                        <td>${it.descripcion||''}</td>
+                        <td>${fmtNum(teor)} ${it.unidad||''}</td>
+                        <td><strong>${fmtNum(cons)} ${it.unidad||''}</strong></td>
+                        <td style="${dCls}">${delta > 0 ? '+' : ''}${fmtNum(delta)} (${dPct>0?'+':''}${dPct.toFixed(2)}%)</td>
+                        <td class="text-mono" style="font-size:11px">${it.loteMP||'—'}</td>
+                        <td>${it.ubicacion||'—'}</td>
+                    </tr>`;
+                }).join('')}</tbody>
+            </table></div>
+            <div style="margin-top:8px;font-size:12px;color:var(--text3)">
+                Emitida: ${fmtDateTime(o.fechaEmision)} por ${o.usuario} ${o.fechaCierre ? ' · Cerrada: '+fmtDateTime(o.fechaCierre)+' por '+(o.usuarioCierre||'') : ''}
+                ${o.notas ? '<br>Notas: '+o.notas : ''}
+            </div>
+        </div>`;
+    // Guardar/ocultar botones según estado
+    const emitida = o.estado === 'Emitida';
+    $('otDet-btn-consumo').style.display  = emitida && canOperate() ? '' : 'none';
+    $('otDet-btn-cerrar').style.display   = emitida && canOperate() ? '' : 'none';
+    $('otDet-btn-cancelar').style.display = emitida && canModifyFormulas() ? '' : 'none';
+    openModal('otDetalleModal');
+}
+
+function openConsumoExtraModal() {
+    const o = data.ordenes[_otDetalleId]; if (!o) return;
+    const items = Array.isArray(o.items) ? o.items : Object.values(o.items||{});
+    $('cxe-sku').innerHTML = items.map(it => `<option value="${it.sku}">${it.sku} — ${it.descripcion} (teórico ${fmtNum(it.requeridoTeorico)} ${it.unidad})</option>`).join('');
+    $('cxe-qty').value = ''; $('cxe-motivo').value = '';
+    $('cxe-hint').textContent = 'Se sumará al consumo. Excedente >3% del teórico requiere perfil Maestro.';
+    openModal('consumoExtraModal');
+}
+async function registrarConsumoExtra() {
+    const o = data.ordenes[_otDetalleId]; if (!o) return;
+    const sku = $('cxe-sku').value;
+    const qty = parseFloat($('cxe-qty').value) || 0;
+    const motivo = $('cxe-motivo').value.trim();
+    if (!sku) { showFormError('cxe-err', 'Seleccione insumo'); return; }
+    if (qty <= 0) { showFormError('cxe-err', 'Cantidad inválida'); return; }
+    const items = Array.isArray(o.items) ? o.items : Object.values(o.items||{});
+    const it = items.find(x => x.sku === sku);
+    if (!it) { showFormError('cxe-err', 'Insumo no está en la OT'); return; }
+    const teor = parseFloat(it.requeridoTeorico) || 0;
+    const nuevoConsumo = (parseFloat(it.consumoTotal) || teor) + qty;
+    const excedente = nuevoConsumo - teor;
+    const pct = teor > 0 ? (excedente / teor * 100) : 999;
+    if (pct > 3 && !canAdjustOver3()) {
+        showFormError('cxe-err', `El excedente sería ${pct.toFixed(2)}% (> 3%). Solo el perfil Maestro puede autorizarlo.`);
+        return;
+    }
+    // Verificar stock disponible del insumo
+    const stkList = stockDe(sku, it.bodega, 'Aprobado').filter(s => s.lote === it.loteMP && s.ubicacion === it.ubicacion);
+    const disp = stkList.reduce((a,s) => a + s.cantidad, 0);
+    if (qty > disp) { showFormError('cxe-err', `Stock insuficiente. Disponible: ${fmtNum(disp)} ${it.unidad}`); return; }
+    // Escribir: actualizar item.consumoTotal + crear ConsumoOT extra
+    try {
+        const updates = {};
+        const idx = items.indexOf(it);
+        updates[`usuarios/${rootUid}/otBiodial/ordenes/${_otDetalleId}/items/${idx}/consumoTotal`] = nuevoConsumo;
+        updates[`usuarios/${rootUid}/otBiodial/movimientos/${Date.now()}`] = {
+            numero: o.numero, tipo: 'ConsumoOT',
+            sku, descripcion: it.descripcion,
+            lote: it.loteMP, cantidad: qty, unidad: it.unidad,
+            bodega: it.bodega, ubicacion: it.ubicacion,
+            status: 'Aprobado',
+            documentoId: o.numero, otId: _otDetalleId, otTipo: o.tipo, loteFabricado: o.lote,
+            fecha: new Date().toISOString(), usuario: currentUser.email,
+            observaciones: `Consumo extra (${pct.toFixed(2)}%). ${motivo||''}`.trim()
+        };
+        await db.ref().update(updates);
+        logAudit('Consumo extra OT', 'OTs', o.numero, `${sku} +${fmtNum(qty)} ${it.unidad} (${pct.toFixed(2)}%)`);
+        closeModal('consumoExtraModal');
+        // Refrescar detalle
+        setTimeout(() => abrirDetalleOT(_otDetalleId), 200);
+    } catch (e) { showFormError('cxe-err', 'Error: ' + e.message); }
+}
+async function cerrarOT() {
+    if (!canOperate()) return;
+    const o = data.ordenes[_otDetalleId]; if (!o) return;
+    if (o.estado !== 'Emitida') return;
+    showConfirm('Cerrar OT', o.numero, '¿Confirmar cierre? La OT quedará como completada.', 'Cerrar OT', 'btn-success', async () => {
+        await db.ref(`usuarios/${rootUid}/otBiodial/ordenes/${_otDetalleId}`).update({
+            estado: 'Cerrada', fechaCierre: new Date().toISOString(), usuarioCierre: currentUser.email
+        });
+        logAudit('Cerrar OT', 'OTs', o.numero, o.skuProducto);
+        closeModal('otDetalleModal');
+    });
+}
+async function cancelarOT() {
+    if (!canModifyFormulas()) { alert('Solo el Maestro puede cancelar OTs.'); return; }
+    const o = data.ordenes[_otDetalleId]; if (!o) return;
+    if (o.estado !== 'Emitida') return;
+    showConfirm('Cancelar OT', o.numero,
+        '⚠ Se revertirá el stock consumido (se crean AjusteInventario positivos). La OT queda como Cancelada para trazabilidad.',
+        'Cancelar OT', 'btn-danger', async () => {
+        const items = Array.isArray(o.items) ? o.items : Object.values(o.items||{});
+        const updates = {};
+        updates[`usuarios/${rootUid}/otBiodial/ordenes/${_otDetalleId}/estado`] = 'Cancelada';
+        updates[`usuarios/${rootUid}/otBiodial/ordenes/${_otDetalleId}/fechaCancelacion`] = new Date().toISOString();
+        updates[`usuarios/${rootUid}/otBiodial/ordenes/${_otDetalleId}/usuarioCancelacion`] = currentUser.email;
+        const ts = Date.now();
+        items.forEach((it, i) => {
+            const consumo = parseFloat(it.consumoTotal || it.requeridoTeorico) || 0;
+            updates[`usuarios/${rootUid}/otBiodial/movimientos/${ts + i}`] = {
+                tipo: 'AjusteInventario', sku: it.sku, descripcion: it.descripcion,
+                lote: it.loteMP, cantidad: consumo,
+                bodega: it.bodega, ubicacion: it.ubicacion, unidad: it.unidad,
+                status: 'Aprobado', documentoId: o.numero + '-CANC',
+                fecha: new Date().toISOString(), usuario: currentUser.email,
+                observaciones: `Reversión por cancelación de OT ${o.numero}`
+            };
+        });
+        await db.ref().update(updates);
+        logAudit('Cancelar OT', 'OTs', o.numero, `Reversión ${items.length} ítems`);
+        closeModal('otDetalleModal');
+    });
+}
+
+// ── PDF de OT ──
+async function generarPDFOTById(otId, otPreload) {
+    const o = otPreload || data.ordenes[otId]; if (!o) { alert('OT no encontrada'); return; }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    doc.setFont('helvetica','bold'); doc.setFontSize(14);
+    doc.text('BIODIAL — SOLUCIONES CONCENTRADAS DE DIÁLISIS', 105, 15, { align: 'center' });
+    doc.setFontSize(12);
+    doc.text(o.tipo === 'Fabricacion' ? 'ORDEN DE TRABAJO — FABRICACIÓN' : 'ORDEN DE TRABAJO — ENVASADO Y EMPAQUE', 105, 22, { align: 'center' });
+    doc.setFontSize(9); doc.setFont('helvetica','normal');
+    // Encabezado
+    doc.text(`N° OT: ${o.numero}`, 15, 32);
+    doc.text(`Producto: ${o.skuProducto} — ${o.descripcionProducto||''}`, 15, 38);
+    doc.text(`Lote: ${o.lote}`, 15, 44);
+    doc.text(`Volumen / Unidades: ${o.volumen} ${o.unidadBase||''}`, 100, 44);
+    doc.text(`Fecha emisión: ${fmtDateTime(o.fechaEmision)}`, 15, 50);
+    doc.text(`Usuario: ${o.usuario||''}`, 100, 50);
+    doc.text(`Bodega: ${o.bodega||''}`, 15, 56);
+    doc.text(`Estado: ${o.estado}`, 100, 56);
+    // Insumos
+    const items = Array.isArray(o.items) ? o.items : Object.values(o.items||{});
+    doc.autoTable({
+        startY: 62, theme: 'grid',
+        head: [['SKU','Descripción','Requerido (teórico)','Consumo actual','Unidad','Lote MP','Ubic.']],
+        body: items.map(it => {
+            const t = parseFloat(it.requeridoTeorico) || 0;
+            const c = parseFloat(it.consumoTotal || it.requeridoTeorico) || 0;
+            return [it.sku, it.descripcion||'', fmtNum(t), fmtNum(c), it.unidad||'', it.loteMP||'', it.ubicacion||''];
+        }),
+        styles: { fontSize: 8 }, headStyles: { fillColor: [8,84,160] }
+    });
+    let y = doc.lastAutoTable.finalY + 6;
+    // Pasos
+    const pasos = Array.isArray(o.pasos) ? o.pasos : Object.values(o.pasos||{});
+    if (pasos.length) {
+        doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.text('Pasos del proceso', 15, y); y += 4;
+        doc.setFont('helvetica','normal'); doc.setFontSize(8);
+        pasos.forEach((p, i) => {
+            if (y > 270) { doc.addPage(); y = 20; }
+            doc.setFont('helvetica','bold');
+            doc.text(`${i+1}. ${p.titulo||''}${p.tiempo?` (${p.tiempo} min)`:''}`, 15, y); y += 4;
+            doc.setFont('helvetica','normal');
+            const lines = doc.splitTextToSize(p.instruccion || '', 180);
+            lines.forEach(l => { if (y > 275) { doc.addPage(); y = 20; } doc.text(l, 18, y); y += 4; });
+            y += 2;
+        });
+    }
+    // Notas + firmas
+    if (o.notas) {
+        if (y > 250) { doc.addPage(); y = 20; }
+        doc.setFont('helvetica','bold'); doc.text('Notas / instrucciones:', 15, y); y += 4;
+        doc.setFont('helvetica','normal');
+        const notasLines = doc.splitTextToSize(o.notas, 180);
+        notasLines.forEach(l => { doc.text(l, 15, y); y += 4; });
+    }
+    if (y > 250) { doc.addPage(); y = 20; }
+    y = Math.max(y + 10, 240);
+    doc.line(20, y, 90, y); doc.line(120, y, 190, y);
+    doc.text('Operador', 55, y + 5, { align: 'center' });
+    doc.text('Supervisor / Aprobación', 155, y + 5, { align: 'center' });
+    doc.save(`${o.numero}.pdf`);
+}
+function generarPDFOT() { if (_otDetalleId) generarPDFOTById(_otDetalleId); }
+
+// PDF simple de movimiento (Entrada/Ajuste/Destrucción)
+function generarPDFMov(documentoId) {
+    const rows = Object.values(data.movimientos || {}).filter(m => m.documentoId === documentoId);
+    if (!rows.length) { alert('Sin datos'); return; }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const r0 = rows[0];
+    doc.setFontSize(14); doc.setFont('helvetica','bold');
+    doc.text('BIODIAL — Movimiento de inventario', 105, 15, { align: 'center' });
+    doc.setFontSize(11);
+    doc.text(({ 'Entrada':'INGRESO','Ajuste':'CAMBIO DE STATUS','Destrucción':'DESTRUCCIÓN','ConsumoOT':'CONSUMO POR OT' })[r0.tipo] || r0.tipo, 105, 22, { align: 'center' });
+    doc.setFontSize(9); doc.setFont('helvetica','normal');
+    doc.text(`Documento: ${documentoId}`, 15, 32);
+    doc.text(`Bodega: ${r0.bodega||''}`, 100, 32);
+    doc.text(`Proveedor/Origen: ${r0.proveedor||''}`, 15, 38);
+    doc.text(`Fecha: ${fmtDateTime(r0.fecha)}`, 100, 38);
+    doc.text(`Usuario: ${r0.usuario||''}`, 15, 44);
+    doc.autoTable({
+        startY: 52, theme: 'grid',
+        head: [['SKU','Descripción','Lote','Vence','Cant.','Ubic.','Estado']],
+        body: rows.map(m => [m.sku, m.descripcion||'', m.lote||'', fmtDate(m.vence), fmtNum(m.cantidad)+' '+(m.unidad||''), m.ubicacion||'', m.status||'']),
+        styles: { fontSize: 8 }, headStyles: { fillColor: [8,84,160] }
+    });
+    if (r0.observaciones) {
+        const y = doc.lastAutoTable.finalY + 8;
+        doc.setFont('helvetica','bold'); doc.text('Observaciones:', 15, y);
+        doc.setFont('helvetica','normal');
+        const lines = doc.splitTextToSize(r0.observaciones, 180);
+        lines.forEach((l, i) => doc.text(l, 15, y + 5 + i * 4));
+    }
+    doc.save(`${documentoId}.pdf`);
+}
+
+// ══════════════════════════════════════════════════════════════
+//  8) DASHBOARD
+// ══════════════════════════════════════════════════════════════
+let _dashChart = null;
+function renderDashboard() {
+    // Stats
+    const stk = calcStock();
+    const nInsumos  = Object.keys(data.insumos||{}).length;
+    const nFormulas = Object.keys(data.formulas||{}).length;
+    const nOts      = Object.values(data.ordenes||{}).filter(o => o.estado === 'Emitida').length;
+    const bajoMin   = Object.values(data.insumos||{}).filter(i => {
+        if (!i.stockMin) return false;
+        const total = Object.values(stk).filter(s => s.sku === i.sku && s.cantidad > 0).reduce((a,s) => a+s.cantidad,0);
+        return total < i.stockMin;
+    }).length;
+    const box = $('dash-stats'); if (box) box.innerHTML = `
+        <div class="stat-box"><div class="stat-label">Insumos</div><div class="stat-value">${nInsumos}</div></div>
+        <div class="stat-box"><div class="stat-label">Fórmulas</div><div class="stat-value">${nFormulas}</div></div>
+        <div class="stat-box"><div class="stat-label">OTs abiertas</div><div class="stat-value">${nOts}</div></div>
+        <div class="stat-box"><div class="stat-label">Bajo mínimo</div><div class="stat-value" style="color:${bajoMin?'var(--danger)':'var(--text)'}">${bajoMin}</div></div>`;
+    // Tabla críticos
+    const crit = Object.values(data.insumos||{}).map(i => {
+        const total = Object.values(stk).filter(s => s.sku === i.sku && s.cantidad > 0).reduce((a,s) => a+s.cantidad,0);
+        return { ...i, stockActual: total };
+    }).filter(x => x.stockMin > 0 && x.stockActual < x.stockMin)
+      .sort((a,b) => (a.stockActual/a.stockMin) - (b.stockActual/b.stockMin));
+    const tbc = $('dash-tbl-critico');
+    if (tbc) tbc.innerHTML = crit.length ? crit.slice(0,10).map(x => `<tr>
+        <td class="text-mono">${x.sku}</td>
+        <td>${x.descripcion}</td>
+        <td style="color:var(--danger);font-weight:600">${fmtNum(x.stockActual)} ${x.unidad}</td>
+        <td>${fmtNum(x.stockMin)} ${x.unidad}</td>
+        <td><span class="badge badge-danger">Bajo mínimo</span></td>
+    </tr>`).join('') : '<tr class="empty-row"><td colspan="5">Todo por sobre mínimo ✓</td></tr>';
+    // OTs abiertas
+    const ots = Object.values(data.ordenes||{}).filter(o => o.estado === 'Emitida').sort((a,b) => new Date(b.fechaEmision) - new Date(a.fechaEmision)).slice(0,10);
+    const tbo = $('dash-tbl-ots');
+    if (tbo) tbo.innerHTML = ots.length ? ots.map(o => `<tr>
+        <td class="text-mono" style="color:var(--accent2)"><strong>${o.numero}</strong></td>
+        <td>${o.tipo}</td>
+        <td>${o.skuProducto} — ${o.descripcionProducto||''}</td>
+        <td class="text-mono">${o.lote}</td>
+        <td class="text-mono" style="font-size:11px">${fmtDateTime(o.fechaEmision)}</td>
+        <td style="font-size:11px;color:var(--text3)">${o.usuario||''}</td>
+    </tr>`).join('') : '<tr class="empty-row"><td colspan="6">Sin OTs abiertas</td></tr>';
+    // Chart consumo mensual (últimos 6 meses)
+    const now = new Date(); const buckets = [];
+    for (let i = 5; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        buckets.push({ label: d.toLocaleDateString('es-CL', { month: 'short', year: '2-digit' }), y: d.getFullYear(), m: d.getMonth(), total: 0 });
+    }
+    Object.values(data.movimientos || {}).forEach(m => {
+        if (m.tipo !== 'ConsumoOT') return;
+        const d = new Date(m.fecha);
+        buckets.forEach(b => { if (d.getFullYear() === b.y && d.getMonth() === b.m) b.total += (parseFloat(m.cantidad)||0); });
+    });
+    const ctx = $('dashChartConsumo')?.getContext('2d'); if (!ctx) return;
+    if (_dashChart) _dashChart.destroy();
+    _dashChart = new Chart(ctx, {
+        type: 'bar',
+        data: { labels: buckets.map(b => b.label), datasets: [{ label: 'Consumo total (unidades sumadas)', data: buckets.map(b => b.total), backgroundColor: 'rgba(8,84,160,.7)' }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+    });
+}
+
+// ══════════════════════════════════════════════════════════════
+//  9) REPORTES
+// ══════════════════════════════════════════════════════════════
+function rptConsumo() {
+    const desde = $('rptDesde').value; const hasta = $('rptHasta').value; const insumo = $('rptInsumo').value;
+    let rows = Object.values(data.movimientos || {}).filter(m => m.tipo === 'ConsumoOT');
+    if (desde)  rows = rows.filter(m => (m.fecha||'').slice(0,10) >= desde);
+    if (hasta)  rows = rows.filter(m => (m.fecha||'').slice(0,10) <= hasta);
+    if (insumo) rows = rows.filter(m => m.sku === insumo);
+    const agg = {};
+    rows.forEach(m => {
+        if (!agg[m.sku]) agg[m.sku] = { sku: m.sku, descripcion: data.insumos[m.sku]?.descripcion || m.descripcion, unidad: m.unidad || '', total: 0, ots: new Set() };
+        agg[m.sku].total += parseFloat(m.cantidad) || 0;
+        if (m.otId) agg[m.sku].ots.add(m.otId);
+    });
+    const tb = $('rpt-tbl-consumo');
+    const list = Object.values(agg).sort((a,b) => b.total - a.total);
+    tb.innerHTML = list.length
+        ? list.map(x => `<tr><td class="text-mono">${x.sku}</td><td>${x.descripcion||'—'}</td><td><strong>${fmtNum(x.total)} ${x.unidad}</strong></td><td>${x.ots.size}</td></tr>`).join('')
+        : '<tr class="empty-row"><td colspan="4">Sin consumos en el rango</td></tr>';
+    tb._data = list;
+}
+function rptConsumoExportCSV() {
+    const list = $('rpt-tbl-consumo')._data || [];
+    if (!list.length) { alert('Ejecute el reporte primero'); return; }
+    const csv = 'SKU,Descripcion,Consumo,Unidad,OTs\n' +
+        list.map(x => [x.sku, JSON.stringify(x.descripcion||''), x.total, x.unidad, x.ots.size].join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob); const a = document.createElement('a');
+    a.href = url; a.download = 'consumo-insumos.csv'; a.click(); URL.revokeObjectURL(url);
+}
+function rptTraza() {
+    const lote = ($('rptLote').value || '').trim(); const c = $('rpt-traza-result');
+    if (!lote) { c.innerHTML = '<div class="alert-banner warning" style="margin-top:8px"><div class="alert-banner-text">Ingrese un N° de lote</div></div>'; return; }
+    // OTs que produjeron ese lote
+    const ots = Object.values(data.ordenes || {}).filter(o => o.lote === lote);
+    // Movimientos donde el lote es el fabricado O el lote MP consumido
+    const movs = Object.values(data.movimientos || {}).filter(m => m.lote === lote || m.loteFabricado === lote);
+    let html = '';
+    if (ots.length) {
+        html += '<div class="card"><div class="card-header"><div><div class="card-title">Órdenes de trabajo que produjeron este lote</div></div></div>';
+        html += '<div class="table-wrap"><table><thead><tr><th>N° OT</th><th>Tipo</th><th>Producto</th><th>Volumen</th><th>Estado</th></tr></thead><tbody>';
+        html += ots.map(o => `<tr><td class="text-mono" style="color:var(--accent2)"><strong>${o.numero}</strong></td><td>${o.tipo}</td><td>${o.skuProducto}</td><td>${fmtNum(o.volumen)} ${o.unidadBase||''}</td><td>${o.estado}</td></tr>`).join('');
+        html += '</tbody></table></div></div>';
+    }
+    if (movs.length) {
+        html += '<div class="card"><div class="card-header"><div><div class="card-title">Movimientos asociados al lote</div></div></div>';
+        html += '<div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Tipo</th><th>SKU</th><th>Cant.</th><th>Bodega</th><th>Observación</th></tr></thead><tbody>';
+        html += movs.sort((a,b) => new Date(a.fecha)-new Date(b.fecha)).map(m => `<tr><td class="text-mono" style="font-size:11px">${fmtDateTime(m.fecha)}</td><td>${m.tipo}</td><td class="text-mono">${m.sku}</td><td>${fmtNum(m.cantidad)} ${m.unidad||''}</td><td>${m.bodega||'—'}</td><td>${m.observaciones||'—'}</td></tr>`).join('');
+        html += '</tbody></table></div></div>';
+    }
+    if (!html) html = '<div class="alert-banner info" style="margin-top:8px"><div class="alert-banner-text">Sin resultados para ese lote</div></div>';
+    c.innerHTML = html;
+}
+
+// ══════════════════════════════════════════════════════════════
+// 10) AUDITORÍA
+// ══════════════════════════════════════════════════════════════
+function renderAuditoria() {
+    const tb = $('tAuditoria'); if (!tb) return;
+    const f  = ($('fAud')?.value || '').toLowerCase();
+    const fd = $('fAudDesde')?.value || '';
+    const fh = $('fAudHasta')?.value || '';
+    let rows = Object.values(data.auditoria || {});
+    if (fd) rows = rows.filter(r => (r.fecha||'').slice(0,10) >= fd);
+    if (fh) rows = rows.filter(r => (r.fecha||'').slice(0,10) <= fh);
+    if (f)  rows = rows.filter(r => JSON.stringify(r).toLowerCase().includes(f));
+    rows.sort((a,b) => new Date(b.fecha) - new Date(a.fecha));
+    if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="6">Sin registros</td></tr>'; return; }
+    tb.innerHTML = rows.slice(0, 300).map(r => `<tr>
+        <td class="text-mono" style="font-size:11px">${fmtDateTime(r.fecha)}</td>
+        <td><strong>${r.accion||''}</strong></td>
+        <td>${r.modulo||''}</td>
+        <td class="text-mono" style="font-size:11px">${r.referencia||''}</td>
+        <td style="max-width:340px">${r.detalle||''}</td>
+        <td style="font-size:11px;color:var(--text3)">${r.usuario||''}</td>
+    </tr>`).join('');
+}
+
+// ══════════════════════════════════════════════════════════════
+// 11) SELECTORES QUE SE POBLAN CENTRALIZADOS
+// ══════════════════════════════════════════════════════════════
+function populateSelectores() {
+    // Filtros de bodega en Stock
+    const fStkBod = $('fStkBodega');
+    if (fStkBod) {
+        const cur = fStkBod.value;
+        fStkBod.innerHTML = '<option value="">Todas las bodegas</option>' + Object.values(data.bodegas||{}).map(b => `<option value="${b.nombre}">${b.nombre}</option>`).join('');
+        if (cur) fStkBod.value = cur;
+    }
+    // Filtro de insumos en reportes
+    const rInsSel = $('rptInsumo');
+    if (rInsSel) {
+        const cur = rInsSel.value;
+        rInsSel.innerHTML = '<option value="">Todos los insumos</option>' + Object.values(data.insumos||{}).map(i => `<option value="${i.sku}">${i.sku} — ${i.descripcion}</option>`).join('');
+        if (cur) rInsSel.value = cur;
+    }
+}
 
 </script>
 </body>
