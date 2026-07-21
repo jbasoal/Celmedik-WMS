@@ -193,6 +193,25 @@
     </div>
 </div>
 
+<!-- ═════════════════════ SIN ACCESO ═════════════════════ -->
+<div id="noAccessScreen" class="login-screen" style="display:none">
+    <div class="login-box">
+        <div class="login-title" style="color:var(--danger)">Sin acceso a OT Biodial</div>
+        <div class="login-subtitle" style="margin-bottom:14px">Su cuenta aún no tiene un perfil asignado en esta aplicación.</div>
+        <div class="alert-banner info" style="margin-bottom:16px">
+            <div class="alert-banner-icon">ℹ</div>
+            <div>
+                <div class="alert-banner-title">Sesión activa</div>
+                <div class="alert-banner-text">Está identificado como <strong id="noAccess-email">—</strong>. El Maestro de OT Biodial debe asignarle un perfil (Maestro, Jefatura o Visualizador) en la sección <em>Usuarios / Perfiles</em>.</div>
+            </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+            <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="doLogout()">Cerrar sesión y entrar con otra cuenta</button>
+            <a href="/" class="btn btn-ghost" style="width:100%;justify-content:center">↑ Ir al WMS Celmedik</a>
+        </div>
+    </div>
+</div>
+
 <!-- ═════════════════════ APP SHELL ═════════════════════ -->
 <div id="appShell" class="app-shell" style="display:none">
     <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
@@ -1040,27 +1059,46 @@ auth.onAuthStateChanged(async (u) => {
         currentUser = null; rootUid = null; userPerfil = null;
         $('loginScreen').style.display = 'flex';
         $('appShell').style.display = 'none';
+        $('noAccessScreen').style.display = 'none';
         return;
     }
     currentUser = { uid: u.uid, email: u.email };
     // rootUid = uid del maestro dueño (patrón WMS)
+    let info = {};
     try {
-        const info = (await db.ref(`usuarios/${u.uid}`).once('value')).val() || {};
+        info = (await db.ref(`usuarios/${u.uid}`).once('value')).val() || {};
         rootUid = info.maestroUid || u.uid;
-        userPerfil = info.otBiodialPerfil || (u.uid === rootUid ? 'Maestro' : null);
-    } catch (e) { rootUid = u.uid; userPerfil = 'Maestro'; }
+    } catch (e) { rootUid = u.uid; }
+    // Perfil: si ya está guardado, lo respetamos. Si el usuario es dueño de
+    // los datos (u.uid === rootUid) y aún no tiene perfil, lo persistimos como
+    // Maestro — así queda estable a través de sesiones y visible al resto del
+    // equipo en Usuarios/Perfiles.
+    userPerfil = info.otBiodialPerfil || null;
+    if (!userPerfil && u.uid === rootUid) {
+        userPerfil = 'Maestro';
+        try {
+            await db.ref(`usuarios/${u.uid}`).update({
+                otBiodialPerfil: 'Maestro',
+                otBiodialPerfilAt: new Date().toISOString()
+            });
+        } catch (e) { console.warn('No se pudo persistir Maestro:', e); }
+    }
+    // Sin perfil → pantalla dedicada de "sin acceso" (evita el logout ciego)
+    if (!userPerfil) {
+        $('loginScreen').style.display = 'none';
+        $('appShell').style.display = 'none';
+        $('noAccessScreen').style.display = 'flex';
+        $('noAccess-email').textContent = currentUser.email;
+        return;
+    }
     // Mostrar app
     $('loginScreen').style.display = 'none';
+    $('noAccessScreen').style.display = 'none';
     $('appShell').style.display = 'grid';
     $('topUserEmail').innerHTML = `<strong>${currentUser.email}</strong>`;
     const badge = $('topPerfilBadge');
-    if (userPerfil) { badge.textContent = userPerfil; badge.className = 'topbar-perfil-badge perfil-' + userPerfil; }
-    else { badge.textContent = 'Sin acceso'; badge.className = 'topbar-perfil-badge perfil-Visualizador'; }
+    badge.textContent = userPerfil; badge.className = 'topbar-perfil-badge perfil-' + userPerfil;
     applyRoleVisibility();
-    if (!userPerfil) {
-        alert('Su cuenta aún no tiene un perfil asignado en OT-Biodial. Solicite al Maestro que le asigne uno.');
-        doLogout(); return;
-    }
     startListeners();
     showPage('dashboard');
 });
