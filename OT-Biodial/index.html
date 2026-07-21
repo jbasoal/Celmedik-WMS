@@ -1,0 +1,1294 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OT Biodial — Fabricación de Soluciones Concentradas</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+    <style>
+        :root {
+            --bg: #F5F5F5;
+            --bg2: #EFEFEF;
+            --bg3: #E8E8E8;
+            --card: #FFFFFF;
+            --border: #D0D0D0;
+            --text: #212121;
+            --text2: #515151;
+            --text3: #7C7C7C;
+            --accent: #0854A0;
+            --accent2: #0A6ED1;
+            --success: #107E3E;
+            --warning: #B25E00;
+            --danger: #BB0000;
+            --gray: #6A6D70;
+            --radius: 6px;
+            --mono: 'JetBrains Mono', ui-monospace, monospace;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+        button, input, select, textarea { font-family: inherit; font-size: 14px; }
+        a { color: var(--accent2); text-decoration: none; }
+
+        /* ── LOGIN ── */
+        .login-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg,#0854A0 0%,#0A6ED1 100%); padding: 20px; }
+        .login-box { background: #fff; border-radius: 10px; padding: 32px; width: 100%; max-width: 400px; box-shadow: 0 10px 40px rgba(0,0,0,.15); }
+        .login-title { font-size: 20px; font-weight: 700; margin-bottom: 4px; color: var(--accent); }
+        .login-subtitle { color: var(--text3); font-size: 13px; margin-bottom: 24px; }
+        .login-form-group { margin-bottom: 14px; }
+        .login-form-group label { display: block; font-size: 12px; font-weight: 600; color: var(--text2); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .5px; }
+
+        /* ── LAYOUT ── */
+        .app-shell { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
+        .sidebar { background: #12354D; color: #DDE7EF; padding: 16px 0; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+        .sidebar-title { font-size: 14px; font-weight: 700; padding: 4px 20px 16px; border-bottom: 1px solid rgba(255,255,255,.1); margin-bottom: 12px; color: #fff; }
+        .sidebar-title small { display: block; font-weight: 400; color: #A6C1D6; font-size: 11px; margin-top: 3px; letter-spacing: .3px; }
+        .sidebar-section { padding: 12px 20px 4px; font-size: 10.5px; font-weight: 600; color: #7BA4C1; text-transform: uppercase; letter-spacing: 1px; }
+        .sidebar a { display: flex; align-items: center; gap: 10px; padding: 8px 20px; color: #DDE7EF; font-size: 13px; cursor: pointer; border-left: 3px solid transparent; }
+        .sidebar a:hover { background: rgba(255,255,255,.06); }
+        .sidebar a.active { background: rgba(255,255,255,.1); border-left-color: var(--accent2); color: #fff; font-weight: 600; }
+        .sidebar a .ico { width: 18px; text-align: center; }
+
+        .topbar { background: #fff; border-bottom: 1px solid var(--border); padding: 10px 24px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 40; }
+        .topbar-user { font-size: 12px; color: var(--text2); }
+        .topbar-user strong { color: var(--text); }
+        .topbar-perfil-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; margin-left: 8px; }
+        .perfil-Maestro       { background: #E7F0FA; color: #0854A0; }
+        .perfil-Jefatura      { background: #EAF5EA; color: #107E3E; }
+        .perfil-Visualizador  { background: #F0F0F0; color: #515151; }
+
+        .main-wrap { padding: 20px 24px 40px; }
+        .page { display: none; }
+        .page.active { display: block; }
+        .page-header { margin-bottom: 16px; }
+        .page-title { font-size: 20px; font-weight: 700; color: var(--text); }
+        .page-subtitle { color: var(--text3); font-size: 13px; margin-top: 2px; }
+
+        /* ── CARDS ── */
+        .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 14px; }
+        .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; flex-wrap: wrap; gap: 12px; }
+        .card-title { font-size: 15px; font-weight: 600; }
+        .card-subtitle { color: var(--text3); font-size: 12px; margin-top: 2px; }
+
+        .stat-row { display: grid; grid-template-columns: repeat(auto-fill,minmax(180px,1fr)); gap: 12px; margin-bottom: 16px; }
+        .stat-box { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+        .stat-label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: .5px; font-weight: 600; }
+        .stat-value { font-size: 22px; font-weight: 700; color: var(--text); margin-top: 4px; }
+        .stat-sub { font-size: 11px; color: var(--text3); margin-top: 2px; }
+
+        /* ── BUTTONS ── */
+        .btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border: 1px solid var(--border); background: #fff; color: var(--text); border-radius: var(--radius); cursor: pointer; font-weight: 500; transition: background .1s; }
+        .btn:hover { background: var(--bg2); }
+        .btn:disabled { opacity: .5; cursor: not-allowed; }
+        .btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+        .btn-primary:hover { background: var(--accent2); }
+        .btn-success { background: var(--success); color: #fff; border-color: var(--success); }
+        .btn-danger  { background: var(--danger);  color: #fff; border-color: var(--danger); }
+        .btn-warning { background: var(--warning); color: #fff; border-color: var(--warning); }
+        .btn-ghost   { background: transparent; }
+        .btn-sm { padding: 4px 10px; font-size: 12px; }
+        .btn-icon { padding: 4px 8px; font-size: 12px; }
+        .btn-row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; flex-wrap: wrap; }
+
+        /* ── FORMS ── */
+        .form-row { display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+        .form-group { flex: 1; min-width: 180px; }
+        .form-label { display: block; font-size: 12px; font-weight: 600; color: var(--text2); margin-bottom: 4px; }
+        .form-input, .form-select, .form-textarea { width: 100%; padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius); background: #fff; color: var(--text); }
+        .form-input:focus, .form-select:focus, .form-textarea:focus { outline: none; border-color: var(--accent2); box-shadow: 0 0 0 3px rgba(10,110,209,.15); }
+        .form-textarea { min-height: 60px; resize: vertical; }
+        .form-error-banner { display: none; background: rgba(187,0,0,.1); border: 1px solid rgba(187,0,0,.3); color: var(--danger); padding: 8px 12px; border-radius: var(--radius); margin-bottom: 10px; font-size: 13px; }
+        .no-spinner::-webkit-inner-spin-button,.no-spinner::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+        .no-spinner{-moz-appearance:textfield}
+
+        /* ── TABLES ── */
+        .table-wrap { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        thead { background: var(--bg2); }
+        th { padding: 8px 10px; text-align: left; font-weight: 600; font-size: 11.5px; color: var(--text2); text-transform: uppercase; letter-spacing: .3px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+        td { padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+        tbody tr:hover { background: var(--bg2); }
+        tr.empty-row td { text-align: center; color: var(--text3); padding: 24px; font-style: italic; }
+        .text-mono { font-family: var(--mono); }
+        .text-muted { color: var(--text3); }
+        .text-right { text-align: right; }
+
+        /* ── BADGES ── */
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; }
+        .badge-success  { background: #EAF5EA; color: #107E3E; }
+        .badge-warning  { background: #FDF3E7; color: #B25E00; }
+        .badge-danger   { background: #FBE7E7; color: #BB0000; }
+        .badge-gray     { background: #F0F0F0; color: #515151; }
+        .badge-info     { background: #E7F0FA; color: #0854A0; }
+
+        /* ── MODAL ── */
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 50; align-items: flex-start; justify-content: center; padding: 40px 20px; overflow-y: auto; }
+        .modal.open { display: flex; }
+        .modal-box { background: #fff; border-radius: 10px; max-width: 720px; width: 100%; padding: 24px; }
+        .modal-box.wide { max-width: 960px; }
+        .modal-box.narrow { max-width: 480px; }
+        .modal-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+        .modal-title { font-size: 17px; font-weight: 700; }
+        .modal-subtitle { color: var(--text3); font-size: 12px; margin-top: 2px; }
+        .modal-close { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text3); }
+        .modal-close:hover { color: var(--danger); }
+
+        /* ── FILTER BAR ── */
+        .filter-bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+        .filter-bar .form-input, .filter-bar .form-select { width: auto; }
+
+        /* ── ALERT BANNERS ── */
+        .alert-banner { display: flex; gap: 10px; align-items: flex-start; padding: 10px 14px; border-radius: var(--radius); }
+        .alert-banner-icon { font-size: 16px; }
+        .alert-banner-title { font-weight: 600; font-size: 13px; }
+        .alert-banner-text { font-size: 12.5px; }
+        .alert-banner.success { background: rgba(16,126,62,.08); border: 1px solid rgba(16,126,62,.3); color: var(--success); }
+        .alert-banner.warning { background: rgba(178,94,0,.08);  border: 1px solid rgba(178,94,0,.3);  color: var(--warning); }
+        .alert-banner.danger  { background: rgba(187,0,0,.08);   border: 1px solid rgba(187,0,0,.3);   color: var(--danger); }
+        .alert-banner.info    { background: rgba(8,84,160,.08);  border: 1px solid rgba(8,84,160,.3);  color: var(--accent); }
+
+        /* ── PDF preview / print helpers ── */
+        .noprint { }
+        @media print { .noprint { display: none !important; } }
+
+        /* ── SIDEBAR responsive ── */
+        @media (max-width: 900px) {
+            .app-shell { grid-template-columns: 1fr; }
+            .sidebar { position: fixed; left: -260px; top: 0; height: 100vh; width: 260px; transition: left .25s; z-index: 60; }
+            .sidebar.open { left: 0; }
+            .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 55; }
+            .sidebar-overlay.visible { display: block; }
+        }
+        .hamburger { display: none; background: none; border: none; font-size: 20px; cursor: pointer; }
+        @media (max-width: 900px) { .hamburger { display: block; } }
+    </style>
+</head>
+<body>
+
+<!-- ═════════════════════ LOGIN ═════════════════════ -->
+<div id="loginScreen" class="login-screen">
+    <div class="login-box">
+        <div class="login-title">OT Biodial</div>
+        <div class="login-subtitle">Fabricación y Envasado de Soluciones Concentradas de Diálisis</div>
+        <form onsubmit="doLogin(event)">
+            <div id="loginErr" class="form-error-banner"></div>
+            <div class="login-form-group">
+                <label>Correo electrónico</label>
+                <input type="email" class="form-input" id="lg-email" required autofocus>
+            </div>
+            <div class="login-form-group">
+                <label>Contraseña</label>
+                <input type="password" class="form-input" id="lg-pass" required>
+            </div>
+            <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center" id="btn-login">Ingresar</button>
+        </form>
+        <div style="margin-top:14px;text-align:center;font-size:12px;color:var(--text3)">
+            <a href="/" style="color:var(--accent2)">↑ Ir al WMS Celmedik</a>
+        </div>
+    </div>
+</div>
+
+<!-- ═════════════════════ APP SHELL ═════════════════════ -->
+<div id="appShell" class="app-shell" style="display:none">
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-title">OT Biodial<small>Fabricación · Envasado</small></div>
+
+        <div class="sidebar-section">General</div>
+        <a data-page="dashboard" onclick="showPage('dashboard')"><span class="ico">📊</span> Dashboard</a>
+
+        <div class="sidebar-section">Inventario</div>
+        <a data-page="insumos"      onclick="showPage('insumos')"><span class="ico">🧪</span> Insumos</a>
+        <a data-page="bodegas"      onclick="showPage('bodegas')"><span class="ico">🏢</span> Bodegas</a>
+        <a data-page="stock"        onclick="showPage('stock')"><span class="ico">📦</span> Stock Actual</a>
+        <a data-page="movimientos"  onclick="showPage('movimientos')"><span class="ico">🔄</span> Movimientos</a>
+
+        <div class="sidebar-section">Producción</div>
+        <a data-page="formulas"       onclick="showPage('formulas')"><span class="ico">📋</span> Fórmulas</a>
+        <a data-page="otFabricacion"  onclick="showPage('otFabricacion')"><span class="ico">🏭</span> OT Fabricación</a>
+        <a data-page="otEnvasado"     onclick="showPage('otEnvasado')"><span class="ico">📦</span> OT Envasado</a>
+
+        <div class="sidebar-section">Control</div>
+        <a data-page="reportes"   onclick="showPage('reportes')"><span class="ico">📈</span> Reportes</a>
+        <a data-page="auditoria"  onclick="showPage('auditoria')"><span class="ico">🛡️</span> Auditoría</a>
+        <a data-page="usuarios" class="only-maestro"    onclick="showPage('usuarios')"><span class="ico">👥</span> Usuarios / Perfiles</a>
+    </aside>
+
+    <div>
+        <div class="topbar">
+            <div style="display:flex;align-items:center;gap:12px">
+                <button class="hamburger" onclick="toggleSidebar()">☰</button>
+                <div id="pageTitleTop" style="font-weight:600"></div>
+            </div>
+            <div class="topbar-user">
+                <span id="topUserEmail">—</span>
+                <span id="topPerfilBadge" class="topbar-perfil-badge"></span>
+                <button class="btn btn-sm btn-ghost" onclick="doLogout()" style="margin-left:10px">Salir</button>
+            </div>
+        </div>
+
+        <main class="main-wrap">
+
+            <!-- ── DASHBOARD ── -->
+            <div id="page-dashboard" class="page active">
+                <div class="page-header">
+                    <div class="page-title">Dashboard</div>
+                    <div class="page-subtitle">Resumen operativo — stock crítico, OTs abiertas, consumo mensual</div>
+                </div>
+                <div id="dash-stats" class="stat-row"></div>
+                <div class="card">
+                    <div class="card-header"><div><div class="card-title">Consumo por mes (últimos 6 meses)</div></div></div>
+                    <div style="height:260px"><canvas id="dashChartConsumo"></canvas></div>
+                </div>
+                <div class="card">
+                    <div class="card-header"><div><div class="card-title">Insumos bajo stock mínimo</div></div></div>
+                    <div class="table-wrap"><table>
+                        <thead><tr><th>SKU</th><th>Descripción</th><th>Stock actual</th><th>Stock mínimo</th><th>Estado</th></tr></thead>
+                        <tbody id="dash-tbl-critico"><tr class="empty-row"><td colspan="5">Cargando…</td></tr></tbody>
+                    </table></div>
+                </div>
+                <div class="card">
+                    <div class="card-header"><div><div class="card-title">Órdenes de trabajo abiertas</div></div></div>
+                    <div class="table-wrap"><table>
+                        <thead><tr><th>N°</th><th>Tipo</th><th>Producto</th><th>Lote</th><th>Emitida</th><th>Usuario</th></tr></thead>
+                        <tbody id="dash-tbl-ots"><tr class="empty-row"><td colspan="6">—</td></tr></tbody>
+                    </table></div>
+                </div>
+            </div>
+
+            <!-- ── INSUMOS ── -->
+            <div id="page-insumos" class="page">
+                <div class="page-header">
+                    <div class="page-title">Insumos</div>
+                    <div class="page-subtitle">Maestro de materias primas, envases, cajas y otros</div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <div><div class="card-title">Listado</div><div class="card-subtitle" id="insumos-count">0 insumos</div></div>
+                        <div>
+                            <button class="btn btn-primary btn-sm only-maestro" onclick="openInsumoModal()">+ Nuevo insumo</button>
+                        </div>
+                    </div>
+                    <div class="filter-bar">
+                        <input type="text" class="form-input" id="fIns" placeholder="Buscar SKU o descripción…" oninput="renderInsumos()" style="min-width:240px">
+                        <select class="form-select" id="fInsCat" onchange="renderInsumos()">
+                            <option value="">Todas las categorías</option>
+                            <option value="Materia Prima">Materia Prima</option>
+                            <option value="Envase">Envase</option>
+                            <option value="Caja">Caja</option>
+                            <option value="Etiqueta">Etiqueta</option>
+                            <option value="Otro">Otro</option>
+                        </select>
+                    </div>
+                    <div class="table-wrap"><table>
+                        <thead><tr><th>SKU</th><th>Descripción</th><th>Categoría</th><th>Unidad</th><th>Stock mín.</th><th>Stock actual</th><th></th></tr></thead>
+                        <tbody id="tInsumos"><tr class="empty-row"><td colspan="7">No hay insumos</td></tr></tbody>
+                    </table></div>
+                </div>
+            </div>
+
+            <!-- ── BODEGAS ── -->
+            <div id="page-bodegas" class="page">
+                <div class="page-header">
+                    <div class="page-title">Bodegas</div>
+                    <div class="page-subtitle">Áreas de almacenamiento de insumos</div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <div><div class="card-title">Listado</div></div>
+                        <div>
+                            <button class="btn btn-primary btn-sm only-maestro" onclick="openBodegaModal()">+ Nueva bodega</button>
+                        </div>
+                    </div>
+                    <div class="table-wrap"><table>
+                        <thead><tr><th>Nombre</th><th>Tipo</th><th>Ubicación</th><th></th></tr></thead>
+                        <tbody id="tBodegas"><tr class="empty-row"><td colspan="4">No hay bodegas</td></tr></tbody>
+                    </table></div>
+                </div>
+            </div>
+
+            <!-- ── STOCK ── -->
+            <div id="page-stock" class="page">
+                <div class="page-header">
+                    <div class="page-title">Stock Actual</div>
+                    <div class="page-subtitle">Vista por insumo · lote · ubicación · estado</div>
+                </div>
+                <div class="card">
+                    <div class="filter-bar">
+                        <input type="text" class="form-input" id="fStk" placeholder="Buscar SKU / lote / bodega…" oninput="renderStock()" style="min-width:240px">
+                        <select class="form-select" id="fStkBodega" onchange="renderStock()"><option value="">Todas las bodegas</option></select>
+                        <select class="form-select" id="fStkStatus" onchange="renderStock()">
+                            <option value="">Todos los estados</option>
+                            <option value="Aprobado">Aprobado</option>
+                            <option value="Cuarentena">Cuarentena</option>
+                            <option value="Rechazado">Rechazado</option>
+                            <option value="Vencido">Vencido</option>
+                        </select>
+                    </div>
+                    <div class="table-wrap"><table>
+                        <thead><tr><th>SKU</th><th>Descripción</th><th>Lote</th><th>Vence</th><th>Bodega</th><th>Ubicación</th><th>Cantidad</th><th>Estado</th></tr></thead>
+                        <tbody id="tStock"><tr class="empty-row"><td colspan="8">No hay stock</td></tr></tbody>
+                    </table></div>
+                </div>
+            </div>
+
+            <!-- ── MOVIMIENTOS ── -->
+            <div id="page-movimientos" class="page">
+                <div class="page-header">
+                    <div class="page-title">Movimientos</div>
+                    <div class="page-subtitle">Entradas, ajustes de status, destrucciones y consumos por OT</div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <div><div class="card-title">Historial</div></div>
+                        <div style="display:flex;gap:8px;flex-wrap:wrap">
+                            <button class="btn btn-primary btn-sm not-visualizador" onclick="openMovModal('Entrada')">+ Entrada</button>
+                            <button class="btn btn-sm not-visualizador" onclick="openMovModal('Ajuste')">± Cambio de Status</button>
+                            <button class="btn btn-danger btn-sm not-visualizador" onclick="openMovModal('Destrucción')">🗑 Destrucción</button>
+                        </div>
+                    </div>
+                    <div class="filter-bar">
+                        <select class="form-select" id="fMovTipo" onchange="renderMovimientos()">
+                            <option value="">Todos los tipos</option>
+                            <option value="Entrada">Entrada</option>
+                            <option value="Ajuste">Cambio de Status</option>
+                            <option value="Destrucción">Destrucción</option>
+                            <option value="ConsumoOT">Consumo OT</option>
+                        </select>
+                        <input type="text" class="form-input" id="fMovSku" placeholder="SKU…" oninput="renderMovimientos()">
+                        <input type="text" class="form-input" id="fMovLote" placeholder="Lote…" oninput="renderMovimientos()">
+                        <input type="date" class="form-input" id="fMovDesde" onchange="renderMovimientos()" title="Desde">
+                        <input type="date" class="form-input" id="fMovHasta" onchange="renderMovimientos()" title="Hasta">
+                    </div>
+                    <div class="table-wrap"><table>
+                        <thead><tr><th>Fecha</th><th>Tipo</th><th>SKU</th><th>Descripción</th><th>Lote</th><th>Vence</th><th>Qty</th><th>Bodega</th><th>Ubicación</th><th>Estado</th><th>Usuario</th><th>Obs.</th><th>PDF</th><th>Adj.</th></tr></thead>
+                        <tbody id="tMovimientos"><tr class="empty-row"><td colspan="14">No hay movimientos</td></tr></tbody>
+                    </table></div>
+                </div>
+            </div>
+
+            <!-- ── FORMULAS ── -->
+            <div id="page-formulas" class="page">
+                <div class="page-header">
+                    <div class="page-title">Fórmulas</div>
+                    <div class="page-subtitle">Definición de fórmulas base (por lote estándar) y pasos de proceso</div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <div><div class="card-title">Fórmulas registradas</div><div class="card-subtitle" id="formulas-count">0</div></div>
+                        <div>
+                            <button class="btn btn-primary btn-sm only-maestro" onclick="openFormulaModal()">+ Nueva fórmula</button>
+                        </div>
+                    </div>
+                    <div class="filter-bar">
+                        <input type="text" class="form-input" id="fForm" placeholder="Buscar SKU o descripción…" oninput="renderFormulas()" style="min-width:240px">
+                        <select class="form-select" id="fFormTipo" onchange="renderFormulas()">
+                            <option value="">Fabricación + Envasado</option>
+                            <option value="Fabricacion">Fabricación</option>
+                            <option value="Envasado">Envasado</option>
+                        </select>
+                    </div>
+                    <div class="table-wrap"><table>
+                        <thead><tr><th>SKU</th><th>Descripción</th><th>Tipo</th><th>Volumen base</th><th>Insumos</th><th>Pasos</th><th>Versión</th><th></th></tr></thead>
+                        <tbody id="tFormulas"><tr class="empty-row"><td colspan="8">No hay fórmulas registradas</td></tr></tbody>
+                    </table></div>
+                </div>
+            </div>
+
+            <!-- ── OT FABRICACION ── -->
+            <div id="page-otFabricacion" class="page">
+                <div class="page-header">
+                    <div class="page-title">Órdenes de Trabajo — Fabricación</div>
+                    <div class="page-subtitle">Emisión y seguimiento de OT-F</div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <div><div class="card-title">OTs de Fabricación</div><div class="card-subtitle" id="otf-count">0</div></div>
+                        <div>
+                            <button class="btn btn-primary btn-sm not-visualizador" onclick="openOTModal('Fabricacion')">+ Emitir OT-F</button>
+                        </div>
+                    </div>
+                    <div class="filter-bar">
+                        <select class="form-select" id="fOtfEstado" onchange="renderOTs('Fabricacion')">
+                            <option value="">Todos los estados</option>
+                            <option value="Emitida">Emitida</option>
+                            <option value="Cerrada">Cerrada</option>
+                            <option value="Cancelada">Cancelada</option>
+                        </select>
+                        <input type="text" class="form-input" id="fOtfNum" placeholder="N° OT…" oninput="renderOTs('Fabricacion')">
+                        <input type="text" class="form-input" id="fOtfLote" placeholder="Lote…" oninput="renderOTs('Fabricacion')">
+                    </div>
+                    <div class="table-wrap"><table>
+                        <thead><tr><th>N° OT</th><th>Fecha emisión</th><th>Producto</th><th>Volumen</th><th>Lote</th><th>Estado</th><th>Usuario</th><th>PDF</th><th>Adj.</th><th></th></tr></thead>
+                        <tbody id="tOTF"><tr class="empty-row"><td colspan="10">No hay OTs de fabricación</td></tr></tbody>
+                    </table></div>
+                </div>
+            </div>
+
+            <!-- ── OT ENVASADO ── -->
+            <div id="page-otEnvasado" class="page">
+                <div class="page-header">
+                    <div class="page-title">Órdenes de Trabajo — Envasado</div>
+                    <div class="page-subtitle">Emisión y seguimiento de OT-E (envasado y empaque)</div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <div><div class="card-title">OTs de Envasado</div><div class="card-subtitle" id="ote-count">0</div></div>
+                        <div>
+                            <button class="btn btn-primary btn-sm not-visualizador" onclick="openOTModal('Envasado')">+ Emitir OT-E</button>
+                        </div>
+                    </div>
+                    <div class="filter-bar">
+                        <select class="form-select" id="fOteEstado" onchange="renderOTs('Envasado')">
+                            <option value="">Todos los estados</option>
+                            <option value="Emitida">Emitida</option>
+                            <option value="Cerrada">Cerrada</option>
+                            <option value="Cancelada">Cancelada</option>
+                        </select>
+                        <input type="text" class="form-input" id="fOteNum" placeholder="N° OT…" oninput="renderOTs('Envasado')">
+                        <input type="text" class="form-input" id="fOteLote" placeholder="Lote…" oninput="renderOTs('Envasado')">
+                    </div>
+                    <div class="table-wrap"><table>
+                        <thead><tr><th>N° OT</th><th>Fecha emisión</th><th>Producto</th><th>Unidades</th><th>Lote</th><th>Estado</th><th>Usuario</th><th>PDF</th><th>Adj.</th><th></th></tr></thead>
+                        <tbody id="tOTE"><tr class="empty-row"><td colspan="10">No hay OTs de envasado</td></tr></tbody>
+                    </table></div>
+                </div>
+            </div>
+
+            <!-- ── REPORTES ── -->
+            <div id="page-reportes" class="page">
+                <div class="page-header">
+                    <div class="page-title">Reportes</div>
+                    <div class="page-subtitle">Consumo por período · trazabilidad por lote · OTs cerradas</div>
+                </div>
+                <div class="card">
+                    <div class="card-header"><div><div class="card-title">Consumo de insumos por período</div></div></div>
+                    <div class="filter-bar">
+                        <input type="date" class="form-input" id="rptDesde" title="Desde">
+                        <input type="date" class="form-input" id="rptHasta" title="Hasta">
+                        <select class="form-select" id="rptInsumo"><option value="">Todos los insumos</option></select>
+                        <button class="btn btn-primary btn-sm" onclick="rptConsumo()">Ejecutar</button>
+                        <button class="btn btn-sm" onclick="rptConsumoExportCSV()">Exportar CSV</button>
+                    </div>
+                    <div class="table-wrap"><table>
+                        <thead><tr><th>SKU</th><th>Descripción</th><th>Consumo (unidades)</th><th>OTs</th></tr></thead>
+                        <tbody id="rpt-tbl-consumo"><tr class="empty-row"><td colspan="4">Ejecute el reporte</td></tr></tbody>
+                    </table></div>
+                </div>
+                <div class="card">
+                    <div class="card-header"><div><div class="card-title">Trazabilidad por lote</div></div></div>
+                    <div class="filter-bar">
+                        <input type="text" class="form-input" id="rptLote" placeholder="N° lote…">
+                        <button class="btn btn-primary btn-sm" onclick="rptTraza()">Buscar</button>
+                    </div>
+                    <div id="rpt-traza-result"></div>
+                </div>
+            </div>
+
+            <!-- ── AUDITORIA ── -->
+            <div id="page-auditoria" class="page">
+                <div class="page-header">
+                    <div class="page-title">Auditoría</div>
+                    <div class="page-subtitle">Log inmutable de operaciones</div>
+                </div>
+                <div class="card">
+                    <div class="filter-bar">
+                        <input type="text" class="form-input" id="fAud" placeholder="Filtrar por acción / usuario / SKU…" oninput="renderAuditoria()" style="min-width:280px">
+                        <input type="date" class="form-input" id="fAudDesde" onchange="renderAuditoria()">
+                        <input type="date" class="form-input" id="fAudHasta" onchange="renderAuditoria()">
+                    </div>
+                    <div class="table-wrap"><table>
+                        <thead><tr><th>Fecha</th><th>Acción</th><th>Módulo</th><th>Referencia</th><th>Detalle</th><th>Usuario</th></tr></thead>
+                        <tbody id="tAuditoria"><tr class="empty-row"><td colspan="6">Sin registros</td></tr></tbody>
+                    </table></div>
+                </div>
+            </div>
+
+            <!-- ── USUARIOS (solo Maestro) ── -->
+            <div id="page-usuarios" class="page">
+                <div class="page-header">
+                    <div class="page-title">Usuarios / Perfiles OT-Biodial</div>
+                    <div class="page-subtitle">Asignar perfil Maestro / Jefatura / Visualizador — solo Maestro</div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <div><div class="card-title">Miembros del equipo</div></div>
+                        <div>
+                            <button class="btn btn-primary btn-sm only-maestro" onclick="openAsignarPerfil()">+ Asignar perfil</button>
+                        </div>
+                    </div>
+                    <div class="table-wrap"><table>
+                        <thead><tr><th>Email</th><th>Perfil OT-Biodial</th><th>Actualizado</th><th></th></tr></thead>
+                        <tbody id="tUsuarios"><tr class="empty-row"><td colspan="4">Sin usuarios</td></tr></tbody>
+                    </table></div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+</div>
+
+<!-- ═════════════════════ MODALES (se rellenan por módulo) ═════════════════════ -->
+<!-- ═ INSUMO ═ -->
+<div id="insumoModal" class="modal">
+    <div class="modal-box narrow">
+        <div class="modal-header">
+            <div><div class="modal-title" id="insumoModal-title">Nuevo insumo</div></div>
+            <button class="modal-close" onclick="closeModal('insumoModal')">✕</button>
+        </div>
+        <form onsubmit="saveInsumo(event)">
+            <div id="insumoModal-err" class="form-error-banner"></div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">SKU <span style="color:var(--danger)">*</span></label>
+                    <input type="text" class="form-input text-mono" id="ins-sku" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Categoría <span style="color:var(--danger)">*</span></label>
+                    <select class="form-select" id="ins-cat" required>
+                        <option value="Materia Prima">Materia Prima</option>
+                        <option value="Envase">Envase</option>
+                        <option value="Caja">Caja</option>
+                        <option value="Etiqueta">Etiqueta</option>
+                        <option value="Otro">Otro</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Descripción <span style="color:var(--danger)">*</span></label>
+                    <input type="text" class="form-input" id="ins-desc" required>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Unidad de medida <span style="color:var(--danger)">*</span></label>
+                    <select class="form-select" id="ins-um" required>
+                        <option value="kg">kg</option>
+                        <option value="g">g</option>
+                        <option value="L">L</option>
+                        <option value="mL">mL</option>
+                        <option value="unidad">unidad</option>
+                        <option value="caja">caja</option>
+                        <option value="rollo">rollo</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Stock mínimo</label>
+                    <input type="number" class="form-input no-spinner" id="ins-stmin" min="0" step="any" value="0">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Fabricante / Proveedor</label>
+                    <input type="text" class="form-input" id="ins-prov">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Notas</label>
+                    <textarea class="form-textarea" id="ins-notas" rows="2"></textarea>
+                </div>
+            </div>
+            <div class="btn-row">
+                <button type="button" class="btn btn-ghost" onclick="closeModal('insumoModal')">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Guardar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ═ BODEGA ═ -->
+<div id="bodegaModal" class="modal">
+    <div class="modal-box narrow">
+        <div class="modal-header">
+            <div><div class="modal-title" id="bodegaModal-title">Nueva bodega</div></div>
+            <button class="modal-close" onclick="closeModal('bodegaModal')">✕</button>
+        </div>
+        <form onsubmit="saveBodega(event)">
+            <div id="bodegaModal-err" class="form-error-banner"></div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Nombre <span style="color:var(--danger)">*</span></label>
+                    <input type="text" class="form-input" id="bod-nombre" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Tipo</label>
+                    <select class="form-select" id="bod-tipo">
+                        <option value="Materia Prima">Materia Prima</option>
+                        <option value="Envases/Cajas">Envases/Cajas</option>
+                        <option value="Producto Terminado">Producto Terminado</option>
+                        <option value="General">General</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Ubicación / Dirección</label>
+                    <input type="text" class="form-input" id="bod-ubic">
+                </div>
+            </div>
+            <div class="btn-row">
+                <button type="button" class="btn btn-ghost" onclick="closeModal('bodegaModal')">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Guardar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ═ MOVIMIENTO ═ -->
+<div id="movModal" class="modal">
+    <div class="modal-box wide">
+        <div class="modal-header">
+            <div><div class="modal-title" id="movModal-title">Nuevo movimiento</div><div class="modal-subtitle" id="movModal-sub">—</div></div>
+            <button class="modal-close" onclick="closeModal('movModal')">✕</button>
+        </div>
+        <div id="movModal-err" class="form-error-banner"></div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">N° Documento / Guía</label>
+                <input type="text" class="form-input" id="mv-doc" placeholder="Ej: GD-2026-001">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Proveedor / Origen</label>
+                <input type="text" class="form-input" id="mv-prov">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Fecha del documento</label>
+                <input type="date" class="form-input" id="mv-fecha">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Bodega destino <span style="color:var(--danger)">*</span></label>
+                <select class="form-select" id="mv-bodega"><option value="">Seleccione…</option></select>
+            </div>
+        </div>
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:14px;margin:14px 0">
+            <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Agregar insumo</div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">SKU <span style="color:var(--danger)">*</span></label>
+                    <select class="form-select" id="mv-i-sku" onchange="onMvSkuChange()"><option value="">Seleccione…</option></select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Descripción</label>
+                    <input type="text" class="form-input" id="mv-i-desc" readonly>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group" id="mv-i-lote-group">
+                    <label class="form-label">Lote</label>
+                    <div id="mv-i-lote-wrap"><input type="text" class="form-input" id="mv-i-lote"></div>
+                </div>
+                <div class="form-group" id="mv-i-vence-group">
+                    <label class="form-label">Vencimiento</label>
+                    <input type="date" class="form-input" id="mv-i-vence">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Cantidad <span style="color:var(--danger)">*</span></label>
+                    <input type="number" class="form-input no-spinner" id="mv-i-qty" min="0.001" step="any">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group" id="mv-i-ubic-group">
+                    <label class="form-label">Ubicación</label>
+                    <input type="text" class="form-input" id="mv-i-ubic" placeholder="Ej: Rack A-1">
+                </div>
+                <div class="form-group" id="mv-i-status-group">
+                    <label class="form-label">Estatus <span style="color:var(--danger)">*</span></label>
+                    <select class="form-select" id="mv-i-status">
+                        <option value="Aprobado">✓ Aprobado</option>
+                        <option value="Cuarentena">🔒 Cuarentena</option>
+                        <option value="Rechazado">✕ Rechazado</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Precio unit. (opc.)</label>
+                    <input type="number" class="form-input no-spinner" id="mv-i-precio" min="0" step="any">
+                </div>
+            </div>
+            <button type="button" class="btn btn-primary btn-sm" onclick="addMvItem()">+ Agregar</button>
+        </div>
+        <div id="mv-items-wrap" style="display:none;margin-bottom:14px">
+            <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;margin-bottom:8px">Ítems del documento</div>
+            <div class="table-wrap"><table>
+                <thead><tr><th>SKU</th><th>Descripción</th><th>Lote</th><th>Vence</th><th>Qty</th><th>Ubicación</th><th>Estado</th><th></th></tr></thead>
+                <tbody id="tMvItems"></tbody>
+            </table></div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Observaciones</label>
+                <textarea class="form-textarea" id="mv-obs" rows="2"></textarea>
+            </div>
+        </div>
+        <div class="btn-row">
+            <button type="button" class="btn btn-ghost" onclick="closeModal('movModal')">Cancelar</button>
+            <button type="button" class="btn btn-primary" id="btn-save-mov" onclick="saveMovDocumento()">Finalizar y Guardar</button>
+        </div>
+    </div>
+</div>
+
+<!-- ═ FORMULA (editor) ═ -->
+<div id="formulaModal" class="modal">
+    <div class="modal-box wide">
+        <div class="modal-header">
+            <div><div class="modal-title" id="formulaModal-title">Nueva fórmula</div><div class="modal-subtitle">Definir insumos por lote base + pasos de proceso</div></div>
+            <button class="modal-close" onclick="closeModal('formulaModal')">✕</button>
+        </div>
+        <div id="formulaModal-err" class="form-error-banner"></div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">SKU del producto <span style="color:var(--danger)">*</span></label>
+                <input type="text" class="form-input text-mono" id="fm-sku" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Descripción <span style="color:var(--danger)">*</span></label>
+                <input type="text" class="form-input" id="fm-desc" required>
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Tipo <span style="color:var(--danger)">*</span></label>
+                <select class="form-select" id="fm-tipo">
+                    <option value="Fabricacion">Fabricación</option>
+                    <option value="Envasado">Envasado</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Volumen / unidades base <span style="color:var(--danger)">*</span></label>
+                <input type="number" class="form-input no-spinner" id="fm-vol" value="1000" min="0.001" step="any">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Unidad base</label>
+                <select class="form-select" id="fm-um">
+                    <option value="L">L</option>
+                    <option value="mL">mL</option>
+                    <option value="kg">kg</option>
+                    <option value="unidad">unidad</option>
+                </select>
+            </div>
+        </div>
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:14px;margin:14px 0">
+            <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Insumos (BOM) por lote base</div>
+            <div id="fm-items-wrap"></div>
+            <button type="button" class="btn btn-sm" onclick="fmAddItem()">+ Añadir insumo</button>
+        </div>
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:14px;margin:14px 0">
+            <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Pasos del proceso</div>
+            <div id="fm-pasos-wrap"></div>
+            <button type="button" class="btn btn-sm" onclick="fmAddPaso()">+ Añadir paso</button>
+        </div>
+        <div style="background:var(--bg2);border:1px dashed var(--border);border-radius:6px;padding:10px 12px">
+            <label class="form-label">Documentos maestros (opcional)</label>
+            <div id="fm-adj-list"></div>
+            <button type="button" class="btn btn-sm btn-ghost" onclick="fmAddAdjRow()" style="margin-top:6px">+ Adjuntar documento</button>
+        </div>
+        <div class="btn-row">
+            <button type="button" class="btn btn-ghost" onclick="closeModal('formulaModal')">Cancelar</button>
+            <button type="button" class="btn btn-primary" id="btn-save-formula" onclick="saveFormula()">Guardar fórmula</button>
+        </div>
+    </div>
+</div>
+
+<!-- ═ OT (emisión + detalle) ═ -->
+<div id="otModal" class="modal">
+    <div class="modal-box wide">
+        <div class="modal-header">
+            <div><div class="modal-title" id="otModal-title">Emitir OT</div><div class="modal-subtitle" id="otModal-sub">—</div></div>
+            <button class="modal-close" onclick="closeModal('otModal')">✕</button>
+        </div>
+        <div id="otModal-err" class="form-error-banner"></div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Fórmula (producto) <span style="color:var(--danger)">*</span></label>
+                <select class="form-select" id="ot-formula" onchange="onOtFormulaChange()"><option value="">Seleccione…</option></select>
+            </div>
+            <div class="form-group">
+                <label class="form-label" id="ot-vol-label">Volumen a preparar <span style="color:var(--danger)">*</span></label>
+                <input type="number" class="form-input no-spinner" id="ot-vol" min="0.001" step="any" oninput="recalcOTItems()">
+                <div id="ot-vol-hint" style="font-size:11px;color:var(--text3);margin-top:3px"></div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Lote a producir <span style="color:var(--danger)">*</span></label>
+                <input type="text" class="form-input text-mono" id="ot-lote" placeholder="Ej: L-2026-001">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Bodega origen de insumos <span style="color:var(--danger)">*</span></label>
+                <select class="form-select" id="ot-bodega" onchange="recalcOTItems()"><option value="">Seleccione…</option></select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Fecha de emisión</label>
+                <input type="date" class="form-input" id="ot-fecha">
+            </div>
+        </div>
+        <div class="card" style="padding:12px;margin:14px 0">
+            <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;margin-bottom:10px">Insumos requeridos (escalados)</div>
+            <div class="table-wrap"><table>
+                <thead><tr><th>SKU</th><th>Descripción</th><th>Requerido</th><th>Lote MP</th><th>Ubicación</th><th>Stock disp.</th><th>Estado</th></tr></thead>
+                <tbody id="tOtItems"><tr class="empty-row"><td colspan="7">Seleccione una fórmula y un volumen</td></tr></tbody>
+            </table></div>
+        </div>
+        <div class="card" style="padding:12px;margin:14px 0">
+            <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;margin-bottom:10px">Pasos del proceso (referencial)</div>
+            <div id="ot-pasos-preview" style="font-size:12.5px;color:var(--text2)">—</div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Notas / instrucciones adicionales</label>
+                <textarea class="form-textarea" id="ot-notas" rows="2"></textarea>
+            </div>
+        </div>
+        <div style="background:var(--bg2);border:1px dashed var(--border);border-radius:6px;padding:10px 12px;margin-bottom:14px">
+            <label class="form-label">Documentos asociados (opc.)</label>
+            <div id="ot-adj-list"></div>
+            <button type="button" class="btn btn-sm btn-ghost" onclick="otAddAdjRow()" style="margin-top:6px">+ Adjuntar</button>
+        </div>
+        <div class="btn-row">
+            <button type="button" class="btn btn-ghost" onclick="closeModal('otModal')">Cancelar</button>
+            <button type="button" class="btn btn-primary" id="btn-emitir-ot" onclick="emitirOT()">Emitir OT y descontar stock</button>
+        </div>
+    </div>
+</div>
+
+<!-- ═ DETALLE OT (con opción de consumo extra) ═ -->
+<div id="otDetalleModal" class="modal">
+    <div class="modal-box wide">
+        <div class="modal-header">
+            <div><div class="modal-title" id="otDet-title">OT</div><div class="modal-subtitle" id="otDet-sub"></div></div>
+            <button class="modal-close" onclick="closeModal('otDetalleModal')">✕</button>
+        </div>
+        <div id="otDet-err" class="form-error-banner"></div>
+        <div id="otDet-info"></div>
+        <div class="btn-row">
+            <button type="button" class="btn btn-ghost" onclick="closeModal('otDetalleModal')">Cerrar</button>
+            <button type="button" class="btn" id="otDet-btn-consumo" onclick="openConsumoExtraModal()">+ Consumo extra</button>
+            <button type="button" class="btn btn-success" id="otDet-btn-cerrar" onclick="cerrarOT()">Cerrar OT</button>
+            <button type="button" class="btn btn-danger" id="otDet-btn-cancelar" onclick="cancelarOT()">Cancelar OT</button>
+            <button type="button" class="btn btn-primary" onclick="generarPDFOT()">📄 Regenerar PDF</button>
+        </div>
+    </div>
+</div>
+
+<!-- ═ CONSUMO EXTRA ═ -->
+<div id="consumoExtraModal" class="modal">
+    <div class="modal-box narrow">
+        <div class="modal-header">
+            <div><div class="modal-title">Registrar consumo extra</div><div class="modal-subtitle">Se descontará adicional del stock; supera 3% requiere Maestro</div></div>
+            <button class="modal-close" onclick="closeModal('consumoExtraModal')">✕</button>
+        </div>
+        <div id="cxe-err" class="form-error-banner"></div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Insumo <span style="color:var(--danger)">*</span></label>
+                <select class="form-select" id="cxe-sku"></select>
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Cantidad extra <span style="color:var(--danger)">*</span></label>
+                <input type="number" class="form-input no-spinner" id="cxe-qty" min="0.001" step="any">
+                <div id="cxe-hint" style="font-size:11px;color:var(--text3);margin-top:4px"></div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Motivo</label>
+                <input type="text" class="form-input" id="cxe-motivo" placeholder="Ej: merma en filtrado">
+            </div>
+        </div>
+        <div class="btn-row">
+            <button type="button" class="btn btn-ghost" onclick="closeModal('consumoExtraModal')">Cancelar</button>
+            <button type="button" class="btn btn-primary" onclick="registrarConsumoExtra()">Registrar</button>
+        </div>
+    </div>
+</div>
+
+<!-- ═ ASIGNAR PERFIL (usuarios) ═ -->
+<div id="perfilModal" class="modal">
+    <div class="modal-box narrow">
+        <div class="modal-header">
+            <div><div class="modal-title">Asignar perfil OT-Biodial</div></div>
+            <button class="modal-close" onclick="closeModal('perfilModal')">✕</button>
+        </div>
+        <div id="perfilModal-err" class="form-error-banner"></div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Usuario <span style="color:var(--danger)">*</span></label>
+                <select class="form-select" id="p-usuario"></select>
+                <div style="font-size:11px;color:var(--text3);margin-top:4px">Se listan los usuarios ya registrados en el WMS.</div>
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Perfil <span style="color:var(--danger)">*</span></label>
+                <select class="form-select" id="p-perfil">
+                    <option value="Maestro">Maestro (modifica fórmulas, ajusta &gt;3%)</option>
+                    <option value="Jefatura">Jefatura (opera OTs, hasta 3% de ajuste)</option>
+                    <option value="Visualizador">Visualizador (solo lectura)</option>
+                    <option value="">— Sin acceso —</option>
+                </select>
+            </div>
+        </div>
+        <div class="btn-row">
+            <button type="button" class="btn btn-ghost" onclick="closeModal('perfilModal')">Cancelar</button>
+            <button type="button" class="btn btn-primary" onclick="guardarPerfilUsuario()">Guardar</button>
+        </div>
+    </div>
+</div>
+
+<!-- ═ CONFIRMACION genérica ═ -->
+<div id="confirmModal" class="modal">
+    <div class="modal-box narrow">
+        <div class="modal-header">
+            <div><div class="modal-title" id="cf-title">Confirmar</div><div class="modal-subtitle" id="cf-sub"></div></div>
+            <button class="modal-close" onclick="closeModal('confirmModal')">✕</button>
+        </div>
+        <div id="cf-body" style="font-size:13px"></div>
+        <div class="btn-row">
+            <button type="button" class="btn btn-ghost" onclick="closeModal('confirmModal')">Cancelar</button>
+            <button type="button" class="btn btn-primary" id="cf-ok">Confirmar</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+//  OT-BIODIAL · Fabricación de soluciones concentradas de diálisis
+// ════════════════════════════════════════════════════════════════
+const firebaseConfig = {
+    apiKey: "AIzaSyCJ73iFZQaqCGVMZEnUA45HmSpXD_Z0oiE",
+    authDomain: "celmedik-inventario.firebaseapp.com",
+    projectId: "celmedik-inventario",
+    storageBucket: "celmedik-inventario.firebasestorage.app",
+    messagingSenderId: "1069071656431",
+    appId: "1:1069071656431:web:5ef4c84416c016a934821a",
+    databaseURL: "https://celmedik-inventario-default-rtdb.firebaseio.com"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db   = firebase.database();
+
+// ── Estado global ──
+let currentUser = null;         // { uid, email }
+let rootUid     = null;         // uid del maestro dueño de los datos
+let userPerfil  = null;         // 'Maestro' | 'Jefatura' | 'Visualizador' | null
+let data = {
+    insumos: {}, bodegas: {}, formulas: {}, ordenes: {},
+    movimientos: {}, contadores: {}, auditoria: {}, usuarios: {}
+};
+let _stockCache = null;
+function _invalidateStockCache() { _stockCache = null; }
+
+// ── Helpers UI ──
+function $(id) { return document.getElementById(id); }
+function fmtDate(d) {
+    if (!d) return '—';
+    const s = ('' + d).slice(0,10);
+    const [y,m,day] = s.split('-'); if (!y||!m||!day) return d;
+    return `${day}-${m}-${y}`;
+}
+function fmtDateTime(d) {
+    if (!d) return '—';
+    try { return new Date(d).toLocaleString('es-CL', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }); }
+    catch { return d; }
+}
+function fmtNum(n, decimals) {
+    const v = parseFloat(n) || 0;
+    if (decimals === undefined) decimals = (Math.round(v) === v ? 0 : 3);
+    return v.toLocaleString('es-CL', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+}
+function openModal(id) { const m = $(id); if (m) m.classList.add('open'); }
+function closeModal(id) { const m = $(id); if (m) m.classList.remove('open'); }
+function showFormError(bannerId, msg) {
+    const el = $(bannerId); if (!el) return;
+    el.textContent = msg; el.style.display = 'block';
+    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    setTimeout(() => { el.style.display = 'none'; }, 6000);
+}
+function showConfirm(title, sub, body, okText, okClass, onOk) {
+    $('cf-title').textContent = title;
+    $('cf-sub').textContent   = sub || '';
+    $('cf-body').innerHTML    = body || '';
+    const okBtn = $('cf-ok');
+    okBtn.textContent = okText || 'Confirmar';
+    okBtn.className = 'btn ' + (okClass || 'btn-primary');
+    okBtn.onclick = () => { closeModal('confirmModal'); onOk && onOk(); };
+    openModal('confirmModal');
+}
+
+// ── Auth ──
+function doLogin(e) {
+    e.preventDefault();
+    const email = $('lg-email').value.trim();
+    const pass  = $('lg-pass').value;
+    const btn   = $('btn-login'); btn.disabled = true; btn.textContent = 'Ingresando…';
+    auth.signInWithEmailAndPassword(email, pass)
+        .catch(err => {
+            showFormError('loginErr', 'No se pudo ingresar: ' + (err.message || err));
+            btn.disabled = false; btn.textContent = 'Ingresar';
+        });
+}
+function doLogout() { auth.signOut(); }
+
+auth.onAuthStateChanged(async (u) => {
+    if (!u) {
+        currentUser = null; rootUid = null; userPerfil = null;
+        $('loginScreen').style.display = 'flex';
+        $('appShell').style.display = 'none';
+        return;
+    }
+    currentUser = { uid: u.uid, email: u.email };
+    // rootUid = uid del maestro dueño (patrón WMS)
+    try {
+        const info = (await db.ref(`usuarios/${u.uid}`).once('value')).val() || {};
+        rootUid = info.maestroUid || u.uid;
+        userPerfil = info.otBiodialPerfil || (u.uid === rootUid ? 'Maestro' : null);
+    } catch (e) { rootUid = u.uid; userPerfil = 'Maestro'; }
+    // Mostrar app
+    $('loginScreen').style.display = 'none';
+    $('appShell').style.display = 'grid';
+    $('topUserEmail').innerHTML = `<strong>${currentUser.email}</strong>`;
+    const badge = $('topPerfilBadge');
+    if (userPerfil) { badge.textContent = userPerfil; badge.className = 'topbar-perfil-badge perfil-' + userPerfil; }
+    else { badge.textContent = 'Sin acceso'; badge.className = 'topbar-perfil-badge perfil-Visualizador'; }
+    applyRoleVisibility();
+    if (!userPerfil) {
+        alert('Su cuenta aún no tiene un perfil asignado en OT-Biodial. Solicite al Maestro que le asigne uno.');
+        doLogout(); return;
+    }
+    startListeners();
+    showPage('dashboard');
+});
+
+// Oculta/muestra elementos según el rol.
+// .only-maestro   → visible solo para Maestro
+// .not-visualizador → visible para Maestro y Jefatura
+function applyRoleVisibility() {
+    document.querySelectorAll('.only-maestro').forEach(el => {
+        el.style.display = (userPerfil === 'Maestro') ? '' : 'none';
+    });
+    document.querySelectorAll('.not-visualizador').forEach(el => {
+        el.style.display = (userPerfil !== 'Visualizador') ? '' : 'none';
+    });
+}
+
+function canModifyFormulas() { return userPerfil === 'Maestro'; }
+function canOperate()        { return userPerfil === 'Maestro' || userPerfil === 'Jefatura'; }
+function canAdjustOver3()    { return userPerfil === 'Maestro'; }
+
+// ── Data listeners ──
+function startListeners() {
+    const base = `usuarios/${rootUid}/otBiodial`;
+    const keys = ['insumos','bodegas','formulas','ordenes','movimientos','contadores','auditoria'];
+    keys.forEach(k => {
+        db.ref(`${base}/${k}`).on('value', s => {
+            data[k] = s.val() || {};
+            _invalidateStockCache();
+            scheduleRender();
+        });
+    });
+    // Listado de usuarios (solo Maestro necesita)
+    if (userPerfil === 'Maestro') {
+        db.ref('usuarios').on('value', s => {
+            const all = s.val() || {};
+            const mine = {};
+            Object.entries(all).forEach(([uid, u]) => {
+                if (uid === rootUid || u.maestroUid === rootUid) mine[uid] = u;
+            });
+            data.usuarios = mine;
+            scheduleRender();
+        });
+    }
+}
+
+let _renderTimer = null;
+function scheduleRender() {
+    if (_renderTimer) clearTimeout(_renderTimer);
+    _renderTimer = setTimeout(() => {
+        renderInsumos(); renderBodegas(); renderStock(); renderMovimientos();
+        renderFormulas(); renderOTs('Fabricacion'); renderOTs('Envasado');
+        renderAuditoria(); renderUsuariosOT(); renderDashboard();
+        populateSelectores();
+    }, 60);
+}
+
+// ── Navegación ──
+function showPage(page) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    const el = $('page-' + page); if (el) el.classList.add('active');
+    document.querySelectorAll('.sidebar a').forEach(a => a.classList.remove('active'));
+    document.querySelectorAll(`.sidebar a[data-page="${page}"]`).forEach(a => a.classList.add('active'));
+    const link = document.querySelector(`.sidebar a[data-page="${page}"]`);
+    $('pageTitleTop').textContent = link ? link.textContent.trim() : '';
+    closeSidebar();
+    // Refresco específico por página
+    if (page === 'dashboard') renderDashboard();
+}
+function toggleSidebar() {
+    const sb = $('sidebar'); const ov = $('sidebarOverlay');
+    const open = sb.classList.toggle('open');
+    ov.classList.toggle('visible', open);
+}
+function closeSidebar() {
+    $('sidebar')?.classList.remove('open');
+    $('sidebarOverlay')?.classList.remove('visible');
+}
+
+// ── Auditoría helper ──
+function logAudit(accion, modulo, referencia, detalle) {
+    const entry = {
+        fecha: new Date().toISOString(),
+        accion, modulo,
+        referencia: referencia || '',
+        detalle: (detalle||'').toString().slice(0, 2000),
+        usuario: currentUser?.email || '',
+        perfil: userPerfil || ''
+    };
+    db.ref(`usuarios/${rootUid}/otBiodial/auditoria`).push(entry).catch(() => {});
+}
+
+// ── Correlativos ──
+async function siguienteCorrelativo(prefijo) {
+    const year = new Date().getFullYear();
+    const ref  = db.ref(`usuarios/${rootUid}/otBiodial/contadores/${prefijo}/${year}`);
+    let next = 0;
+    await ref.transaction(cur => (next = (cur || 0) + 1));
+    return `${prefijo}-${year}-${String(next).padStart(6, '0')}`;
+}
+
+// ── Stock ──
+function getLoteStatus(s) {
+    if (s.vence) {
+        const hoy = new Date(); hoy.setHours(0,0,0,0);
+        const v = new Date(s.vence + 'T00:00:00'); if (v < hoy) return 'Vencido';
+    }
+    return s.status || 'Aprobado';
+}
+function calcStock() {
+    if (_stockCache) return _stockCache;
+    const stock = {};
+    const movs = Object.values(data.movimientos || {}).sort((a,b) => new Date(a.fecha) - new Date(b.fecha));
+    movs.forEach(m => {
+        const key = `${m.sku}|${m.lote||''}|${m.bodega||''}|${m.ubicacion||''}`;
+        if (m.tipo === 'Entrada') {
+            if (!stock[key]) stock[key] = { sku:m.sku, lote:m.lote||'', cantidad:0, vence:m.vence||'', bodega:m.bodega||'', ubicacion:m.ubicacion||'', status:'Aprobado' };
+            stock[key].cantidad += parseFloat(m.cantidad)||0;
+            stock[key].status = m.status || 'Aprobado';
+            if (m.vence && !stock[key].vence) stock[key].vence = m.vence;
+        } else if (m.tipo === 'ConsumoOT' || m.tipo === 'Destrucción') {
+            if (stock[key]) stock[key].cantidad -= parseFloat(m.cantidad)||0;
+        } else if (m.tipo === 'AjusteInventario') {
+            if (!stock[key]) stock[key] = { sku:m.sku, lote:m.lote||'', cantidad:0, vence:m.vence||'', bodega:m.bodega||'', ubicacion:m.ubicacion||'', status:'Aprobado' };
+            stock[key].cantidad += parseFloat(m.cantidad)||0;
+        } else if (m.tipo === 'Ajuste') {
+            // Cambio de Status: NO altera cantidad (lección WMS-Celmedik).
+            if (stock[key]) stock[key].status = m.status || stock[key].status;
+        }
+    });
+    _stockCache = stock;
+    return stock;
+}
+function stockDe(sku, bodega, status) {
+    const stk = calcStock();
+    return Object.values(stk).filter(s => s.sku === sku
+        && (!bodega || s.bodega === bodega)
+        && (!status || getLoteStatus(s) === status)
+        && s.cantidad > 0);
+}
+
+// ── Adjuntos base64 en RTDB ──
+const ADJUNTO_MAX_BYTES = 3 * 1024 * 1024;
+function _fileToBase64(file) {
+    return new Promise((res, rej) => {
+        const fr = new FileReader();
+        fr.onerror = () => rej(new Error('No se pudo leer'));
+        fr.onload  = () => res(fr.result);
+        fr.readAsDataURL(file);
+    });
+}
+async function saveAdjuntosBase64(files, tipo) {
+    const out = [];
+    for (const f of files) {
+        if (f.size > ADJUNTO_MAX_BYTES) throw new Error(`"${f.name}" supera 3 MB`);
+        const dataUrl = await _fileToBase64(f);
+        const adjId = 'adj_' + Date.now() + '_' + Math.random().toString(36).slice(2,8);
+        const meta = { tipo: tipo || 'Documento', nombre: f.name, mime: f.type || '', tamano: f.size || 0, fecha: new Date().toISOString(), usuario: currentUser?.email || '' };
+        await db.ref(`usuarios/${rootUid}/otBiodial/adjuntosData/${adjId}`).set({ ...meta, data: dataUrl });
+        out.push({ id: adjId, ...meta });
+    }
+    return out;
+}
+async function downloadAdjuntoRTDB(adjId, filenameHint) {
+    try {
+        const snap = await db.ref(`usuarios/${rootUid}/otBiodial/adjuntosData/${adjId}`).get();
+        const val = snap.val();
+        if (!val || !val.data) { alert('Adjunto no disponible.'); return; }
+        const [prefix, b64] = val.data.split(',');
+        const mime = (prefix.match(/data:([^;]+);/) || [,'application/octet-stream'])[1];
+        const bin = atob(b64); const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        const blob = new Blob([bytes], { type: mime });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = val.nombre || filenameHint || 'documento';
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch (e) { alert('Error al descargar: ' + e.message); }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  Los módulos (insumos, bodegas, movimientos, formulas, OTs,
+//  reportes, auditoría, usuarios) están implementados a partir
+//  de aquí. Cada módulo define su render{X}, sus modales y sus
+//  saves. El scaffold ya delega los eventos.
+// ══════════════════════════════════════════════════════════════
+
+// ── STUBS que quedarán completos en commits siguientes ──
+function renderInsumos()      { const tb = $('tInsumos');    if (tb) tb.innerHTML = '<tr class="empty-row"><td colspan="7">Módulo insumos — implementación en curso</td></tr>'; }
+function renderBodegas()      { const tb = $('tBodegas');    if (tb) tb.innerHTML = '<tr class="empty-row"><td colspan="4">Módulo bodegas — implementación en curso</td></tr>'; }
+function renderStock()        { const tb = $('tStock');      if (tb) tb.innerHTML = '<tr class="empty-row"><td colspan="8">Stock — implementación en curso</td></tr>'; }
+function renderMovimientos()  { const tb = $('tMovimientos');if (tb) tb.innerHTML = '<tr class="empty-row"><td colspan="14">Movimientos — implementación en curso</td></tr>'; }
+function renderFormulas()     { const tb = $('tFormulas');   if (tb) tb.innerHTML = '<tr class="empty-row"><td colspan="8">Fórmulas — implementación en curso</td></tr>'; }
+function renderOTs(tipo)      { const tb = $(tipo === 'Fabricacion' ? 'tOTF' : 'tOTE'); if (tb) tb.innerHTML = '<tr class="empty-row"><td colspan="10">OTs — implementación en curso</td></tr>'; }
+function renderAuditoria()    { const tb = $('tAuditoria');  if (tb) tb.innerHTML = '<tr class="empty-row"><td colspan="6">—</td></tr>'; }
+function renderUsuariosOT()   { const tb = $('tUsuarios');   if (tb) tb.innerHTML = '<tr class="empty-row"><td colspan="4">—</td></tr>'; }
+function renderDashboard()    { }
+function populateSelectores() { }
+
+// Stubs de modales (se completan por módulo)
+function openInsumoModal()      { alert('Insumos: próximo commit'); }
+function saveInsumo(e)          { e.preventDefault(); }
+function openBodegaModal()      { alert('Bodegas: próximo commit'); }
+function saveBodega(e)          { e.preventDefault(); }
+function openMovModal(tipo)     { alert('Movimientos: próximo commit'); }
+function onMvSkuChange()        {}
+function addMvItem()            {}
+function saveMovDocumento()     {}
+function openFormulaModal()     { alert('Fórmulas: próximo commit'); }
+function fmAddItem()            {}
+function fmAddPaso()            {}
+function fmAddAdjRow()          {}
+function saveFormula()          {}
+function openOTModal(tipo)      { alert('OTs: próximo commit'); }
+function onOtFormulaChange()    {}
+function recalcOTItems()        {}
+function otAddAdjRow()          {}
+function emitirOT()             {}
+function openConsumoExtraModal(){ alert('Consumo extra: próximo commit'); }
+function registrarConsumoExtra(){}
+function cerrarOT()             {}
+function cancelarOT()           {}
+function generarPDFOT()         {}
+function openAsignarPerfil()    { alert('Perfiles: próximo commit'); }
+function guardarPerfilUsuario() {}
+function rptConsumo()           {}
+function rptConsumoExportCSV()  {}
+function rptTraza()             {}
+
+</script>
+</body>
+</html>
