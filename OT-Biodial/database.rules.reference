@@ -1,0 +1,170 @@
+{
+  "rules": {
+    "usuarios": {
+      ".read": "auth != null && root.child('usuarios').child(auth.uid).child('perfil').val() === 'Maestro'",
+      ".indexOn": ["maestroUid", "perfil"],
+      "$uid": {
+        ".read":  "$uid === auth.uid || root.child('usuarios').child(auth.uid).child('maestroUid').val() === $uid || (root.child('usuarios').child(auth.uid).child('perfil').val() === 'Maestro' && data.child('perfil').val() !== 'Maestro' && (!data.child('maestroUid').exists() || data.child('maestroUid').val() === auth.uid))",
+        ".write": "$uid === auth.uid || root.child('usuarios').child(auth.uid).child('maestroUid').val() === $uid || (root.child('usuarios').child(auth.uid).child('perfil').val() === 'Maestro' && data.child('perfil').val() !== 'Maestro' && (!data.child('maestroUid').exists() || data.child('maestroUid').val() === auth.uid))",
+
+        "perfil": {
+          ".validate": "newData.isString() && newData.val().length <= 50 && (newData.val() !== 'Maestro' || $uid !== auth.uid || data.val() === 'Maestro')"
+        },
+        "maestroUid": {
+          ".validate": "newData.isString() && newData.val() === auth.uid && root.child('usuarios').child(auth.uid).child('perfil').val() === 'Maestro'"
+        },
+        "email": {
+          ".validate": "newData.isString() && newData.val().length <= 200"
+        },
+        "creadoEn": {
+          ".validate": "newData.isString() && newData.val().length <= 50"
+        },
+
+        "productos": {
+          "$sku": {
+            ".validate": "newData.hasChildren(['sku', 'descripcion'])",
+            "sku":               { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 100" },
+            "descripcion":       { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 500" },
+            "tipo":              { ".validate": "newData.isString() && newData.val().length <= 100" },
+            "registroSanitario": { ".validate": "newData.isString() && newData.val().length <= 100" },
+            "fabricante":        { ".validate": "newData.isString() && newData.val().length <= 200" },
+            "proveedor":         { ".validate": "newData.isString() && newData.val().length <= 200" },
+            "presentacion":      { ".validate": "newData.isString() && newData.val().length <= 200" },
+            "unidadVenta":       { ".validate": "newData.isString() && newData.val().length <= 100" },
+            "principioActivo":   { ".validate": "newData.isString() && newData.val().length <= 200" },
+            "almacenamiento":    { ".validate": "newData.isString() && newData.val().length <= 100" },
+            "stockMin":          { ".validate": "newData.isNumber()" },
+            "precioReferencia":  { ".validate": "newData.isNumber()" },
+            "fecha":             { ".validate": "newData.isString() && newData.val().length <= 50" }
+          }
+        },
+
+        "movimientos": {
+          ".indexOn": ["fecha", "sku", "lote", "documentoId", "bodega", "tipo"],
+          "$movId": {
+            ".validate": "newData.hasChildren(['tipo', 'sku', 'cantidad', 'bodega', 'fecha', 'usuario'])",
+            "tipo":            { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 50" },
+            "sku":             { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 100" },
+            "lote":            { ".validate": "newData.isString() && newData.val().length <= 100" },
+            "cantidad":        { ".validate": "newData.isNumber()" },
+            "bodega":          { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 100" },
+            "fecha":           { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 50" },
+            "usuario":         { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 200" },
+            "precio":          { ".validate": "newData.isNumber()" },
+            "status":          { ".validate": "newData.isString() && newData.val().length <= 50" },
+            "statusAnterior":  { ".validate": "newData.isString() && newData.val().length <= 50" },
+            "ubicacion":       { ".validate": "newData.isString() && newData.val().length <= 200" },
+            "ubicacionOrigen": { ".validate": "newData.isString() && newData.val().length <= 200" },
+            "proveedor":       { ".validate": "newData.isString() && newData.val().length <= 200" },
+            "referencia":      { ".validate": "newData.isString() && newData.val().length <= 200" },
+            "observaciones":   { ".validate": "newData.isString() && newData.val().length <= 2000" },
+            "documentoId":     { ".validate": "newData.isString() && newData.val().length <= 200" },
+            "fechaDocumento":  { ".validate": "newData.isString() && newData.val().length <= 50" },
+            "fechaDespacho":   { ".validate": "newData.isString() && newData.val().length <= 50" },
+            "descripcion":     { ".validate": "newData.isString() && newData.val().length <= 500" },
+            "tipoProducto":    { ".validate": "newData.isString() && newData.val().length <= 100" },
+            "vence":           { ".validate": "newData.isString() && newData.val().length <= 50" },
+            "palletNum":       { ".validate": "newData.isNumber()" },
+            "palletTotal":     { ".validate": "newData.isNumber()" },
+            "palletGroupId":   { ".validate": "newData.isString() && newData.val().length <= 100" },
+            "ajustadoEn":      { ".validate": "newData.isString() && newData.val().length <= 50" },
+            "ajustadoPor":     { ".validate": "newData.isString() && newData.val().length <= 200" },
+            "ajusteId":        { ".validate": "newData.isString() && newData.val().length <= 100" },
+            "ajusteTipo":      { ".validate": "newData.isString() && newData.val().length <= 50" },
+            "actaDestruccion": { ".validate": "newData.hasChildren()" }
+          }
+        },
+
+        "bodegas": {
+          "$id": {
+            ".validate": "newData.hasChild('nombre')",
+            "nombre":    { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 100" },
+            "tipo":      { ".validate": "newData.isString() && newData.val().length <= 100" },
+            "ubicacion": { ".validate": "newData.isString() && newData.val().length <= 200" },
+            "capacidad": { ".validate": "newData.isNumber() || (newData.isString() && newData.val().length <= 50)" },
+            "fecha":     { ".validate": "newData.isString() && newData.val().length <= 50" }
+          }
+        },
+
+        "auditoria": {
+          ".indexOn": ["fecha", "accion", "modulo", "usuario"],
+          "$id": {
+            ".validate": "newData.hasChildren(['fecha', 'accion', 'usuario'])",
+            "fecha":   { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 50" },
+            "accion":  { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 100" },
+            "modulo":  { ".validate": "newData.isString() && newData.val().length <= 100" },
+            "sku":     { ".validate": "newData.isString() && newData.val().length <= 100" },
+            "lote":    { ".validate": "newData.isString() && newData.val().length <= 100" },
+            "detalle": { ".validate": "newData.isString() && newData.val().length <= 2000" },
+            "usuario": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 200" }
+          }
+        },
+
+        "cuarentena": {
+          "$id": {
+            ".validate": "newData.hasChildren(['sku', 'lote', 'cantidad'])",
+            "sku":              { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 100" },
+            "lote":             { ".validate": "newData.isString() && newData.val().length <= 100" },
+            "cantidad":         { ".validate": "newData.isNumber()" },
+            "motivo":           { ".validate": "newData.isString() && newData.val().length <= 500" },
+            "responsable":      { ".validate": "newData.isString() && newData.val().length <= 200" },
+            "observaciones":    { ".validate": "newData.isString() && newData.val().length <= 2000" },
+            "descripcion":      { ".validate": "newData.isString() && newData.val().length <= 500" },
+            "status":           { ".validate": "newData.isString() && newData.val().length <= 50" },
+            "fechaIngreso":     { ".validate": "newData.isString() && newData.val().length <= 50" },
+            "fechaLiberacion":  { ".validate": "newData.isString() && newData.val().length <= 50" },
+            "fechaDestroy":     { ".validate": "newData.isString() && newData.val().length <= 50" },
+            "usuario":          { ".validate": "newData.isString() && newData.val().length <= 200" },
+            "usuarioLibera":    { ".validate": "newData.isString() && newData.val().length <= 200" },
+            "usuarioDestroy":   { ".validate": "newData.isString() && newData.val().length <= 200" },
+            "actaDestruccion":  { ".validate": "newData.isString() && newData.val().length <= 100" }
+          }
+        },
+
+        "devoluciones": {
+          "$id": {
+            "sku":           { ".validate": "newData.isString() && newData.val().length <= 100" },
+            "lote":          { ".validate": "newData.isString() && newData.val().length <= 100" },
+            "cantidad":      { ".validate": "newData.isNumber()" },
+            "motivo":        { ".validate": "newData.isString() && newData.val().length <= 500" },
+            "status":        { ".validate": "newData.isString() && newData.val().length <= 50" },
+            "fecha":         { ".validate": "newData.isString() && newData.val().length <= 50" },
+            "usuario":       { ".validate": "newData.isString() && newData.val().length <= 200" }
+          }
+        },
+
+        "ajustesMovimiento": {
+          "$id": {
+            "fecha":           { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 50" },
+            "usuario":         { ".validate": "newData.isString() && newData.val().length <= 200" },
+            "usuarioPerfil":   { ".validate": "newData.isString() && newData.val().length <= 50" },
+            "documentoId":     { ".validate": "newData.isString() && newData.val().length <= 200" },
+            "referencia":      { ".validate": "newData.isString() && newData.val().length <= 200" },
+            "tipoMovimiento":  { ".validate": "newData.isString() && newData.val().length <= 50" },
+            "bodega":          { ".validate": "newData.isString() && newData.val().length <= 100" },
+            "totalItems":      { ".validate": "newData.isNumber()" },
+            "totalCambios":    { ".validate": "newData.isNumber()" }
+          }
+        },
+
+        "driveArchive": {
+          ".validate": "root.child('usuarios').child(auth.uid).child('perfil').val() === 'Maestro'",
+          "endpoint": { ".validate": "newData.isString() && newData.val().length <= 500" },
+          "secret":   { ".validate": "newData.isString() && newData.val().length <= 500" }
+        }
+      }
+    },
+
+    "organizaciones": {
+      "$orgId": {
+        ".read":  "auth != null",
+        ".write": "auth != null && (auth.uid === $orgId || root.child('usuarios').child(auth.uid).child('maestroUid').val() === $orgId)"
+      }
+    },
+
+    "tracking": {
+      ".read":  true,
+      ".write": "auth != null"
+    }
+  }
+}
