@@ -5023,14 +5023,12 @@ const NUMMOV_PREFIJOS = {
 };
 function _prefijoNumMov(tipo) { return NUMMOV_PREFIJOS[tipo] || 'MOV'; }
 
-// Devuelve el próximo N° del contador para preview (sin consumirlo). Si se
-// pasa `referencia` y ya existe un movimiento del mismo tipo con esa
-// referencia y numeroMovimiento asignado, devuelve ese en vez del preview.
+// Devuelve el próximo N° del contador para preview (sin consumirlo).
+// Cada operación de Nuevo Movimiento genera SIEMPRE un N° nuevo, independiente
+// de si la referencia (factura/guía) ya se usó antes en otro movimiento.
 async function _peekNumeroMovimiento(tipo, referencia) {
     const uid = rootUid || currentUser?.uid;
     if (!uid || !tipo) return '';
-    const existente = _numMovExistente(tipo, referencia);
-    if (existente) return existente;
     const prefijo = _prefijoNumMov(tipo);
     const año = new Date().getFullYear();
     try {
@@ -5040,47 +5038,19 @@ async function _peekNumeroMovimiento(tipo, referencia) {
     } catch (_) { return ''; }
 }
 
-// Busca en memoria (data.movimientos + data.devoluciones) si ya hay un
-// movimiento del mismo tipo con la misma referencia y numeroMovimiento
-// asignado. Devuelve el número o '' si no hay coincidencia.
-function _numMovExistente(tipo, referencia) {
-    const r = (referencia || '').trim().toLowerCase();
-    if (!r || !tipo) return '';
-    let hit = Object.values(data.movimientos || {}).find(m =>
-        m && m.tipo === tipo && m.numeroMovimiento && (m.referencia || '').trim().toLowerCase() === r
-    );
-    if (hit) return hit.numeroMovimiento;
-    // Devoluciones viven en su propio nodo pero comparten prefijo DEV.
-    if (tipo === 'Devolución') {
-        hit = Object.values(data.devoluciones || {}).find(d =>
-            d && d.numeroMovimiento && (d.referencia || '').trim().toLowerCase() === r
-        );
-        if (hit) return hit.numeroMovimiento;
-    }
-    return '';
-}
-
-// Muestra "Se asignará: XXX-YYYY-NNNNN" bajo el select de tipo del modal. Si
-// el N° documento ingresado coincide con un movimiento previo del mismo tipo,
-// muestra el número existente que se REUTILIZARÁ (sin "(estimado)").
+// Muestra "Se asignará: XXX-YYYY-NNNNN" bajo el select de tipo del modal.
+// Cada operación consume un correlativo nuevo, independiente de si la
+// referencia ya se usó antes en otro movimiento.
 async function _refreshNumMovPreview() {
     const el = document.getElementById('md-nummov-preview');
     if (!el) return;
     const tipo = document.getElementById('md-tipo')?.value || '';
     if (!tipo) { el.style.display = 'none'; el.textContent = ''; return; }
-    const numDoc = (document.getElementById('md-numdoc')?.value || '').trim();
-    const existente = _numMovExistente(tipo, numDoc);
-    if (existente) {
-        el.textContent = `Se reutilizará: ${existente} (mismo N° de factura ya usado en ${tipo})`;
-        el.style.color = 'var(--accent)';
-        el.style.display = 'block';
-    } else {
-        const preview = await _peekNumeroMovimiento(tipo);
-        if (!preview) { el.style.display = 'none'; el.textContent = ''; return; }
-        el.textContent = `Se asignará: ${preview} (estimado)`;
-        el.style.color = 'var(--text3)';
-        el.style.display = 'block';
-    }
+    const preview = await _peekNumeroMovimiento(tipo);
+    if (!preview) { el.style.display = 'none'; el.textContent = ''; return; }
+    el.textContent = `Se asignará: ${preview} (estimado)`;
+    el.style.color = 'var(--text3)';
+    el.style.display = 'block';
     // Refrescar aviso duplicado/vacío/obligatorio: cambió el tipo o el N° doc.
     try { _checkNumDocDup(); } catch(_) {}
     // Ajustar label del N° documento a obligatorio/opcional según tipo.
@@ -5106,16 +5076,14 @@ function _numDocRequerido(tipo) {
     return tipo === 'Entrada' || tipo === 'Salida' || tipo === 'Devolución';
 }
 
-// Genera el número interno consumiendo el contador de forma atómica. Si se
-// pasa `referencia` y ya existe un movimiento previo del mismo tipo con esa
-// referencia y numeroMovimiento asignado, ese número se REUTILIZA (no consume
-// contador). Esto ata el N° movimiento al N° documento comercial: dos
-// despachos parciales de la misma factura comparten el mismo N° movimiento.
+// Genera el número interno consumiendo el contador de forma atómica.
+// Cada operación de Nuevo Movimiento genera un N° único y correlativo, sin
+// reutilizar el N° de operaciones previas aunque compartan la misma
+// referencia (factura/guía). El parámetro `referencia` se acepta por
+// compatibilidad con los llamadores, pero no se usa para reutilizar N°.
 async function generarNumeroMovimiento(tipo, referencia) {
     const uid = rootUid || currentUser?.uid;
     if (!uid) throw new Error('Usuario no identificado.');
-    const existente = _numMovExistente(tipo, referencia);
-    if (existente) return existente;
     const prefijo = _prefijoNumMov(tipo);
     const año = new Date().getFullYear();
     const ref = db.ref(`usuarios/${uid}/contadores/${prefijo}/${año}`);
@@ -5304,7 +5272,8 @@ function saveDocumento() {
                         bodega, ubic, obs,
                         items: [...movDocItems], usuario,
                         usuarioPerfil: userPerfil || '',
-                        usuarioUid: currentUser.uid
+                        usuarioUid: currentUser.uid,
+                        numeroMovimiento
                     };
                     _setBtnLoading('btn-save-doc', false, 'Finalizar y Guardar');
                     closeModal('movModal');
@@ -5375,7 +5344,11 @@ function generatePDF(docData, opts) {
         : (docData.tipo||'').toUpperCase();
     doc.text(`DOCUMENTO DE ${tipoTituloPDF}`, pageW - margin, 11, { align: 'right' });
     doc.setFontSize(9); doc.setFont('helvetica', 'normal');
-    doc.text(porUbicacion ? `${docData.documentoId} · DETALLE POR UBICACIÓN` : docData.documentoId, pageW - margin, 17, { align: 'right' });
+    // Encabezado derecho: N° movimiento interno (identificador único de la
+    // operación). Si no existe (movimientos históricos), se muestra el
+    // documentoId como fallback.
+    const encabezadoRight = docData.numeroMovimiento || docData.documentoId;
+    doc.text(porUbicacion ? `${encabezadoRight} · DETALLE POR UBICACIÓN` : encabezadoRight, pageW - margin, 17, { align: 'right' });
 
     // Línea divisoria bajo el encabezado.
     doc.setDrawColor(180, 180, 180);
@@ -5392,8 +5365,10 @@ function generatePDF(docData, opts) {
     const tipoEtq = docData.tipo === 'CambioUbicacion' ? 'Cambio de Ubicación'
         : docData.tipo === 'Ajuste' ? 'Cambio de Status'
         : docData.tipo;
-    addInfo('N° Documento:', docData.documentoId, margin, y, 35);
+    addInfo('N° Movimiento:', docData.numeroMovimiento || '—', margin, y, 35);
     addInfo('Tipo:', tipoEtq, col2, y, 15);
+    y += 6;
+    addInfo('N° Documento:', docData.documentoId, margin, y, 35);
     y += 6;
     addInfo('Fecha registro:', new Date(docData.fecha).toLocaleString('es-CL'), margin, y, 35);
     addInfo('Fecha documento:', docData.fechaDoc ? fmtDate(docData.fechaDoc) : '—', col2, y, 38);
@@ -5582,6 +5557,7 @@ function generatePDF(docData, opts) {
             creator: 'Celmedik WMS',
             keywords: [
                 `tipo:${docData.tipo}`,
+                `nummov:${docData.numeroMovimiento||''}`,
                 `doc:${docData.documentoId}`,
                 `usuario:${docData.usuario||''}`,
                 `perfil:${docData.usuarioPerfil||''}`,
@@ -5598,7 +5574,10 @@ function generatePDF(docData, opts) {
         .slice(0, 24);
     const fechaSlug = new Date().toISOString().split('T')[0];
     const sufijo = porUbicacion ? '_DETALLE_UBICACION' : '';
-    const filename = `${docData.tipo}_${docData.documentoId}_${userSlug}_${fechaSlug}${sufijo}.pdf`;
+    // Nombre asociado al N° movimiento (identificador único de la operación).
+    // Si no existe (movimientos históricos), se cae al documentoId.
+    const idArchivo = docData.numeroMovimiento || docData.documentoId;
+    const filename = `${docData.tipo}_${idArchivo}_${userSlug}_${fechaSlug}${sufijo}.pdf`;
     doc.save(filename);
 
     // Subida automática a Google Drive: solo para Salidas y perfiles autorizados
