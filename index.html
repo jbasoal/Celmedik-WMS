@@ -8379,16 +8379,16 @@ function getSalidasFacturasParaOT(bodegaNombre) {
 }
 
 // Lista de bodegas disponibles para OT según el perfil. Sin restricción (Maestro
-// / Farmacéutico / Operador genérico), muestra todas las bodegas «origen» —
-// se excluyen las sub-bodegas de cliente, ya que no son bodegas físicas de
-// despacho propias. La comparación con las bodegas permitidas es case-insensitive
-// para tolerar diferencias de mayúsculas entre el constante del perfil y el
-// nombre registrado en data.bodegas.
+// / Farmacéutico / Operador genérico), se muestran todas las bodegas del maestro
+// — incluidas las sub-bodegas de cliente 3PL (EMIMED, etc.), ya que también
+// realizan Salidas físicas que requieren OT. La comparación con las bodegas
+// permitidas es case-insensitive para tolerar diferencias de mayúsculas entre
+// el constante del perfil y el nombre registrado en data.bodegas.
 function _bodegasElegiblesParaOT() {
     const permitidas = bodegasFijasActual(); // null si sin restricción
     const permUp = permitidas ? new Set(permitidas.map(n => (n||'').toUpperCase())) : null;
     return Object.values(data.bodegas || {})
-        .filter(b => b && b.nombre && !b.esClienteBodega)
+        .filter(b => b && b.nombre)
         .map(b => b.nombre)
         .filter(n => !permUp || permUp.has(n.toUpperCase()))
         .sort((a, b) => a.localeCompare(b));
