@@ -4374,10 +4374,13 @@ function selectLoteNormal(lote, vence, status, stock) {
     document.querySelectorAll('.lote-selector-item').forEach(el => el.classList.remove('lote-sel-active'));
     const card = document.getElementById('lotecard-' + lote.replace(/[^a-zA-Z0-9]/g,'_'));
     if (card) card.classList.add('lote-sel-active');
-    // I4: Aviso FEFO — si no es el lote con vencimiento más próximo
+    // I4: Aviso FEFO — si no es el lote con vencimiento más próximo. Acotamos a la
+    // bodega del documento: FEFO se evalúa dentro de la bodega desde la que se
+    // despacha; sugerir un lote de otra bodega es inaccionable y confuso.
     const sku = document.getElementById('mi-sku').value.trim().toUpperCase();
+    const bodegaFEFO = (document.getElementById('md-bodega')?.value || '').trim();
     const lotesDisp = Object.values(calcStock())
-        .filter(s => s.sku === sku && s.cantidad > 0 && getLoteStatus(s) === 'Aprobado')
+        .filter(s => s.sku === sku && s.cantidad > 0 && getLoteStatus(s) === 'Aprobado' && (!bodegaFEFO || (s.bodega||'') === bodegaFEFO))
         .sort((a, b) => new Date(a.vence||'9999') - new Date(b.vence||'9999'));
     const fefoLote = lotesDisp[0];
     let warnEl = document.getElementById('fefo-advisory');
@@ -7527,10 +7530,13 @@ function saveAjuste() {
     if (!obs)                    { showFormError('ajusteModal-err','Ingrese el motivo del ajuste.'); return; }
     if (ajusteTipo === 'Negativo') {
         const stockActual = calcStock();
+        // Acotamos a la bodega/ubicación del ajuste — antes se sumaban todas las
+        // bodegas, permitiendo ajustes negativos sobre una bodega sin stock si
+        // otra bodega tenía el mismo sku+lote.
         const stockDisponible = Object.values(stockActual)
-            .filter(s => s.sku === sku && s.lote === lote)
+            .filter(s => s.sku === sku && s.lote === lote && (s.bodega||'') === bodega && (ubic ? (s.ubicacion||'') === ubic : true))
             .reduce((a, s) => a + (parseFloat(s.cantidad)||0), 0);
-        if (qty > stockDisponible) { showFormError('ajusteModal-err', `Stock insuficiente. Disponible para lote ${lote}: ${stockDisponible} unidades.`); return; }
+        if (qty > stockDisponible) { showFormError('ajusteModal-err', `Stock insuficiente en ${bodega}${ubic ? ' · ' + ubic : ''}. Disponible para lote ${lote}: ${stockDisponible} unidades.`); return; }
     }
 
     const cantidadFinal = ajusteTipo === 'Positivo' ? qty : -qty;
