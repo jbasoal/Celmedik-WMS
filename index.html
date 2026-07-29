@@ -5103,9 +5103,11 @@ function saveDocumento() {
         tipo === 'Salida' ? 'btn-danger' : 'btn-primary',
         async () => {
             _setBtnLoading('btn-save-doc', true); // I1: spinner
-            // Un solo número interno por documento. Si la referencia ya se usó
-            // antes en el mismo tipo (ej. despachos parciales), se reutiliza
-            // el N° previo en vez de consumir un correlativo nuevo.
+            // Un N° movimiento único por operación (transacción sobre el
+            // correlativo). Se comparte entre todos los ítems del mismo documento
+            // pero NUNCA se reutiliza aunque otra operación posterior use la misma
+            // referencia — así el PDF de cada operación queda inequívocamente
+            // identificado por su N° movimiento.
             let numeroMovimiento = '';
             try { numeroMovimiento = await generarNumeroMovimiento(tipo, numDoc); }
             catch (e) {
@@ -5538,15 +5540,29 @@ function _requiereDetalleUbicacion(docData) {
     return (docData.items || []).some(it => _palletSizeForSku(it.sku) && (parseFloat(it.qty) || 0) > 0);
 }
 
-function regenerarPDF(documentoId) {
-    const movs = Object.values(data.movimientos || {}).filter(m => m.documentoId === documentoId);
-    if (!movs.length) { alert('No se encontraron movimientos para este documento.'); return; }
+// Regenera el PDF de una operación. Se identifica por el N° de movimiento
+// (único por operación). Para movimientos históricos sin numeroMovimiento se
+// admite como fallback filtrar por documentoId, pero eso puede mezclar
+// operaciones distintas que reutilizaron la misma referencia — por eso siempre
+// se prefiere numeroMovimiento.
+function regenerarPDF(idOperacion) {
+    if (!idOperacion) { alert('Identificador de operación vacío.'); return; }
+    const all = Object.values(data.movimientos || {});
+    let movs = all.filter(m => m.numeroMovimiento === idOperacion);
+    if (!movs.length) {
+        // Fallback histórico: filtrar por documentoId sólo cuando ningún movimiento
+        // tenga numeroMovimiento (para no contaminar con operaciones más nuevas
+        // que compartan referencia pero sí tienen su propio N° movimiento).
+        movs = all.filter(m => m.documentoId === idOperacion && !m.numeroMovimiento);
+    }
+    if (!movs.length) { alert('No se encontraron movimientos para esta operación.'); return; }
     const ref = movs[0];
     // Solo mostramos perfil/uid si quien regenera coincide con el usuario original del movimiento
     const perfilRegen = (ref.usuario && ref.usuario === currentUser.email) ? (userPerfil || '') : '';
     const uidRegen    = (ref.usuario && ref.usuario === currentUser.email) ? currentUser.uid : '';
     const docData = {
-        documentoId,
+        documentoId: ref.documentoId || '',
+        numeroMovimiento: ref.numeroMovimiento || '',
         tipo: ref.tipo,
         numDoc: ref.referencia,
         fecha: ref.fecha,
@@ -5863,7 +5879,7 @@ function renderAjustesMovHistorial() {
             <td style="font-weight:600;color:var(--accent2)">${r.totalCambios||0}</td>
             <td style="font-size:11px;color:var(--text2)">${_ajmEsc(r.usuario||'—')}</td>
             <td><button class="btn btn-sm btn-icon" style="font-size:10px" onclick="verDetalleAjusteMov('${r.id}')">Ver</button></td>
-            <td>${r.documentoId ? `<button class="btn btn-sm btn-icon" style="font-size:10px" onclick="regenerarPDF('${r.documentoId.replace(/'/g,"\\'")}')">PDF</button>` : '—'}</td>
+            <td>${(r.numeroMovimiento || r.documentoId) ? `<button class="btn btn-sm btn-icon" style="font-size:10px" onclick="regenerarPDF('${(r.numeroMovimiento || r.documentoId).replace(/'/g,"\\'")}')">PDF</button>` : '—'}</td>
         </tr>`;
     }).join('');
 }
@@ -5975,6 +5991,9 @@ function guardarAjusteMov() {
         fecha: fechaAjuste,
         usuario: currentUser.email,
         usuarioPerfil: userPerfil || '',
+        // N° movimiento de la operación ajustada — único, permite regenerar
+        // el PDF de esa operación específica aunque comparta referencia con otras.
+        numeroMovimiento: ref0.numeroMovimiento || '',
         documentoId: h.documentoId || '',
         referencia: h.referencia || (ref0.referencia || ''),
         tipoMovimiento: ref0.tipo || '',
@@ -5997,8 +6016,9 @@ function guardarAjusteMov() {
             _setBtnLoading('btn-save-ajmov', false, 'Guardar ajustes y regenerar PDF');
             // Sincronizar memoria con valores guardados (para próximas modificaciones sin recargar)
             _ajMovItems.forEach(it => { it.original = { ...updates[`usuarios/${uid}/movimientos/${it.key}`] }; });
-            // Regenerar PDF con los datos finales
-            try { regenerarPDF(h.documentoId); } catch(e) { console.warn('No se pudo regenerar PDF:', e); }
+            // Regenerar PDF con los datos finales — usa el N° movimiento (único)
+            // para no mezclar con otras operaciones que compartan referencia.
+            try { regenerarPDF(ref0.numeroMovimiento || h.documentoId); } catch(e) { console.warn('No se pudo regenerar PDF:', e); }
             const c = document.getElementById('ajMovResults');
             if (c) c.insertAdjacentHTML('afterbegin', '<div class="alert-banner success" style="margin:8px 0"><div class="alert-banner-icon">✓</div><div><div class="alert-banner-title">Ajuste aplicado</div><div class="alert-banner-text">Los cambios fueron guardados, el stock se recalcula automáticamente, quedó registrado en el historial de ajustes y en auditoría, y se generó un nuevo PDF con la información final.</div></div></div>');
             // El listener de ajustesMovimiento refrescará el historial automáticamente
@@ -6269,6 +6289,7 @@ async function uploadSalidaToDrive(blob, filename, docData) {
     }
     _toastDrive('info', `Subiendo ${filename} a Google Drive...`);
     const metadata = {
+        numeroMovimiento: docData.numeroMovimiento || '',
         documentoId: docData.documentoId,
         tipo: docData.tipo,
         fecha: docData.fecha,
@@ -6370,9 +6391,10 @@ function renderMovimientos(preservePage) {
     }
     const visibles = Math.min(_movVisibleCount, total);
     const shown = rows.slice(0, visibles);
-    // Track which documentoIds already have a PDF button rendered to avoid duplicates.
-    // Se calcula sobre la ventana visible: al hacer "Cargar más" se re-renderiza
-    // desde el inicio, por lo que la primera aparición del documento sigue siendo la primera.
+    // Un botón PDF por operación única (N° movimiento). Dos movimientos con la
+    // misma referencia/documentoId pero diferentes N° movimiento son operaciones
+    // distintas y deben tener su propio PDF. Fallback a documentoId sólo para
+    // movimientos históricos sin N° movimiento.
     const pdfRendered = new Set();
     tb.innerHTML = shown.map(m => {
         const tC = m.tipo === 'Entrada' ? 'badge-success' : m.tipo === 'Salida' ? 'badge-danger' : m.tipo === 'Destrucción' ? 'badge-danger' : m.tipo === 'CambioEstado' ? 'badge-gray' : m.tipo === 'CambioUbicacion' ? 'badge-gray' : 'badge-warning';
@@ -6381,12 +6403,13 @@ function renderMovimientos(preservePage) {
             ? `<span style="color:var(--text3)">${m.ubicacionOrigen}</span> → <strong>${m.ubicacion||'—'}</strong>`
             : (m.ubicacion||'—');
         let pdfCell = '—';
-        if (m.documentoId) {
-            if (!pdfRendered.has(m.documentoId)) {
-                pdfRendered.add(m.documentoId);
-                pdfCell = `<button class="btn btn-sm btn-icon" style="font-size:10px;white-space:nowrap" onclick="regenerarPDF('${m.documentoId.replace(/'/g,"\\'")}')">PDF</button>`;
+        const pdfKey = m.numeroMovimiento || m.documentoId || '';
+        if (pdfKey) {
+            if (!pdfRendered.has(pdfKey)) {
+                pdfRendered.add(pdfKey);
+                pdfCell = `<button class="btn btn-sm btn-icon" style="font-size:10px;white-space:nowrap" onclick="regenerarPDF('${pdfKey.replace(/'/g,"\\'")}')">PDF</button>`;
             } else {
-                pdfCell = `<span style="color:var(--text3);font-size:10px">${m.documentoId}</span>`;
+                pdfCell = `<span style="color:var(--text3);font-size:10px">${pdfKey}</span>`;
             }
         }
         const numMovCell = m.numeroMovimiento
