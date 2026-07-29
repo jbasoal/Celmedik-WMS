@@ -944,13 +944,13 @@
                     </div>
                 </div>
 
-                <!-- ── ORDEN DE TRANSPORTE (solo Bodega Celmedik Los Angeles) ── -->
+                <!-- ── ORDEN DE TRANSPORTE ── -->
                 <div id="ordenTransporte" class="page">
                     <div class="card">
                         <div class="card-header">
                             <div>
                                 <div class="card-title">Órdenes de Transporte</div>
-                                <div class="card-subtitle">Requerimiento de transporte a empresa externa · Bodega Celmedik Los Angeles · No afecta el inventario</div>
+                                <div class="card-subtitle">Requerimiento de transporte a empresa externa · Bodega origen seleccionable · No afecta el inventario</div>
                             </div>
                             <button class="btn btn-primary btn-sm need-write" onclick="openOTModal()">+ Nueva Orden de Transporte</button>
                         </div>
@@ -964,9 +964,9 @@
                         <div class="table-wrap">
                             <table>
                                 <thead><tr>
-                                    <th>N° Orden</th><th>Fecha generación</th><th>Fecha envío</th><th>Empresa</th><th>Destino</th><th>Facturas</th><th>Total bultos</th><th>Generado por</th><th>PDF</th>
+                                    <th>N° Orden</th><th>Fecha generación</th><th>Fecha envío</th><th>Bodega origen</th><th>Empresa</th><th>Destino</th><th>Facturas</th><th>Total bultos</th><th>Generado por</th><th>PDF</th>
                                 </tr></thead>
-                                <tbody id="tOTHistorial"><tr class="empty-row"><td colspan="9">Sin órdenes de transporte registradas</td></tr></tbody>
+                                <tbody id="tOTHistorial"><tr class="empty-row"><td colspan="10">Sin órdenes de transporte registradas</td></tr></tbody>
                             </table>
                         </div>
                     </div>
@@ -2102,7 +2102,7 @@
         <div class="modal-header">
             <div>
                 <div class="modal-title">Nueva Orden de Transporte</div>
-                <div class="modal-subtitle">Despacho a empresa externa · Bodega Celmedik Los Angeles · No afecta inventario</div>
+                <div class="modal-subtitle">Despacho a empresa externa · No afecta inventario</div>
             </div>
             <button class="modal-close" onclick="closeModal('otModal')">✕</button>
         </div>
@@ -2110,13 +2110,23 @@
 
         <div class="form-row">
             <div class="form-group">
+                <label class="form-label">Bodega origen <span style="color:var(--danger)">*</span></label>
+                <select class="form-select" id="ot-bodega" onchange="_onOTBodegaChange()">
+                    <option value="">Seleccionar bodega...</option>
+                </select>
+            </div>
+            <div class="form-group">
                 <label class="form-label">N° Orden de Transporte</label>
                 <input type="text" class="form-input" id="ot-numero" readonly placeholder="Se asigna al guardar" style="background:var(--bg3);color:var(--text2);font-family:var(--mono)">
             </div>
+        </div>
+
+        <div class="form-row">
             <div class="form-group">
                 <label class="form-label">Fecha de envío <span style="color:var(--danger)">*</span></label>
                 <input type="date" class="form-input" id="ot-fecha-envio">
             </div>
+            <div class="form-group"></div>
         </div>
 
         <div class="form-row">
@@ -2139,11 +2149,11 @@
         <!-- ── FACTURAS ASOCIADAS ── -->
         <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin:16px 0">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
-                <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px">Facturas asociadas (Salidas de Los Angeles)</div>
+                <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px">Facturas asociadas (Salidas de la bodega origen)</div>
                 <button type="button" class="btn btn-sm btn-ghost" onclick="addOTFacturaRow()">+ Agregar factura</button>
             </div>
             <div style="font-size:11.5px;color:var(--text3);margin-bottom:10px">
-                Solo se permiten N° de documento asociados a una <strong>Salida</strong> de la bodega <em>Celmedik Los Angeles</em> que aún no hayan sido usados en otra Orden de Transporte.
+                Solo se permiten N° de documento asociados a una <strong>Salida</strong> de la bodega seleccionada arriba que aún no hayan sido usados en otra Orden de Transporte.
             </div>
             <div class="table-wrap" style="background:var(--surface);border:1px solid var(--border)">
                 <table>
@@ -2632,8 +2642,10 @@ function loadProfile() {
         if (navAdmin) navAdmin.style.display = userPerfil === 'Maestro' ? '' : 'none';
         const navTransporte = document.getElementById('nav-transporte');
         if (navTransporte) navTransporte.style.display = (userPerfil === 'Maestro' || userPerfil === 'Farmacéutico') ? '' : 'none';
-        // Orden de Transporte: solo perfiles que operan en Bodega Celmedik Los Angeles.
-        // Operario Santiago (fijo a Biodial) y Visualizador no acceden.
+        // Orden de Transporte: perfiles que operan bodegas físicas de despacho
+        // (Maestro/Farmacéutico sin restricción; Operador genérico y Operador
+        // Los Angeles restringido a su bodega). Operario Santiago (fijo a
+        // Biodial) y Visualizador no acceden.
         const navOT = document.getElementById('nav-orden-transporte');
         if (navOT) {
             const perfilesOT = ['Maestro','Farmacéutico','Operador','Operador Los Angeles'];
@@ -8315,26 +8327,28 @@ async function exportDCPDF() {
 // ══════════════════════════════════════════════════════════════
 //  ORDEN DE TRANSPORTE
 //  - Operación que registra un requerimiento de transporte a
-//    empresa externa, asociado a una o más Salidas de la bodega
-//    Celmedik Los Angeles.
+//    empresa externa, asociado a una o más Salidas de una bodega
+//    origen seleccionable (Celmedik Los Angeles, EMIMED, etc.).
 //  - No genera descuentos ni ajustes en el inventario.
 //  - Cada N° de factura (documento de Salida) sólo puede usarse
 //    una vez en una Orden de Transporte.
 // ══════════════════════════════════════════════════════════════
-const OT_BODEGA_NOMBRE = 'CELMEDIK LOS ANGELES';
 let _otFacturasRows = []; // [{ numero, bultos }]
 
 function _otEsc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
-// Devuelve los N° de documento de Salida disponibles en la bodega
-// Celmedik Los Angeles que aún no se han usado en ninguna OT previa.
-function getSalidasLAFacturas() {
+// Devuelve los N° de documento de Salida disponibles en la bodega dada que aún
+// no se han usado en ninguna OT previa. Si no se pasa bodega, devuelve vacío
+// (el modal exige seleccionar la bodega origen antes de listar facturas).
+function getSalidasFacturasParaOT(bodegaNombre) {
+    if (!bodegaNombre) return [];
+    const targetUp = String(bodegaNombre).toUpperCase();
     const set = new Map(); // num -> { numero, fecha, items, cliente }
     Object.values(data.movimientos || {}).forEach(m => {
         if (m.tipo !== 'Salida') return;
-        if ((m.bodega || '').toUpperCase() !== OT_BODEGA_NOMBRE) return;
+        if ((m.bodega || '').toUpperCase() !== targetUp) return;
         const num = (m.documentoId || m.referencia || '').trim();
         if (!num) return;
         if (!set.has(num)) set.set(num, {
@@ -8351,7 +8365,9 @@ function getSalidasLAFacturas() {
             ubicacion: m.ubicacion || '', precio: m.precio || 0
         });
     });
-    // Excluir facturas ya usadas en alguna OT
+    // Excluir facturas ya usadas en alguna OT (a nivel global — un mismo N° de
+    // documento no debe reutilizarse en dos OT distintas aunque sean de bodegas
+    // diferentes).
     const usadas = new Set();
     Object.values(data.ordenesTransporte || {}).forEach(ot => {
         (ot.facturas || []).forEach(f => { if (f && f.numero) usadas.add(String(f.numero).trim()); });
@@ -8360,6 +8376,22 @@ function getSalidasLAFacturas() {
     set.forEach((v, k) => { if (!usadas.has(k)) out.push(v); });
     out.sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
     return out;
+}
+
+// Lista de bodegas disponibles para OT según el perfil. Sin restricción (Maestro
+// / Farmacéutico / Operador genérico), muestra todas las bodegas «origen» —
+// se excluyen las sub-bodegas de cliente, ya que no son bodegas físicas de
+// despacho propias. La comparación con las bodegas permitidas es case-insensitive
+// para tolerar diferencias de mayúsculas entre el constante del perfil y el
+// nombre registrado en data.bodegas.
+function _bodegasElegiblesParaOT() {
+    const permitidas = bodegasFijasActual(); // null si sin restricción
+    const permUp = permitidas ? new Set(permitidas.map(n => (n||'').toUpperCase())) : null;
+    return Object.values(data.bodegas || {})
+        .filter(b => b && b.nombre && !b.esClienteBodega)
+        .map(b => b.nombre)
+        .filter(n => !permUp || permUp.has(n.toUpperCase()))
+        .sort((a, b) => a.localeCompare(b));
 }
 
 // Mapa de las facturas usadas en otras OT (para validación dura)
@@ -8397,6 +8429,15 @@ function openOTModal() {
         return;
     }
     _otFacturasRows = [];
+    // Poblar el selector de bodegas origen según el perfil.
+    const selBod = document.getElementById('ot-bodega');
+    if (selBod) {
+        const bods = _bodegasElegiblesParaOT();
+        selBod.innerHTML = '<option value="">Seleccionar bodega...</option>'
+            + bods.map(n => `<option value="${_otEsc(n)}">${_otEsc(n)}</option>`).join('');
+        // Autoselección cuando el perfil tiene una única bodega permitida
+        selBod.value = (bods.length === 1) ? bods[0] : '';
+    }
     document.getElementById('ot-numero').value = generarNumeroOT();
     document.getElementById('ot-fecha-envio').value = new Date().toISOString().split('T')[0];
     document.getElementById('ot-empresa').value = 'Transfarma';
@@ -8408,11 +8449,24 @@ function openOTModal() {
     openModal('otModal');
 }
 
+// Cambio de bodega origen: al cambiar de bodega las facturas seleccionadas dejan
+// de ser válidas (pertenecen a otra bodega), así que se resetean las filas.
+function _onOTBodegaChange() {
+    _otFacturasRows = [];
+    addOTFacturaRow();
+    _otRefreshFacturasDatalist();
+}
+
+function _otBodegaSeleccionada() {
+    return (document.getElementById('ot-bodega')?.value || '').trim();
+}
+
 function _otRefreshFacturasDatalist() {
     const dl = document.getElementById('ot-facturas-disponibles');
     if (!dl) return;
+    const bodegaSel = _otBodegaSeleccionada();
     const usadasEnForm = new Set(_otFacturasRows.map(r => (r.numero || '').trim()).filter(Boolean));
-    const disponibles = getSalidasLAFacturas().filter(s => !usadasEnForm.has(s.numero));
+    const disponibles = getSalidasFacturasParaOT(bodegaSel).filter(s => !usadasEnForm.has(s.numero));
     dl.innerHTML = disponibles.map(s => `<option value="${_otEsc(s.numero)}">${_otEsc(s.fecha || '')} · ${_otEsc(s.cliente || '')}</option>`).join('');
 }
 
@@ -8469,29 +8523,36 @@ function saveOrdenTransporte() {
     const perfilesOT = ['Maestro','Farmacéutico','Operador','Operador Los Angeles'];
     if (!perfilesOT.includes(userPerfil)) { showFormError('otModal-err', 'Su perfil no puede generar Órdenes de Transporte.'); return; }
 
+    const bodegaOT   = _otBodegaSeleccionada();
     const fechaEnvio = (document.getElementById('ot-fecha-envio')?.value || '').trim();
     const empresa    = (document.getElementById('ot-empresa')?.value || '').trim();
     const destino    = (document.getElementById('ot-destino')?.value || '').trim();
     const obs        = (document.getElementById('ot-obs')?.value || '').trim();
 
+    if (!bodegaOT)   { showFormError('otModal-err', 'Seleccione la bodega origen de la OT.'); return; }
     if (!fechaEnvio) { showFormError('otModal-err', 'Indique la fecha de envío.'); return; }
     if (!empresa)    { showFormError('otModal-err', 'Indique la empresa de transporte.'); return; }
     if (!destino)    { showFormError('otModal-err', 'Indique el destino.'); return; }
+    // Guard: perfiles con restricción no pueden crear OT en otras bodegas.
+    const bodegasOk = _bodegasElegiblesParaOT();
+    if (bodegasOk.length && !bodegasOk.includes(bodegaOT)) {
+        showFormError('otModal-err', `Su perfil no puede crear OT para la bodega «${bodegaOT}».`); return;
+    }
 
     const facturasLimpias = _otFacturasRows
         .map(r => ({ numero: (r.numero || '').trim(), bultos: parseInt(r.bultos, 10) || 0 }))
         .filter(r => r.numero);
     if (!facturasLimpias.length) { showFormError('otModal-err', 'Agregue al menos una factura asociada.'); return; }
 
-    // Validaciones por factura
+    // Validaciones por factura — ancladas a la bodega origen seleccionada.
     const salidasDisponibles = new Map();
-    getSalidasLAFacturas().forEach(s => salidasDisponibles.set(s.numero, s));
-    // También cargamos todas las salidas LA (aun usadas) para detectar uso previo
-    const todasLA = new Map();
+    getSalidasFacturasParaOT(bodegaOT).forEach(s => salidasDisponibles.set(s.numero, s));
+    const bodegaUp = bodegaOT.toUpperCase();
+    const todasBodega = new Map();
     Object.values(data.movimientos || {}).forEach(m => {
-        if (m.tipo === 'Salida' && (m.bodega || '').toUpperCase() === OT_BODEGA_NOMBRE) {
+        if (m.tipo === 'Salida' && (m.bodega || '').toUpperCase() === bodegaUp) {
             const num = (m.documentoId || m.referencia || '').trim();
-            if (num) todasLA.set(num, true);
+            if (num) todasBodega.set(num, true);
         }
     });
     const usadasOtras = getFacturasUsadasOT(null);
@@ -8500,8 +8561,8 @@ function saveOrdenTransporte() {
     if (dup) { showFormError('otModal-err', `La factura «${dup}» está duplicada en esta OT.`); return; }
 
     for (const f of facturasLimpias) {
-        if (!todasLA.has(f.numero)) {
-            showFormError('otModal-err', `La factura «${f.numero}» no corresponde a una Salida de la bodega Celmedik Los Angeles.`);
+        if (!todasBodega.has(f.numero)) {
+            showFormError('otModal-err', `La factura «${f.numero}» no corresponde a una Salida de la bodega «${bodegaOT}».`);
             return;
         }
         if (usadasOtras.has(f.numero)) {
@@ -8542,7 +8603,7 @@ function saveOrdenTransporte() {
         fechaEnvio,
         empresaTransporte: empresa,
         destino,
-        bodega: 'Celmedik Los Angeles',
+        bodega: bodegaOT,
         facturas: facturasPersist,
         totalBultos,
         observaciones: obs,
@@ -8555,6 +8616,7 @@ function saveOrdenTransporte() {
         'Confirmar Orden de Transporte',
         'Esta operación NO afecta el inventario',
         `<strong>${_otEsc(numeroOT)}</strong><br>
+         <span style="color:var(--text3)">Bodega origen:</span> <strong>${_otEsc(bodegaOT)}</strong><br>
          <span style="color:var(--text3)">Empresa:</span> ${_otEsc(empresa)}<br>
          <span style="color:var(--text3)">Destino:</span> ${_otEsc(destino)}<br>
          <span style="color:var(--text3)">Fecha envío:</span> <strong>${fmtDate(fechaEnvio)}</strong><br>
@@ -8818,7 +8880,7 @@ function renderOTHistorial() {
     rows.sort((a, b) => new Date(b.fechaGeneracion || 0) - new Date(a.fechaGeneracion || 0));
 
     if (!rows.length) {
-        tb.innerHTML = '<tr class="empty-row"><td colspan="9">Sin órdenes de transporte registradas</td></tr>';
+        tb.innerHTML = '<tr class="empty-row"><td colspan="10">Sin órdenes de transporte registradas</td></tr>';
         return;
     }
     tb.innerHTML = rows.map(o => {
@@ -8827,6 +8889,7 @@ function renderOTHistorial() {
             <td class="text-mono" style="color:var(--accent2);font-size:11px;font-weight:600">${_otEsc(o.numero || '—')}</td>
             <td class="text-mono" style="font-size:11px">${fmtDateTime(o.fechaGeneracion)}</td>
             <td>${o.fechaEnvio ? fmtDate(o.fechaEnvio) : '—'}</td>
+            <td style="font-size:12px">${_otEsc(o.bodega || 'Celmedik Los Angeles')}</td>
             <td>${_otEsc(o.empresaTransporte || '—')}</td>
             <td style="max-width:200px;font-size:12px">${_otEsc(o.destino || '—')}</td>
             <td style="font-size:11px;max-width:220px;white-space:normal">${facts || '—'}</td>
