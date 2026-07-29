@@ -4696,13 +4696,17 @@ function addItemToDoc() {
 
     if (tipo === 'Salida') {
         const stock = calcStock();
+        // Filtramos por la bodega del documento — sin este filtro, un lote presente
+        // en varias bodegas con misma ubicación podía matchear una entrada distinta
+        // a la seleccionada (p.ej. cantidad 0) y disparar "stock insuficiente"
+        // aunque la bodega correcta tuviera stock.
+        const bodegaSelSal = (document.getElementById('md-bodega')?.value || '').trim();
 
-        // Buscar entrada de stock para sku+lote, preferir la que coincide con la ubicación elegida
         let loteStock = miUbic
-            ? Object.values(stock).find(s => s.sku === sku && s.lote === lote && s.ubicacion === miUbic)
+            ? Object.values(stock).find(s => s.sku === sku && s.lote === lote && (s.bodega||'') === bodegaSelSal && s.ubicacion === miUbic)
             : null;
-        if (!loteStock) loteStock = Object.values(stock).find(s => s.sku === sku && s.lote === lote);
-        if (!loteStock) { showFormError('mi-err', 'Lote no encontrado en stock.'); return; }
+        if (!loteStock) loteStock = Object.values(stock).find(s => s.sku === sku && s.lote === lote && (s.bodega||'') === bodegaSelSal);
+        if (!loteStock) { showFormError('mi-err', `Lote no encontrado en stock de la bodega ${bodegaSelSal || '(sin bodega)'}.`); return; }
 
         const st = getLoteStatus(loteStock);
         itemUbic = miUbic || loteStock.ubicacion || '';
@@ -4720,11 +4724,11 @@ function addItemToDoc() {
         const enDoc = movDocItems.filter(i => i.sku === sku && i.lote === lote && i.ubicacion === itemUbic).reduce((a, i) => a + i.qty, 0);
         let disponible;
         if (miUbic) {
-            const locEntry = Object.values(stock).find(s => s.sku === sku && s.lote === lote && s.ubicacion === miUbic && getLoteStatus(s) === 'Aprobado');
+            const locEntry = Object.values(stock).find(s => s.sku === sku && s.lote === lote && (s.bodega||'') === bodegaSelSal && s.ubicacion === miUbic && getLoteStatus(s) === 'Aprobado');
             disponible = locEntry ? locEntry.cantidad : 0;
         } else {
             disponible = Object.values(stock)
-                .filter(s => s.sku === sku && s.lote === lote && getLoteStatus(s) === 'Aprobado')
+                .filter(s => s.sku === sku && s.lote === lote && (s.bodega||'') === bodegaSelSal && getLoteStatus(s) === 'Aprobado')
                 .reduce((a, s) => a + s.cantidad, 0);
         }
         const locLabel = miUbic ? `ubicación ${miUbic}` : `lote ${lote}`;
@@ -4757,11 +4761,12 @@ function addItemToDoc() {
         // Para Salida revalidamos stock por ubicación de cada pallet
         if (tipo === 'Salida') {
             const stock = calcStock();
+            const bodegaSelPal = (document.getElementById('md-bodega')?.value || '').trim();
             const palBy = {};
             palletItems.forEach(p => { palBy[p.palUbic] = (palBy[p.palUbic] || 0) + p.palQty; });
             for (const [u, n] of Object.entries(palBy)) {
                 const enDoc = movDocItems.filter(it => it.sku === sku && it.lote === lote && it.ubicacion === u).reduce((a, it) => a + it.qty, 0);
-                const locEntry = Object.values(stock).find(s => s.sku === sku && s.lote === lote && s.ubicacion === u && getLoteStatus(s) === 'Aprobado');
+                const locEntry = Object.values(stock).find(s => s.sku === sku && s.lote === lote && (s.bodega||'') === bodegaSelPal && s.ubicacion === u && getLoteStatus(s) === 'Aprobado');
                 const disponible = locEntry ? locEntry.cantidad : 0;
                 if (n + enDoc > disponible) {
                     showFormError('mi-err', `Stock insuficiente en ubicación ${u}: disponible ${disponible} ud., ya en documento ${enDoc}, requerido ${n}.`);
