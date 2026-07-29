@@ -1767,62 +1767,6 @@
     </div>
 </div>
 
-<!-- CUARENTENA -->
-<div id="cuarModal" class="modal">
-    <div class="modal-box">
-        <div class="modal-header">
-            <div><div class="modal-title">Ingresar a Cuarentena</div><div class="modal-subtitle">Bloqueo de lote pendiente liberación QA — NT 147</div></div>
-            <button class="modal-close" onclick="closeModal('cuarModal')">✕</button>
-        </div>
-        <form onsubmit="saveCuarentena(event)">
-            <div id="cuarModal-err" class="form-error-banner"></div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label class="form-label">SKU <span style="color:var(--danger)">*</span></label>
-                    <div class="sku-ac-wrap">
-                        <input type="text" class="form-input" id="q-sku" oninput="skuAutocomplete(this,'q-sku-dd','q-sku-info')" onblur="setTimeout(()=>hideDropdown('q-sku-dd'),200)" placeholder="Escriba SKU o nombre..." autocomplete="off" required>
-                        <div id="q-sku-dd" class="sku-dropdown" style="display:none"></div>
-                    </div>
-                    <div id="q-sku-info" style="margin-top:6px;font-size:12.5px;color:var(--text3)"></div>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Lote <span style="color:var(--danger)">*</span></label>
-                    <input type="text" class="form-input" id="q-lote" required>
-                </div>
-            </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label class="form-label">Cantidad afectada <span style="color:var(--danger)">*</span></label>
-                    <input type="number" class="form-input" id="q-qty" min="0.001" step="any" required>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Responsable QA</label>
-                    <input type="text" class="form-input" id="q-resp" placeholder="Nombre del responsable">
-                </div>
-            </div>
-            <div class="form-group">
-                <label class="form-label">Motivo <span style="color:var(--danger)">*</span></label>
-                <select class="form-select" id="q-motivo" required>
-                    <option value="">Seleccionar...</option>
-                    <option value="Revisión calidad">Revisión de calidad</option>
-                    <option value="Sospecha deterioro">Sospecha de deterioro</option>
-                    <option value="Alerta ISP">Alerta del ISP</option>
-                    <option value="Recepción pendiente">Recepción pendiente de aprobación</option>
-                    <option value="Otro">Otro</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label class="form-label">Observaciones</label>
-                <textarea class="form-textarea" id="q-obs" placeholder="Describa el motivo detallado..."></textarea>
-            </div>
-            <div class="btn-row">
-                <button type="button" class="btn btn-ghost" onclick="closeModal('cuarModal')">Cancelar</button>
-                <button type="submit" class="btn btn-primary">Ingresar a cuarentena</button>
-            </div>
-        </form>
-    </div>
-</div>
-
 <!-- MODAL CONFIRMACIÓN -->
 <div id="confirmModal" class="modal">
     <div class="modal-box" style="max-width:440px">
@@ -1919,43 +1863,6 @@
         <div class="btn-row">
             <button type="button" class="btn btn-ghost" onclick="closeModal('destruccionModal')">Cancelar</button>
             <button type="button" class="btn btn-danger" onclick="saveDestruccion()" style="background:var(--danger);color:white;border-color:var(--danger)">Registrar destrucción y generar Acta PDF</button>
-        </div>
-    </div>
-</div>
-
-<!-- RECHAZO DE CUARENTENA -->
-<div id="rechazarCuarModal" class="modal">
-    <div class="modal-box" style="max-width:480px">
-        <div class="modal-header">
-            <div><div class="modal-title">Rechazar lote de cuarentena</div><div class="modal-subtitle">El lote quedará en estado RECHAZADO</div></div>
-            <button class="modal-close" onclick="closeModal('rechazarCuarModal')">✕</button>
-        </div>
-        <input type="hidden" id="rcq-id">
-        <div class="form-group">
-            <label class="form-label">Motivo del rechazo <span style="color:var(--danger)">*</span></label>
-            <select class="form-select" id="rcq-motivo" required>
-                <option value="">Seleccionar...</option>
-                <option value="Contaminación">Contaminación</option>
-                <option value="Vencido">Vencido</option>
-                <option value="Daño físico">Daño físico</option>
-                <option value="Alerta ISP">Alerta ISP</option>
-                <option value="Temperatura inadecuada">Temperatura inadecuada</option>
-                <option value="Falsificado">Falsificado</option>
-                <option value="Retiro de mercado">Retiro de mercado</option>
-                <option value="Otro">Otro</option>
-            </select>
-        </div>
-        <div class="form-group">
-            <label class="form-label">Responsable QA <span style="color:var(--danger)">*</span></label>
-            <input type="text" class="form-input" id="rcq-resp" placeholder="Nombre del responsable que rechaza" required>
-        </div>
-        <div class="form-group">
-            <label class="form-label">Observaciones</label>
-            <textarea class="form-textarea" id="rcq-obs" placeholder="Detalle adicional..."></textarea>
-        </div>
-        <div class="btn-row">
-            <button type="button" class="btn btn-ghost" onclick="closeModal('rechazarCuarModal')">Cancelar</button>
-            <button type="button" class="btn" style="background:var(--danger);color:white;border-color:var(--danger)" onclick="confirmarRechazoCuarentena()">Confirmar rechazo</button>
         </div>
     </div>
 </div>
@@ -4327,12 +4234,13 @@ function loadMiLotesDisponibles(sku) {
         // En Cambio de Status cualquier lote es clickeable (justamente para cambiar su status).
         const disabledCls = (!isAjuste && isCuarentena) ? 'lote-disabled' : '';
         const ubicSafe = (l.ubicacion||'').replace(/'/g,"\\'");
+        const bodegaSafe = (l.bodega||'').replace(/'/g,"\\'");
         let onclick = '';
         if (isAjuste) {
             onclick = `onmousedown="selectLoteAjuste('${sku}','${l.lote}','${ubicSafe}','${l.vence||''}','${st}',${l.cantidad})"`;
         } else if (!isCuarentena) {
             onclick = isDestruccion
-                ? `onmousedown="selectLoteDestruccion('${sku}','${l.lote}','${l.vence||''}','${st}',${l.cantidad})"`
+                ? `onmousedown="selectLoteDestruccion('${sku}','${l.lote}','${l.vence||''}','${st}',${l.cantidad},'${bodegaSafe}','${ubicSafe}')"`
                 : `onmousedown="selectLoteNormal('${l.lote}','${l.vence||''}','${st}',${l.cantidad})"`;
         }
         const diasLabel = dias !== null ? (dias < 0 ? '<span style="color:var(--danger);font-weight:600">VENCIDO</span>' : `${dias}d`) : '—';
@@ -4503,10 +4411,14 @@ function loadUbicacionesParaLote(sku, lote) {
     miUbicWrap.innerHTML = html;
 }
 
-function selectLoteDestruccion(sku, lote, vence, status, stockQty) {
-    // Open destrucción modal
-    document.getElementById('dest-sku').value = sku;
-    document.getElementById('dest-sku').dataset.cuarId = ''; // not from cuarentena
+function selectLoteDestruccion(sku, lote, vence, status, stockQty, bodega, ubicacion) {
+    // Open destrucción modal — bodega/ubicación se conservan como data-attrs
+    // para que saveDestruccion() escriba el movimiento contra la entrada de stock
+    // correcta cuando el mismo sku+lote existe en varias bodegas/ubicaciones.
+    const skuEl = document.getElementById('dest-sku');
+    skuEl.value = sku;
+    skuEl.dataset.bodega = bodega || '';
+    skuEl.dataset.ubic = ubicacion || '';
     document.getElementById('dest-lote').value = lote;
     document.getElementById('dest-estado').value = status;
     document.getElementById('dest-stock').value = stockQty + ' unidades';
@@ -6745,25 +6657,6 @@ function clearStockFilters() {
 }
 
 // ══ CUARENTENA ══
-function saveCuarentena(e) {
-    e.preventDefault();
-    if (userPerfil === 'Visualizador') { alert('Su perfil es de solo lectura.'); return; }
-    const sku = document.getElementById('q-sku').value.trim().toUpperCase();
-    const q = {
-        sku, lote: document.getElementById('q-lote').value.trim(),
-        cantidad: parseFloat(document.getElementById('q-qty').value),
-        motivo: document.getElementById('q-motivo').value,
-        responsable: document.getElementById('q-resp').value.trim(),
-        observaciones: document.getElementById('q-obs').value.trim(),
-        descripcion: data.productos[sku]?.descripcion || '',
-        status: 'Pendiente',
-        fechaIngreso: new Date().toISOString(),
-        usuario: currentUser.email
-    };
-    db.ref(`usuarios/${rootUid || currentUser.uid}/cuarentena`).push(q)
-        .then(() => { logAudit('Ingresar', 'Cuarentena', sku, q.lote, q.motivo); closeModal('cuarModal'); })
-        .catch(err => alert('Error: ' + err.message));
-}
 
 // ¿Es una categoría en la que el Operario (de su bodega) también puede cambiar
 // el estatus? Solo Concentrados y Dispositivos Médicos. Medicamentos,
@@ -6954,116 +6847,6 @@ async function confirmarCambioEstatusCuar() {
         });
 }
 
-function liberarCuarentena(id) {
-    if (userPerfil !== 'Maestro' && userPerfil !== 'Farmacéutico') { alert('Solo los perfiles Maestro y Farmacéutico pueden liberar lotes de cuarentena.'); return; }
-    const q = data.cuarentena[id]; if (!q) return;
-    showConfirm(
-        'Liberar lote de cuarentena',
-        `SKU: ${q.sku} · Lote: ${q.lote}`,
-        `<strong>¿Confirmar liberación?</strong><br>El lote quedará en estado <span style="color:var(--success);font-weight:600">APROBADO</span> y podrá despacharse normalmente.<br><span style="color:var(--text3);font-size:12px">Se registrará un evento de cambio de estado en trazabilidad.</span>`,
-        'Confirmar liberación', 'btn-success-sm',
-        async () => {
-            const uid = rootUid || currentUser.uid;
-            const ahora = new Date().toISOString();
-            const stock = calcStock();
-            const stockItem = Object.values(stock).find(s => s.sku === q.sku && s.lote === q.lote);
-            let numeroMovimiento = '';
-            try { numeroMovimiento = await generarNumeroMovimiento('CambioEstado'); }
-            catch (e) { alert('No se pudo asignar el N° de movimiento: ' + (e.message || e)); return; }
-            const updates = {};
-            updates[`usuarios/${uid}/cuarentena/${id}/status`] = 'Liberado';
-            updates[`usuarios/${uid}/cuarentena/${id}/fechaLiberacion`] = ahora;
-            updates[`usuarios/${uid}/cuarentena/${id}/usuarioLibera`] = currentUser.email;
-            // CambioEstado movement for trazabilidad
-            updates[`usuarios/${uid}/movimientos/${Date.now()}`] = {
-                numeroMovimiento,
-                tipo: 'CambioEstado', sku: q.sku, lote: q.lote,
-                descripcion: q.descripcion || data.productos[q.sku]?.descripcion || '',
-                cantidad: q.cantidad, vence: stockItem?.vence || '',
-                status: 'Aprobado', statusAnterior: 'Cuarentena',
-                bodega: stockItem?.bodega || '', ubicacion: stockItem?.ubicacion || '',
-                proveedor: '', referencia: '',
-                observaciones: `Liberado de cuarentena por QA. Motivo original: ${q.motivo}`,
-                fecha: ahora, usuario: currentUser.email
-            };
-            db.ref().update(updates).then(() => {
-                logAudit('Liberar', 'Cuarentena', q.sku, q.lote, 'Liberado → Aprobado por QA');
-            });
-        }
-    );
-}
-
-function abrirRechazoCuarentena(id) {
-    if (userPerfil !== 'Maestro' && userPerfil !== 'Farmacéutico') { alert('Solo los perfiles Maestro y Farmacéutico pueden rechazar lotes de cuarentena.'); return; }
-    const q = data.cuarentena[id]; if (!q) return;
-    document.getElementById('rcq-id').value = id;
-    document.getElementById('rcq-motivo').value = '';
-    document.getElementById('rcq-resp').value = '';
-    document.getElementById('rcq-obs').value = '';
-    openModal('rechazarCuarModal');
-}
-
-async function confirmarRechazoCuarentena() {
-    const id = document.getElementById('rcq-id').value;
-    const motivo = document.getElementById('rcq-motivo').value;
-    const resp = document.getElementById('rcq-resp').value.trim();
-    const obs = document.getElementById('rcq-obs').value.trim();
-    if (!motivo) { alert('Seleccione el motivo de rechazo.'); return; }
-    if (!resp) { alert('Ingrese el nombre del responsable QA.'); return; }
-    const q = data.cuarentena[id]; if (!q) return;
-    const uid = rootUid || currentUser.uid;
-    const ahora = new Date().toISOString();
-    const stock = calcStock();
-    const stockItem = Object.values(stock).find(s => s.sku === q.sku && s.lote === q.lote);
-    let numeroMovimiento = '';
-    try { numeroMovimiento = await generarNumeroMovimiento('CambioEstado'); }
-    catch (e) { alert('No se pudo asignar el N° de movimiento: ' + (e.message || e)); return; }
-    const updates = {};
-    updates[`usuarios/${uid}/cuarentena/${id}/status`] = 'Rechazado';
-    updates[`usuarios/${uid}/cuarentena/${id}/motivoRechazo`] = motivo;
-    updates[`usuarios/${uid}/cuarentena/${id}/responsableRechazo`] = resp;
-    updates[`usuarios/${uid}/cuarentena/${id}/observacionesRechazo`] = obs;
-    updates[`usuarios/${uid}/cuarentena/${id}/fechaRechazo`] = ahora;
-    updates[`usuarios/${uid}/cuarentena/${id}/usuarioRechazo`] = currentUser.email;
-    // CambioEstado movement
-    updates[`usuarios/${uid}/movimientos/${Date.now()}`] = {
-        numeroMovimiento,
-        tipo: 'CambioEstado', sku: q.sku, lote: q.lote,
-        descripcion: q.descripcion || data.productos[q.sku]?.descripcion || '',
-        cantidad: q.cantidad, vence: stockItem?.vence || '',
-        status: 'Rechazado', statusAnterior: 'Cuarentena',
-        bodega: stockItem?.bodega || '', ubicacion: stockItem?.ubicacion || '',
-        proveedor: resp, referencia: '',
-        observaciones: `Rechazado por QA. Motivo: ${motivo}. ${obs}`,
-        fecha: ahora, usuario: currentUser.email
-    };
-    db.ref().update(updates).then(() => {
-        logAudit('Rechazar', 'Cuarentena', q.sku, q.lote, `Rechazado → ${motivo} · Resp: ${resp}`);
-        closeModal('rechazarCuarModal');
-    });
-}
-
-function abrirDestruccionCuarentena(id) {
-    if (userPerfil !== 'Maestro' && userPerfil !== 'Farmacéutico') { alert('Solo los perfiles Maestro y Farmacéutico pueden registrar destrucción desde cuarentena.'); return; }
-    const q = data.cuarentena[id]; if (!q) return;
-    const stock = calcStock();
-    const stockItem = Object.values(stock).find(s => s.sku === q.sku && s.lote === q.lote);
-    document.getElementById('dest-sku').value = q.sku;
-    document.getElementById('dest-lote').value = q.lote;
-    document.getElementById('dest-estado').value = stockItem ? getLoteStatus(stockItem) : 'Cuarentena';
-    document.getElementById('dest-stock').value = (stockItem?.cantidad || q.cantidad) + ' unidades';
-    document.getElementById('dest-qty').value = stockItem?.cantidad || q.cantidad;
-    document.getElementById('dest-qty').max = stockItem?.cantidad || q.cantidad;
-    document.getElementById('dest-header-title').textContent = `Lote ${q.lote} — Desde cuarentena`;
-    document.getElementById('dest-header-desc').textContent = 'Se registrará la destrucción y se actualizará el stock. Complete todos los campos del acta.';
-    ['dest-motivo','dest-empresa','dest-acta','dest-resp','dest-obs'].forEach(id => { const el=document.getElementById(id); if(el&&el.tagName==='SELECT') el.value=''; else if(el) el.value=''; });
-    document.getElementById('dest-fecha').value = new Date().toISOString().split('T')[0];
-    document.getElementById('dest-err').style.display = 'none';
-    // Store cuarentena id for later update
-    document.getElementById('dest-sku').dataset.cuarId = id;
-    openModal('destruccionModal');
-}
-
 // ══ DESTRUCCIÓN ISP ══
 async function saveDestruccion() {
     const sku      = document.getElementById('dest-sku').value.trim();
@@ -7076,7 +6859,8 @@ async function saveDestruccion() {
     const fechaDest = document.getElementById('dest-fecha').value;
     const resp     = document.getElementById('dest-resp').value.trim();
     const obs      = document.getElementById('dest-obs').value.trim();
-    const cuarId   = document.getElementById('dest-sku').dataset.cuarId || '';
+    const bodegaDest = document.getElementById('dest-sku').dataset.bodega || '';
+    const ubicDest   = document.getElementById('dest-sku').dataset.ubic || '';
 
     if (!qty || qty <= 0) { showFormError('dest-err', 'La cantidad a destruir debe ser mayor a cero.'); return; }
     if (!motivo) { showFormError('dest-err', 'Seleccione el motivo de rechazo.'); return; }
@@ -7092,7 +6876,13 @@ async function saveDestruccion() {
     const uid = rootUid || currentUser.uid;
     const ahora = new Date().toISOString();
     const stock = calcStock();
-    const stockItem = Object.values(stock).find(s => s.sku === sku && s.lote === lote);
+    // Buscar la entrada exacta por sku+lote+bodega+ubicación. Fallback por sólo
+    // sku+lote para registros históricos que no traían bodega/ubicación.
+    const stockItem = Object.values(stock).find(s =>
+        s.sku === sku && s.lote === lote &&
+        (bodegaDest ? (s.bodega||'') === bodegaDest : true) &&
+        (ubicDest   ? (s.ubicacion||'') === ubicDest : true)
+    ) || Object.values(stock).find(s => s.sku === sku && s.lote === lote);
     const documentoId = `DEST-${acta}-${Date.now()}`;
 
     // Un N° de destrucción y opcionalmente un N° de cambio de estado para
@@ -7126,14 +6916,6 @@ async function saveDestruccion() {
 
     const updates = {};
     updates[`usuarios/${uid}/movimientos/${Date.now()}`] = mov;
-
-    // If came from cuarentena, mark it as Destruido
-    if (cuarId && data.cuarentena[cuarId]) {
-        updates[`usuarios/${uid}/cuarentena/${cuarId}/status`] = 'Destruido';
-        updates[`usuarios/${uid}/cuarentena/${cuarId}/fechaDestroy`] = ahora;
-        updates[`usuarios/${uid}/cuarentena/${cuarId}/usuarioDestroy`] = currentUser.email;
-        updates[`usuarios/${uid}/cuarentena/${cuarId}/actaDestruccion`] = acta;
-    }
 
     // CambioEstado: mark remaining stock as Rechazado if partial destruction
     if (remaining > 0) {
