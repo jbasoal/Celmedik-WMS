@@ -1707,11 +1707,15 @@
         </div>
         <!-- (campo de estado movido al formulario por ítem — mi-status-group) -->
         <div id="md-status-row" style="display:none"><select id="md-status-prod" style="display:none"></select><div id="md-status-info" style="display:none"><div id="md-status-info-text"></div></div></div>
-        <div class="form-row" id="md-rutcli-row" style="display:none">
-            <div class="form-group" id="md-rutcli-group">
+        <div class="form-row" id="md-rutcli-row">
+            <div class="form-group" id="md-rutcli-group" style="display:none">
                 <label class="form-label">N° RUT Cliente <span style="color:var(--danger)">*</span></label>
                 <input type="text" class="form-input" id="md-rutcli" placeholder="Ej: 76.039.571-4" oninput="_onRutClienteInput()" onblur="_formatRutInput(this); _onRutClienteInput(true)" autocomplete="off">
                 <div id="md-rutcli-info" style="margin-top:6px;font-size:12px;color:var(--text3);min-height:14px"></div>
+            </div>
+            <div class="form-group" id="md-fechadoc-group">
+                <label class="form-label">Fecha del documento</label>
+                <input type="date" class="form-input" id="md-fecha">
             </div>
         </div>
         <div class="form-row" id="md-proveedor-row">
@@ -1719,25 +1723,17 @@
                 <label class="form-label">Proveedor / Cliente</label>
                 <input type="text" class="form-input" id="md-proveedor" placeholder="Nombre proveedor o cliente">
             </div>
-            <div class="form-group">
-                <label class="form-label">Fecha del documento</label>
-                <input type="date" class="form-input" id="md-fecha">
-            </div>
-        </div>
-        <div class="form-row" id="md-destino-row" style="display:none">
-            <div class="form-group" id="md-destino-group">
-                <label class="form-label">Destino <span id="md-destino-req" style="color:var(--danger);display:none">*</span></label>
-                <div id="md-destino-wrap"><input type="text" class="form-input" id="md-destino" placeholder="Ej: Santiago, Concepción..."></div>
-            </div>
-        </div>
-        <div class="form-row" id="md-despacho-row" style="display:none">
-            <div class="form-group">
+            <div class="form-group" id="md-despacho-group" style="display:none">
                 <label class="form-label">Fecha de despacho <span style="color:var(--danger)">*</span></label>
                 <input type="date" class="form-input" id="md-fecha-despacho">
             </div>
         </div>
-        <div class="form-row">
-            <div class="form-group">
+        <div class="form-row" id="md-destino-row">
+            <div class="form-group" id="md-destino-group" style="display:none">
+                <label class="form-label">Destino <span id="md-destino-req" style="color:var(--danger);display:none">*</span></label>
+                <div id="md-destino-wrap"><input type="text" class="form-input" id="md-destino" placeholder="Ej: Santiago, Concepción..."></div>
+            </div>
+            <div class="form-group" id="md-bodega-group">
                 <label class="form-label">Bodega <span style="color:var(--danger)">*</span></label>
                 <select class="form-select" id="md-bodega" required onchange="onDocBodegaChange()">
                     <option value="">Seleccionar...</option>
@@ -4393,23 +4389,28 @@ function _refreshMiStatusField(tipo) {
     // Cabecera: mostrar/ocultar N° Documento y Proveedor según tipo.
     const numdocGroup    = document.getElementById('md-numdoc-group');
     const proveedorGroup = document.getElementById('md-proveedor-group');
+    const proveedorRow   = document.getElementById('md-proveedor-row');
     const miPrecioGroup  = document.getElementById('mi-precio-group');
     const miVenceGroup   = document.getElementById('mi-vence-group');
     const miPalletGroup  = document.getElementById('mi-pallet-qty-group');
     const miUbicDestGroup = document.getElementById('mi-ubic-dest-group');
     const isCambioUbic = (tipo === 'CambioUbicacion');
+    const esSalida = (tipo === 'Salida');
     if (numdocGroup)    numdocGroup.style.display    = isCambioUbic ? 'none' : '';
     if (proveedorGroup) proveedorGroup.style.display = isCambioUbic ? 'none' : '';
-    const despachoRow = document.getElementById('md-despacho-row');
-    if (despachoRow) despachoRow.style.display = (tipo === 'Salida') ? '' : 'none';
-    // Casilla "Destino (ciudad)": visible sólo en Salida.
-    const destinoRow = document.getElementById('md-destino-row');
-    if (destinoRow) destinoRow.style.display = (tipo === 'Salida') ? '' : 'none';
-    // Casilla "N° RUT Cliente" y marca obligatorio en Destino: visible sólo en Salida.
-    const rutcliRow = document.getElementById('md-rutcli-row');
-    if (rutcliRow) rutcliRow.style.display = (tipo === 'Salida') ? '' : 'none';
+    // Fecha de despacho: sólo Salida. Comparte fila con Proveedor.
+    const despachoGroup = document.getElementById('md-despacho-group');
+    if (despachoGroup) despachoGroup.style.display = esSalida ? '' : 'none';
+    // Toda la fila Proveedor+Despacho se oculta en CambioUbicacion (ambos ocultos).
+    if (proveedorRow) proveedorRow.style.display = isCambioUbic ? 'none' : '';
+    // Destino: solo Salida. Comparte fila con Bodega (Bodega siempre visible).
+    const destinoGroup = document.getElementById('md-destino-group');
+    if (destinoGroup) destinoGroup.style.display = esSalida ? '' : 'none';
+    // N° RUT Cliente: solo Salida. Comparte fila con Fecha del documento.
+    const rutcliGroup = document.getElementById('md-rutcli-group');
+    if (rutcliGroup) rutcliGroup.style.display = esSalida ? '' : 'none';
     const destReq = document.getElementById('md-destino-req');
-    if (destReq) destReq.style.display = (tipo === 'Salida') ? '' : 'none';
+    if (destReq) destReq.style.display = esSalida ? '' : 'none';
     // Fecha de despacho por defecto = hoy al elegir Salida (si está vacía)
     if (tipo === 'Salida') {
         const fdEl = document.getElementById('md-fecha-despacho');
@@ -8255,9 +8256,9 @@ function resetMovModal() {
     const fechaEl = document.getElementById('md-fecha');
     if (fechaEl) fechaEl.value = new Date().toISOString().split('T')[0];
     const fdEl = document.getElementById('md-fecha-despacho'); if (fdEl) fdEl.value = '';
-    const fdRow = document.getElementById('md-despacho-row'); if (fdRow) fdRow.style.display = 'none';
-    const destinoRow = document.getElementById('md-destino-row'); if (destinoRow) destinoRow.style.display = 'none';
-    const rutcliRow = document.getElementById('md-rutcli-row'); if (rutcliRow) rutcliRow.style.display = 'none';
+    const despachoGroup = document.getElementById('md-despacho-group'); if (despachoGroup) despachoGroup.style.display = 'none';
+    const destinoGroup = document.getElementById('md-destino-group'); if (destinoGroup) destinoGroup.style.display = 'none';
+    const rutcliGroup = document.getElementById('md-rutcli-group'); if (rutcliGroup) rutcliGroup.style.display = 'none';
     const ndWarn = document.getElementById('md-numdoc-warn');
     if (ndWarn) {
         ndWarn.style.display = 'none';
