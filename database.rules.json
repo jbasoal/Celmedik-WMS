@@ -56,6 +56,7 @@
             "ubicacion":       { ".validate": "newData.isString() && newData.val().length <= 200" },
             "ubicacionOrigen": { ".validate": "newData.isString() && newData.val().length <= 200" },
             "proveedor":       { ".validate": "newData.isString() && newData.val().length <= 200" },
+            "clienteRut":      { ".validate": "newData.isString() && newData.val().length <= 20" },
             "referencia":      { ".validate": "newData.isString() && newData.val().length <= 200" },
             "observaciones":   { ".validate": "newData.isString() && newData.val().length <= 2000" },
             "documentoId":     { ".validate": "newData.isString() && newData.val().length <= 200" },
@@ -83,6 +84,26 @@
             "ubicacion": { ".validate": "newData.isString() && newData.val().length <= 200" },
             "capacidad": { ".validate": "newData.isNumber() || (newData.isString() && newData.val().length <= 50)" },
             "fecha":     { ".validate": "newData.isString() && newData.val().length <= 50" }
+          }
+        },
+
+        "clientes": {
+          ".indexOn": ["rut", "nombre"],
+          "$rutKey": {
+            ".validate": "newData.hasChildren(['rut', 'nombre'])",
+            "rut":    { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 20" },
+            "nombre": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 300" },
+            "fecha":  { ".validate": "newData.isString() && newData.val().length <= 50" },
+            "destinos": {
+              "$dId": {
+                "direccion":           { ".validate": "newData.isString() && newData.val().length <= 300" },
+                "comuna":              { ".validate": "newData.isString() && newData.val().length <= 100" },
+                "registroISP":         { ".validate": "newData.isString() && newData.val().length <= 100" },
+                "resolucionSanitaria": { ".validate": "newData.isString() && newData.val().length <= 100" },
+                "vigencia":            { ".validate": "newData.isString() && newData.val().length <= 200" },
+                "referencia":          { ".validate": "newData.isString() && newData.val().length <= 500" }
+              }
+            }
           }
         },
 

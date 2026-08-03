@@ -620,6 +620,10 @@
                 <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>
                 Bodegas
             </a>
+            <a class="nav-link" data-page="clientes" id="nav-clientes">
+                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+                Clientes Maestro
+            </a>
 
             <div class="nav-section">Operaciones</div>
             <a class="nav-link" data-page="movimientos">
@@ -862,6 +866,30 @@
                         <div class="table-wrap">
                             <table><thead><tr><th>Nombre</th><th>Ubicación</th><th>Capacidad</th><th>Tipo</th><th>Estado</th><th></th></tr></thead>
                             <tbody id="tBodegas"><tr class="empty-row"><td colspan="6">No hay bodegas registradas</td></tr></tbody></table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── CLIENTES MAESTRO ── -->
+                <div id="clientes" class="page">
+                    <div class="card">
+                        <div class="card-header">
+                            <div>
+                                <div class="card-title">Clientes Maestro</div>
+                                <div class="card-subtitle">Trazabilidad de destinos por RUT · Solo perfil Maestro puede modificar</div>
+                            </div>
+                            <button class="btn btn-primary btn-sm need-write need-maestro" onclick="openClienteModal()">+ Nuevo cliente</button>
+                        </div>
+                        <div class="filter-bar">
+                            <input type="text" class="form-input" id="fCliRut" placeholder="Buscar RUT..." onkeyup="renderClientes()" style="max-width:180px">
+                            <input type="text" class="form-input" id="fCliNombre" placeholder="Buscar nombre..." onkeyup="renderClientes()">
+                            <input type="text" class="form-input" id="fCliComuna" placeholder="Buscar comuna..." onkeyup="renderClientes()" style="max-width:180px">
+                            <button class="btn btn-ghost btn-sm" onclick="clearFiltrosClientes()">Limpiar</button>
+                        </div>
+                        <div class="table-wrap">
+                            <table><thead><tr>
+                                <th>RUT</th><th>Nombre / Razón social</th><th>Destinos</th><th>Comunas</th><th>Registros ISP</th><th></th>
+                            </tr></thead><tbody id="tClientes"><tr class="empty-row"><td colspan="6">No hay clientes registrados</td></tr></tbody></table>
                         </div>
                     </div>
                 </div>
@@ -1615,6 +1643,39 @@
     </div>
 </div>
 
+<!-- CLIENTE MAESTRO -->
+<div id="clienteModal" class="modal">
+    <div class="modal-box" style="max-width:820px;width:95vw;max-height:92vh;overflow-y:auto">
+        <div class="modal-header">
+            <div><div class="modal-title" id="cli-modal-title">Nuevo Cliente</div><div class="modal-subtitle">Un cliente puede tener múltiples destinos con distintos registros ISP</div></div>
+            <button class="modal-close" onclick="closeModal('clienteModal')">✕</button>
+        </div>
+        <div id="clienteModal-err" class="form-error-banner"></div>
+        <form onsubmit="saveCliente(event)">
+            <div class="section-divider"><div class="section-divider-line"></div><div class="section-divider-text">Identificación</div><div class="section-divider-line"></div></div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">RUT <span style="color:var(--danger)">*</span></label>
+                    <input type="text" class="form-input" id="cli-rut" placeholder="Ej: 76.039.571-4" required onblur="_formatRutInput(this)">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Nombre / Razón social <span style="color:var(--danger)">*</span></label>
+                    <input type="text" class="form-input" id="cli-nombre" placeholder="Ej: ADMINISTRADORA E INVERSIONES SUR SA" required>
+                </div>
+            </div>
+            <div class="section-divider"><div class="section-divider-line"></div><div class="section-divider-text">Destinos / Ubicaciones</div><div class="section-divider-line"></div></div>
+            <div id="cli-destinos-wrap"></div>
+            <div style="margin:12px 0 18px 0">
+                <button type="button" class="btn btn-ghost btn-sm" onclick="addClienteDestinoRow()">+ Agregar destino</button>
+            </div>
+            <div class="btn-row">
+                <button type="button" class="btn btn-ghost" onclick="closeModal('clienteModal')">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Guardar cliente</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <!-- MOVIMIENTO - DOCUMENTO MULTI-PRODUCTO -->
 <div id="movModal" class="modal">
     <div class="modal-box" style="max-width:860px;width:95vw;max-height:92vh;overflow-y:auto">
@@ -1656,10 +1717,17 @@
                 <input type="date" class="form-input" id="md-fecha">
             </div>
         </div>
+        <div class="form-row" id="md-rutcli-row" style="display:none">
+            <div class="form-group" id="md-rutcli-group">
+                <label class="form-label">N° RUT Cliente <span style="color:var(--danger)">*</span></label>
+                <input type="text" class="form-input" id="md-rutcli" placeholder="Ej: 76.039.571-4" oninput="_onRutClienteInput()" onblur="_formatRutInput(this); _onRutClienteInput(true)" autocomplete="off">
+                <div id="md-rutcli-info" style="margin-top:6px;font-size:12px;color:var(--text3);min-height:14px"></div>
+            </div>
+        </div>
         <div class="form-row" id="md-destino-row" style="display:none">
             <div class="form-group" id="md-destino-group">
-                <label class="form-label">Destino (ciudad)</label>
-                <input type="text" class="form-input" id="md-destino" placeholder="Ej: Santiago, Concepción...">
+                <label class="form-label">Destino <span id="md-destino-req" style="color:var(--danger);display:none">*</span></label>
+                <div id="md-destino-wrap"><input type="text" class="form-input" id="md-destino" placeholder="Ej: Santiago, Concepción..."></div>
             </div>
         </div>
         <div class="form-row" id="md-despacho-row" style="display:none">
@@ -2533,7 +2601,7 @@ function getStockFiltrado() {
     Object.entries(stock).forEach(([k, s]) => { if (arr.includes(s.bodega)) out[k] = s; });
     return out;
 }
-let data = { productos:{}, bodegas:{}, movimientos:{}, cuarentena:{}, devoluciones:{}, auditoria:{}, ajustesMovimiento:{}, ordenesTransporte:{}, facturasPorDespachar:{} };
+let data = { productos:{}, bodegas:{}, clientes:{}, movimientos:{}, cuarentena:{}, devoluciones:{}, auditoria:{}, ajustesMovimiento:{}, ordenesTransporte:{}, facturasPorDespachar:{} };
 let selectedBodega = 'TOTAL';
 let movDocItems = [];
 
@@ -2576,7 +2644,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // que acceda al mismo navegador después de un logout.
 function _resetAppMemoryState() {
     try {
-        data = { productos:{}, bodegas:{}, movimientos:{}, cuarentena:{}, devoluciones:{}, auditoria:{}, ajustesMovimiento:{}, facturasPorDespachar:{} };
+        data = { productos:{}, bodegas:{}, clientes:{}, movimientos:{}, cuarentena:{}, devoluciones:{}, auditoria:{}, ajustesMovimiento:{}, facturasPorDespachar:{} };
         movDocItems = [];
         userPerfil = null; rootUid = null; userClienteOwner = null;
         _stockCache = null;
@@ -2652,7 +2720,7 @@ function loadProfile() {
             navOT.style.display = perfilesOT.includes(userPerfil) ? '' : 'none';
         }
         // Perfil Cliente: oculta módulos administrativos/comerciales que no debe ver.
-        const _ocultosCliente = ['nav-productos','nav-bodegas','nav-fpd','nav-dashComercial','nav-reportes','nav-auditoria'];
+        const _ocultosCliente = ['nav-productos','nav-bodegas','nav-clientes','nav-fpd','nav-dashComercial','nav-reportes','nav-auditoria'];
         _ocultosCliente.forEach(id => {
             const el = document.getElementById(id);
             if (el) el.style.display = isCliente ? 'none' : '';
@@ -3369,6 +3437,7 @@ function navigateTo(page) {
     // Como los renders "pesados" se gatean por visibilidad en attachListeners,
     // al entrar por primera vez a estas páginas se dispara su render.
     if (page === 'productos')    renderProductos();
+    if (page === 'clientes')     renderClientes();
     if (page === 'stock')        renderStock();
     if (page === 'movimientos')  renderMovimientos();
     if (page === 'cuarentena')   renderCuarentena();
@@ -3394,6 +3463,7 @@ function _flushPendingRenders() {
     const q = new Set(_pendingRenders);
     _pendingRenders.clear();
     if (q.has('bodegas'))           { renderBodegas(); renderBodegaBtns(); updateBodegaSelect(); }
+    if (q.has('clientes') && _isPageActive('clientes'))         renderClientes();
     if (q.has('productos') && _isPageActive('productos'))       renderProductos();
     if (q.has('movimientos') && _isPageActive('movimientos'))   renderMovimientos();
     if (q.has('stock') && _isPageActive('stock'))               renderStock();
@@ -3439,12 +3509,13 @@ function attachListeners() {
     db.ref(`usuarios/${uid}/ajustesMovimiento`).on('value', s => { data.ajustesMovimiento = s.val()||{}; _scheduleRender('ajustesMov'); });
     db.ref(`usuarios/${uid}/ordenesTransporte`).on('value', s => { data.ordenesTransporte = s.val()||{}; _scheduleRender('ordenesTransporte'); });
     db.ref(`usuarios/${uid}/facturasPorDespachar`).on('value', s => { data.facturasPorDespachar = s.val()||{}; _invalidateStockCache(); _scheduleRender('facturasPorDespachar','stock','stats'); });
+    db.ref(`usuarios/${uid}/clientes`).on('value', s => { data.clientes = s.val()||{}; _scheduleRender('clientes'); });
 }
 
 function detachListeners() {
     if (!currentUser) return;
     const uid = rootUid || currentUser.uid;
-    ['productos','bodegas','movimientos','cuarentena','devoluciones','ajustesMovimiento','ordenesTransporte','facturasPorDespachar'].forEach(k => db.ref(`usuarios/${uid}/${k}`).off());
+    ['productos','bodegas','clientes','movimientos','cuarentena','devoluciones','ajustesMovimiento','ordenesTransporte','facturasPorDespachar'].forEach(k => db.ref(`usuarios/${uid}/${k}`).off());
 }
 
 // ══ AUDIT LOG ══
@@ -3843,6 +3914,321 @@ function deleteBodega(id) {
     );
 }
 
+// ══ CLIENTES MAESTRO ══
+// Normaliza un RUT chileno para usarlo como key: solo dígitos + DV en mayúscula.
+// Ej: "76.039.571-4" -> "760395714"; "12345678-K" -> "12345678K".
+function _rutKey(rut) {
+    return String(rut||'').replace(/[.\s]/g,'').replace(/-/g,'').toUpperCase();
+}
+// Formatea a "76.039.571-4" a partir de cualquier variante legible.
+function _formatRut(rut) {
+    const raw = _rutKey(rut);
+    if (raw.length < 2) return String(rut||'').trim();
+    const dv = raw.slice(-1);
+    let num = raw.slice(0, -1);
+    // Miles con puntos
+    let out = '';
+    while (num.length > 3) { out = '.' + num.slice(-3) + out; num = num.slice(0,-3); }
+    out = num + out;
+    return `${out}-${dv}`;
+}
+function _formatRutInput(inp) {
+    if (!inp) return;
+    const v = (inp.value||'').trim();
+    if (!v) return;
+    inp.value = _formatRut(v);
+}
+// Valida DV mod 11. Devuelve true si el RUT es matemáticamente válido.
+function _isRutValido(rut) {
+    const raw = _rutKey(rut);
+    if (raw.length < 2) return false;
+    const dv = raw.slice(-1);
+    const num = raw.slice(0, -1);
+    if (!/^\d+$/.test(num)) return false;
+    let s = 0, m = 2;
+    for (let i = num.length - 1; i >= 0; i--) { s += parseInt(num[i],10) * m; m = m === 7 ? 2 : m + 1; }
+    const r = 11 - (s % 11);
+    const dvCalc = r === 11 ? '0' : (r === 10 ? 'K' : String(r));
+    return dvCalc === dv;
+}
+// Convierte serial de Excel (número de días desde 1900-01-01) a "dd-mm-aaaa".
+// Si viene texto, se devuelve tal cual (ej: "Prorrogada hasta ...").
+function _fmtVigencia(v) {
+    if (v === null || v === undefined) return '';
+    const s = String(v).trim();
+    if (!s) return '';
+    // Ya viene como fecha ISO o dd-mm-aaaa: no tocar.
+    if (/^\d{4}-\d{2}-\d{2}/.test(s) || /^\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4}/.test(s)) return s;
+    // Sólo dígitos: probable serial Excel
+    if (/^\d+(\.\d+)?$/.test(s)) {
+        const n = parseFloat(s);
+        // Excel serial: día 1 = 1900-01-01 (con bug del 29-feb-1900 → offset 25569 para 1970-01-01)
+        const ms = Math.round((n - 25569) * 86400 * 1000);
+        const d = new Date(ms);
+        if (!isNaN(d)) {
+            const dd = String(d.getUTCDate()).padStart(2,'0');
+            const mm = String(d.getUTCMonth()+1).padStart(2,'0');
+            const yy = d.getUTCFullYear();
+            return `${dd}-${mm}-${yy}`;
+        }
+    }
+    return s;
+}
+
+function renderClientes() {
+    const fRut     = (document.getElementById('fCliRut')?.value||'').toLowerCase().replace(/[.\s-]/g,'');
+    const fNombre  = (document.getElementById('fCliNombre')?.value||'').toLowerCase();
+    const fComuna  = (document.getElementById('fCliComuna')?.value||'').toLowerCase();
+    const rows = Object.entries(data.clientes||{})
+        .filter(([id,c]) => {
+            if (!c) return false;
+            const rutN = String(c.rut||'').toLowerCase().replace(/[.\s-]/g,'');
+            const nomN = String(c.nombre||'').toLowerCase();
+            const comunasN = Object.values(c.destinos||{}).map(d => (d.comuna||'').toLowerCase()).join(' ');
+            if (fRut && !rutN.includes(fRut)) return false;
+            if (fNombre && !nomN.includes(fNombre)) return false;
+            if (fComuna && !comunasN.includes(fComuna)) return false;
+            return true;
+        })
+        .sort((a,b) => (a[1].nombre||'').localeCompare(b[1].nombre||''));
+    const tb = document.getElementById('tClientes');
+    if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="6">No hay clientes registrados</td></tr>'; return; }
+    const esMaestro = userPerfil === 'Maestro';
+    tb.innerHTML = rows.map(([id,c]) => {
+        const dests = Object.values(c.destinos||{});
+        const direcciones = dests.map(d => d.direccion||'—').filter(Boolean).slice(0,3);
+        const comunas = [...new Set(dests.map(d => d.comuna).filter(Boolean))];
+        const regs = dests.map(d => d.registroISP).filter(Boolean);
+        return `
+        <tr>
+            <td class="text-mono" style="color:var(--accent2)">${c.rut||'—'}</td>
+            <td style="color:var(--text);font-weight:500">${c.nombre||'—'}</td>
+            <td style="font-size:12px">
+                <span class="badge badge-blue" style="font-size:10px">${dests.length}</span>
+                <div style="color:var(--text3);margin-top:3px">${direcciones.join('<br>')}${dests.length>3 ? `<br><em>+${dests.length-3} más…</em>` : ''}</div>
+            </td>
+            <td style="font-size:12px">${comunas.slice(0,3).join(', ')}${comunas.length>3?'…':''}</td>
+            <td style="font-size:12px">${regs.length ? regs.slice(0,3).map(r=>`<span class="rs-number" style="font-size:10px">${r}</span>`).join(' ')+(regs.length>3?' …':'') : '<span class="text-muted">—</span>'}</td>
+            <td>${esMaestro
+                ? `<button class="btn btn-sm btn-icon" onclick="editCliente('${id}')" title="Editar">✎</button>
+                   <button class="btn btn-sm btn-danger-sm" onclick="deleteCliente('${id}')" title="Eliminar">🗑</button>`
+                : (userPerfil === 'Visualizador' ? '<span class="text-muted">—</span>' : '<span class="text-muted" title="Solo Maestro puede editar clientes">—</span>')}</td>
+        </tr>`;
+    }).join('');
+}
+
+function clearFiltrosClientes() {
+    ['fCliRut','fCliNombre','fCliComuna'].forEach(id => { const el = document.getElementById(id); if (el) el.value=''; });
+    renderClientes();
+}
+
+// ── Modal ABM Cliente ─────────────────────────────────────────────────────────
+let _cliEditingId = '';   // rutKey en edición, vacío si es alta.
+
+function openClienteModal() {
+    if (userPerfil !== 'Maestro') { alert('Solo el perfil Maestro puede administrar clientes.'); return; }
+    _cliEditingId = '';
+    document.getElementById('cli-modal-title').textContent = 'Nuevo Cliente';
+    document.getElementById('cli-rut').value = '';
+    document.getElementById('cli-rut').disabled = false;
+    document.getElementById('cli-nombre').value = '';
+    document.getElementById('cli-destinos-wrap').innerHTML = '';
+    addClienteDestinoRow(); // arranca con un destino vacío
+    const err = document.getElementById('clienteModal-err'); if (err) err.style.display='none';
+    openModal('clienteModal');
+}
+
+function editCliente(id) {
+    if (userPerfil !== 'Maestro') { alert('Solo el perfil Maestro puede editar clientes.'); return; }
+    const c = data.clientes?.[id]; if (!c) return;
+    _cliEditingId = id;
+    document.getElementById('cli-modal-title').textContent = 'Editar Cliente';
+    document.getElementById('cli-rut').value = c.rut || '';
+    document.getElementById('cli-rut').disabled = true; // RUT es la clave, no se edita
+    document.getElementById('cli-nombre').value = c.nombre || '';
+    document.getElementById('cli-destinos-wrap').innerHTML = '';
+    const dests = Object.values(c.destinos||{});
+    if (!dests.length) addClienteDestinoRow();
+    else dests.forEach(d => addClienteDestinoRow(d));
+    const err = document.getElementById('clienteModal-err'); if (err) err.style.display='none';
+    openModal('clienteModal');
+}
+
+function addClienteDestinoRow(d) {
+    d = d || {};
+    const wrap = document.getElementById('cli-destinos-wrap');
+    const idx = wrap.children.length;
+    const div = document.createElement('div');
+    div.className = 'cli-destino-row';
+    div.style.cssText = 'background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:12px;margin-bottom:10px;position:relative';
+    div.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px">Destino ${idx+1}</div>
+            <button type="button" class="btn btn-sm btn-danger-sm" onclick="this.closest('.cli-destino-row').remove(); _renumeraDestinos()">Quitar</button>
+        </div>
+        <div class="form-row">
+            <div class="form-group" style="flex:2">
+                <label class="form-label">Dirección</label>
+                <input type="text" class="form-input cli-d-direccion" placeholder="Ej: LIBERTAD 184" value="${_escHtml(d.direccion||'')}">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Comuna</label>
+                <input type="text" class="form-input cli-d-comuna" placeholder="Ej: MAIPU" value="${_escHtml(d.comuna||'')}">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Registro N° (ISP)</label>
+                <input type="text" class="form-input cli-d-registro" placeholder="Ej: 427" value="${_escHtml(d.registroISP||'')}">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Resolución Sanitaria N°</label>
+                <input type="text" class="form-input cli-d-resolucion" placeholder="Ej: 3371" value="${_escHtml(d.resolucionSanitaria||'')}">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Vigencia</label>
+                <input type="text" class="form-input cli-d-vigencia" placeholder="Ej: 31-12-2026 o texto" value="${_escHtml(d.vigencia||'')}">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Referencia (URL)</label>
+                <input type="text" class="form-input cli-d-referencia" placeholder="https://..." value="${_escHtml(d.referencia||'')}">
+            </div>
+        </div>
+    `;
+    wrap.appendChild(div);
+}
+
+function _renumeraDestinos() {
+    const wrap = document.getElementById('cli-destinos-wrap'); if (!wrap) return;
+    Array.from(wrap.children).forEach((row, i) => {
+        const t = row.querySelector('div > div'); if (t) t.textContent = `Destino ${i+1}`;
+    });
+}
+
+function _escHtml(s) {
+    return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function saveCliente(e) {
+    e.preventDefault();
+    if (userPerfil !== 'Maestro') { alert('Solo el perfil Maestro puede administrar clientes.'); return; }
+    const rutRaw = document.getElementById('cli-rut').value.trim();
+    const nombre = document.getElementById('cli-nombre').value.trim();
+    if (!rutRaw) { showFormError('clienteModal-err', 'Ingrese el RUT.'); return; }
+    if (!_isRutValido(rutRaw)) { showFormError('clienteModal-err', `El RUT «${rutRaw}» no es válido (dígito verificador incorrecto).`); return; }
+    if (!nombre) { showFormError('clienteModal-err', 'Ingrese el nombre / razón social.'); return; }
+    const rutKey = _rutKey(rutRaw);
+    const rutFmt = _formatRut(rutRaw);
+    // En alta, evitar duplicado
+    if (!_cliEditingId && data.clientes && data.clientes[rutKey]) {
+        showFormError('clienteModal-err', `Ya existe un cliente con RUT ${rutFmt}. Edite el registro existente.`);
+        return;
+    }
+    // Reunir destinos
+    const destinos = {};
+    let idx = 0;
+    document.querySelectorAll('#cli-destinos-wrap .cli-destino-row').forEach(row => {
+        const direccion  = (row.querySelector('.cli-d-direccion')?.value  || '').trim();
+        const comuna     = (row.querySelector('.cli-d-comuna')?.value     || '').trim();
+        const registro   = (row.querySelector('.cli-d-registro')?.value   || '').trim();
+        const resolucion = (row.querySelector('.cli-d-resolucion')?.value || '').trim();
+        const vigencia   = (row.querySelector('.cli-d-vigencia')?.value   || '').trim();
+        const referencia = (row.querySelector('.cli-d-referencia')?.value || '').trim();
+        // Sólo guardar destinos con al menos dirección o comuna.
+        if (!direccion && !comuna && !registro && !resolucion && !vigencia && !referencia) return;
+        const id = `d${Date.now()}${idx++}`;
+        const d = {};
+        if (direccion)  d.direccion  = direccion;
+        if (comuna)     d.comuna     = comuna;
+        if (registro)   d.registroISP = registro;
+        if (resolucion) d.resolucionSanitaria = resolucion;
+        if (vigencia)   d.vigencia   = vigencia;
+        if (referencia) d.referencia = referencia;
+        destinos[id] = d;
+    });
+    const cliente = {
+        rut: rutFmt,
+        nombre,
+        fecha: new Date().toISOString(),
+        destinos
+    };
+    const esEdicion = !!_cliEditingId;
+    db.ref(`usuarios/${rootUid || currentUser.uid}/clientes/${rutKey}`).set(cliente)
+        .then(() => {
+            logAudit(esEdicion ? 'Editar' : 'Crear', 'Clientes', rutFmt, '', `${nombre} · ${Object.keys(destinos).length} destino(s)`);
+            closeModal('clienteModal');
+        })
+        .catch(err => showFormError('clienteModal-err', 'Error: ' + err.message));
+}
+
+function deleteCliente(id) {
+    if (userPerfil !== 'Maestro') { alert('Solo el perfil Maestro puede eliminar clientes.'); return; }
+    const c = data.clientes?.[id]; if (!c) return;
+    showConfirm('Eliminar Cliente', 'Esta acción no se puede deshacer',
+        `¿Eliminar el cliente <strong>${c.nombre}</strong> (RUT ${c.rut})? Se perderán todos sus destinos.`,
+        'Eliminar', 'btn-danger',
+        () => { db.ref(`usuarios/${rootUid || currentUser.uid}/clientes/${id}`).remove()
+            .then(() => logAudit('Eliminar', 'Clientes', c.rut, '', c.nombre)); }
+    );
+}
+
+// ── Integración con modal Movimiento (Salida) ─────────────────────────────────
+// Se dispara al escribir en md-rutcli. Si el RUT existe en el maestro, autollena
+// el nombre en md-proveedor y transforma md-destino en un <select> con los destinos.
+// Si no existe y `blur=true` (perdió foco), muestra advertencia (bloqueo real ocurre al guardar).
+function _onRutClienteInput(blur) {
+    const inp   = document.getElementById('md-rutcli');
+    const info  = document.getElementById('md-rutcli-info');
+    const prov  = document.getElementById('md-proveedor');
+    const destWrap = document.getElementById('md-destino-wrap');
+    if (!inp || !info || !prov || !destWrap) return;
+    const raw = (inp.value||'').trim();
+    // Vacío: reset campos derivados a texto libre (pero no borrar lo que el usuario haya escrito manualmente)
+    if (!raw) {
+        info.textContent = '';
+        info.style.color = '';
+        destWrap.innerHTML = '<input type="text" class="form-input" id="md-destino" placeholder="Ej: Santiago, Concepción...">';
+        prov.readOnly = false;
+        return;
+    }
+    const key = _rutKey(raw);
+    const cli = (data.clientes||{})[key];
+    if (!cli) {
+        info.style.color = 'var(--danger)';
+        info.textContent = blur ? `⚠ RUT ${_formatRut(raw)} no está en el Maestro de Clientes. Regístrelo antes de guardar la salida.` : '';
+        // Deja el destino como input libre para que el usuario vea el estado
+        destWrap.innerHTML = '<input type="text" class="form-input" id="md-destino" placeholder="Ej: Santiago, Concepción..." disabled>';
+        prov.value = '';
+        prov.readOnly = false;
+        return;
+    }
+    // Encontrado: autollenar nombre + poblar destinos
+    prov.value = cli.nombre || '';
+    prov.readOnly = true;
+    info.style.color = 'var(--success,#0f8b3a)';
+    const dests = Object.entries(cli.destinos||{});
+    info.textContent = `✓ ${cli.nombre} — ${dests.length} destino(s) asociado(s).`;
+    if (!dests.length) {
+        destWrap.innerHTML = '<input type="text" class="form-input" id="md-destino" placeholder="Escriba destino libremente">';
+        return;
+    }
+    const sel = document.createElement('select');
+    sel.className = 'form-select'; sel.id = 'md-destino';
+    sel.innerHTML = '<option value="">Seleccionar destino...</option>' + dests.map(([did,d]) => {
+        const label = [d.direccion, d.comuna].filter(Boolean).join(' — ') || '(sin dirección)';
+        const val = label;
+        return `<option value="${_escHtml(val)}">${_escHtml(label)}</option>`;
+    }).join('');
+    destWrap.innerHTML = '';
+    destWrap.appendChild(sel);
+    if (dests.length === 1) {
+        const only = dests[0][1];
+        sel.value = [only.direccion, only.comuna].filter(Boolean).join(' — ') || '';
+    }
+}
+
 function renderBodegaBtns() {
     const c = document.getElementById('bodegaBtns');
     c.querySelectorAll('[data-bodega-btn]').forEach(b => b.remove());
@@ -4019,6 +4405,11 @@ function _refreshMiStatusField(tipo) {
     // Casilla "Destino (ciudad)": visible sólo en Salida.
     const destinoRow = document.getElementById('md-destino-row');
     if (destinoRow) destinoRow.style.display = (tipo === 'Salida') ? '' : 'none';
+    // Casilla "N° RUT Cliente" y marca obligatorio en Destino: visible sólo en Salida.
+    const rutcliRow = document.getElementById('md-rutcli-row');
+    if (rutcliRow) rutcliRow.style.display = (tipo === 'Salida') ? '' : 'none';
+    const destReq = document.getElementById('md-destino-req');
+    if (destReq) destReq.style.display = (tipo === 'Salida') ? '' : 'none';
     // Fecha de despacho por defecto = hoy al elegir Salida (si está vacía)
     if (tipo === 'Salida') {
         const fdEl = document.getElementById('md-fecha-despacho');
@@ -5032,8 +5423,9 @@ function saveDocumento() {
     if (userPerfil === 'Visualizador') { alert('Su perfil es de solo lectura.'); return; }
     const tipo = document.getElementById('md-tipo').value;
     const numDoc = document.getElementById('md-numdoc').value.trim();
-    const proveedor = document.getElementById('md-proveedor').value.trim();
+    let proveedor = document.getElementById('md-proveedor').value.trim();
     const destino = (document.getElementById('md-destino')?.value || '').trim();
+    const rutClienteRaw = (document.getElementById('md-rutcli')?.value || '').trim();
     const fechaDoc = document.getElementById('md-fecha').value;
     const fechaDespacho = (document.getElementById('md-fecha-despacho')?.value || '').trim();
     const bodega = document.getElementById('md-bodega').value;
@@ -5041,6 +5433,32 @@ function saveDocumento() {
     const obs = document.getElementById('md-obs').value.trim();
 
     if (!tipo) { showFormError('movModal-err', 'Seleccione el tipo de movimiento.'); return; }
+    // Salida: exigir RUT registrado en el Maestro de Clientes y destino elegido.
+    let clienteRutFmt = '', clienteNombre = '';
+    if (tipo === 'Salida') {
+        if (!rutClienteRaw) {
+            showFormError('movModal-err', 'Debe ingresar el N° RUT del cliente. Es obligatorio para salidas.');
+            try { document.getElementById('md-rutcli')?.focus(); } catch(_){}
+            return;
+        }
+        if (!_isRutValido(rutClienteRaw)) {
+            showFormError('movModal-err', `El RUT «${rutClienteRaw}» no es válido (dígito verificador incorrecto).`);
+            return;
+        }
+        const key = _rutKey(rutClienteRaw);
+        const cli = (data.clientes||{})[key];
+        if (!cli) {
+            showFormError('movModal-err', `El RUT ${_formatRut(rutClienteRaw)} no existe en el Maestro de Clientes. Regístrelo primero en el módulo «Clientes Maestro» y vuelva a intentar.`);
+            return;
+        }
+        clienteRutFmt = cli.rut || _formatRut(rutClienteRaw);
+        clienteNombre = cli.nombre || proveedor;
+        proveedor = clienteNombre; // forzar a que quede el nombre canónico del maestro
+        if (!destino) {
+            showFormError('movModal-err', 'Seleccione el destino asociado al RUT del cliente.');
+            return;
+        }
+    }
     // N° factura/guía obligatorio para Entrada, Salida y Devolución.
     if (_numDocRequerido(tipo) && !numDoc) {
         showFormError('movModal-err', `Debe ingresar el N° de factura/guía. Es obligatorio para movimientos de tipo ${tipo}.`);
@@ -5091,6 +5509,7 @@ function saveDocumento() {
         <span style="color:var(--text3)">Documento:</span> <strong>${documentoId}</strong><br>
         <span style="color:var(--text3)">Bodega:</span> ${bodega}<br>
         ${isCambioUbic ? '' : `<span style="color:var(--text3)">Proveedor/Cliente:</span> ${proveedor||'—'}<br>`}
+        ${tipo === 'Salida' && clienteRutFmt ? `<span style="color:var(--text3)">RUT Cliente:</span> <strong>${clienteRutFmt}</strong><br>` : ''}
         ${tipo === 'Salida' && destino ? `<span style="color:var(--text3)">Destino:</span> ${destino}<br>` : ''}
         ${tipo === 'Salida' && fechaDespacho ? `<span style="color:var(--text3)">Fecha de despacho:</span> <strong>${fmtDate(fechaDespacho)}</strong><br>` : ''}
         <span style="color:var(--text3)">Total unidades:</span> <strong>${totalUnidades}</strong>`;
@@ -5130,6 +5549,7 @@ function saveDocumento() {
                     bodega, ubicacion: item.ubicacion || ubic,
                     proveedor, referencia: numDoc,
                     destino: tipo === 'Salida' ? destino : '',
+                    clienteRut: tipo === 'Salida' ? clienteRutFmt : '',
                     observaciones: obs,
                     fecha: fechaISO,
                     usuario,
@@ -5203,6 +5623,7 @@ function saveDocumento() {
                         documentoId, tipo, numDoc, fecha: fechaISO, fechaDoc,
                         fechaDespacho: tipo === 'Salida' ? fechaDespacho : '',
                         proveedor, destino: tipo === 'Salida' ? destino : '',
+                        clienteRut: tipo === 'Salida' ? clienteRutFmt : '',
                         bodega, ubic, obs,
                         items: [...movDocItems], usuario,
                         usuarioPerfil: userPerfil || '',
@@ -5308,7 +5729,14 @@ function generatePDF(docData, opts) {
     addInfo('Fecha documento:', docData.fechaDoc ? fmtDate(docData.fechaDoc) : '—', col2, y, 38);
     y += 6;
     addInfo('Proveedor/Destinatario:', docData.proveedor || '—', margin, y, 52);
+    if (docData.tipo === 'Salida' && docData.clienteRut) {
+        addInfo('RUT Cliente:', docData.clienteRut, col2, y, 28);
+    }
     y += 6;
+    if (docData.tipo === 'Salida' && docData.destino) {
+        addInfo('Destino:', docData.destino, margin, y, 20);
+        y += 6;
+    }
     addInfo('Bodega:', docData.bodega || '—', margin, y, 20);
     if (docData.tipo === 'Salida') {
         addInfo('Fecha de despacho:', docData.fechaDespacho ? fmtDate(docData.fechaDespacho) : '—', col2, y, 38);
@@ -5569,6 +5997,8 @@ function regenerarPDF(idOperacion) {
         fechaDoc: ref.fechaDocumento || '',
         fechaDespacho: ref.fechaDespacho || '',
         proveedor: ref.proveedor || '',
+        destino: ref.destino || '',
+        clienteRut: ref.clienteRut || '',
         bodega: ref.bodega || '',
         ubic: ref.ubicacion || '',
         obs: ref.observaciones || '',
@@ -6439,7 +6869,7 @@ function renderMovimientos(preservePage) {
             <td style="font-weight:600;color:var(--text)">${m.cantidad}</td>
             <td>${m.bodega||'—'}</td>
             <td style="font-size:11px">${ubicCell}</td>
-            <td>${m.proveedor||'—'}</td>
+            <td>${m.proveedor||'—'}${m.clienteRut ? `<br><span class="text-mono" style="font-size:10px;color:var(--text3)">RUT ${m.clienteRut}</span>` : ''}</td>
             <td>${m.referencia||'—'}</td>
             <td>${statusBadgeHTML(m.status||'—')}</td>
             <td style="font-size:11px;color:var(--text3)">${m.usuario||'—'}</td>
@@ -7816,12 +8246,18 @@ function closeModal(id) {
 
 function resetMovModal() {
     movDocItems = [];
-    _clearFields('md-tipo','md-numdoc','md-proveedor','md-destino','md-obs');
+    _clearFields('md-tipo','md-numdoc','md-proveedor','md-destino','md-obs','md-rutcli');
+    // El destino puede haber quedado transformado en <select> de una salida previa: restaurar a input libre
+    const destWrap = document.getElementById('md-destino-wrap');
+    if (destWrap) destWrap.innerHTML = '<input type="text" class="form-input" id="md-destino" placeholder="Ej: Santiago, Concepción...">';
+    const provEl = document.getElementById('md-proveedor'); if (provEl) provEl.readOnly = false;
+    const rutcliInfo = document.getElementById('md-rutcli-info'); if (rutcliInfo) { rutcliInfo.textContent = ''; rutcliInfo.style.color = ''; }
     const fechaEl = document.getElementById('md-fecha');
     if (fechaEl) fechaEl.value = new Date().toISOString().split('T')[0];
     const fdEl = document.getElementById('md-fecha-despacho'); if (fdEl) fdEl.value = '';
     const fdRow = document.getElementById('md-despacho-row'); if (fdRow) fdRow.style.display = 'none';
     const destinoRow = document.getElementById('md-destino-row'); if (destinoRow) destinoRow.style.display = 'none';
+    const rutcliRow = document.getElementById('md-rutcli-row'); if (rutcliRow) rutcliRow.style.display = 'none';
     const ndWarn = document.getElementById('md-numdoc-warn');
     if (ndWarn) {
         ndWarn.style.display = 'none';
