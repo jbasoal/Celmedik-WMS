@@ -6042,33 +6042,55 @@ function buscarMovAjuste() {
     }
     const refLc = refRaw.toLowerCase();
     const entries = Object.entries(data.movimientos || {});
-    // Búsqueda por N° Movimiento: 1) match exacto, 2) contiene
-    let found = entries.filter(([,m]) => (m.numeroMovimiento||'') === refRaw);
-    if (!found.length) found = entries.filter(([,m]) => ((m.numeroMovimiento||'')+'').toLowerCase().includes(refLc));
-    if (!found.length) {
-        c.innerHTML = `<div class="alert-banner danger" style="margin:8px 0"><div class="alert-banner-icon">✕</div><div><div class="alert-banner-title">No se encontraron movimientos</div><div class="alert-banner-text">No hay registros con N° Movimiento «${_ajmEsc(refRaw)}». Verifique el número y reintente.</div></div></div>`;
-        _ajMovItems = []; _ajMovHeader = null;
-        return;
-    }
-    const docs = Array.from(new Set(found.map(([,m]) => m.documentoId || ''))).filter(Boolean);
-    if (docs.length > 1) {
-        const opts = docs.map(d => {
-            const m = found.find(([,mm]) => (mm.documentoId||'') === d);
-            const numMov = m ? (m[1].numeroMovimiento || '') : '';
-            const label = numMov ? `${numMov} · ${d}` : d;
-            return `<button class="btn btn-sm" style="margin:3px" onclick="cargarMovAjuste('${d.replace(/'/g,"\\'")}')">${_ajmEsc(label)}</button>`;
+
+    // 1) Match exacto por N° Movimiento — se carga directamente ese operativo,
+    //    aunque haya otras operaciones que compartan referencia/factura.
+    const exact = entries.filter(([,m]) => (m.numeroMovimiento||'') === refRaw);
+    if (exact.length) { cargarMovAjuste(refRaw); return; }
+
+    // 2) Match parcial por N° Movimiento — si hay varios N° distintos, elegir.
+    const parciales = entries.filter(([,m]) => ((m.numeroMovimiento||'')+'').toLowerCase().includes(refLc));
+    if (parciales.length) {
+        const nums = Array.from(new Set(parciales.map(([,m]) => m.numeroMovimiento))).filter(Boolean);
+        if (nums.length === 1) { cargarMovAjuste(nums[0]); return; }
+        const opts = nums.map(n => {
+            const m = parciales.find(([,mm]) => (mm.numeroMovimiento||'') === n)?.[1] || {};
+            const label = `${n} · ${m.tipo||''}${m.documentoId ? ` · ${m.documentoId}` : ''}`;
+            return `<button class="btn btn-sm" style="margin:3px" onclick="cargarMovAjuste('${n.replace(/'/g,"\\'")}')">${_ajmEsc(label)}</button>`;
         }).join('');
-        c.innerHTML = `<div class="alert-banner warning" style="margin:8px 0"><div class="alert-banner-icon">ℹ</div><div><div class="alert-banner-title">Se encontraron ${docs.length} movimientos coincidentes</div><div class="alert-banner-text">Seleccione cuál desea ajustar:</div><div style="margin-top:8px">${opts}</div></div></div>`;
+        c.innerHTML = `<div class="alert-banner warning" style="margin:8px 0"><div class="alert-banner-icon">ℹ</div><div><div class="alert-banner-title">Se encontraron ${nums.length} N° Movimiento coincidentes</div><div class="alert-banner-text">Seleccione el N° Movimiento exacto que desea ajustar:</div><div style="margin-top:8px">${opts}</div></div></div>`;
         return;
     }
-    cargarMovAjuste(docs[0] || (found[0][1].documentoId || ''));
+
+    // 3) Fallback histórico: movimientos sin N° Movimiento asignado.
+    //    Sólo aquí se cae al documentoId (usado por registros antiguos).
+    const sinNum = entries.filter(([,m]) => !m.numeroMovimiento && ((m.documentoId||'')+'').toLowerCase().includes(refLc));
+    if (sinNum.length) {
+        const docs = Array.from(new Set(sinNum.map(([,m]) => m.documentoId))).filter(Boolean);
+        if (docs.length === 1) { cargarMovAjuste(docs[0], true); return; }
+        const opts = docs.map(d =>
+            `<button class="btn btn-sm" style="margin:3px" onclick="cargarMovAjuste('${d.replace(/'/g,"\\'")}', true)">${_ajmEsc(d)}</button>`
+        ).join('');
+        c.innerHTML = `<div class="alert-banner warning" style="margin:8px 0"><div class="alert-banner-icon">ℹ</div><div><div class="alert-banner-title">Registros históricos sin N° Movimiento</div><div class="alert-banner-text">Se encontraron ${docs.length} documento(s) coincidentes por referencia:</div><div style="margin-top:8px">${opts}</div></div></div>`;
+        return;
+    }
+
+    c.innerHTML = `<div class="alert-banner danger" style="margin:8px 0"><div class="alert-banner-icon">✕</div><div><div class="alert-banner-title">No se encontraron movimientos</div><div class="alert-banner-text">No hay registros con N° Movimiento «${_ajmEsc(refRaw)}». Verifique el número y reintente.</div></div></div>`;
+    _ajMovItems = []; _ajMovHeader = null;
 }
 
-function cargarMovAjuste(documentoId) {
+function cargarMovAjuste(identificador, isDocFallback) {
     if (userPerfil !== 'Maestro') return;
     const c = document.getElementById('ajMovResults');
-    const entries = Object.entries(data.movimientos || {}).filter(([,m]) => (m.documentoId||'') === documentoId);
-    if (!entries.length) { if (c) c.innerHTML = '<div class="alert-banner danger" style="margin:8px 0"><div class="alert-banner-icon">✕</div><div><div class="alert-banner-title">Documento no encontrado</div><div class="alert-banner-text">No se hallaron registros asociados.</div></div></div>'; return; }
+    // Por defecto se filtra por N° Movimiento (único por operación). El fallback
+    // por documentoId sólo aplica a movimientos históricos sin N° Movimiento.
+    const entries = isDocFallback
+        ? Object.entries(data.movimientos || {}).filter(([,m]) => (m.documentoId||'') === identificador && !m.numeroMovimiento)
+        : Object.entries(data.movimientos || {}).filter(([,m]) => (m.numeroMovimiento||'') === identificador);
+    if (!entries.length) {
+        if (c) c.innerHTML = `<div class="alert-banner danger" style="margin:8px 0"><div class="alert-banner-icon">✕</div><div><div class="alert-banner-title">Movimiento no encontrado</div><div class="alert-banner-text">No se hallaron registros para «${_ajmEsc(identificador)}».</div></div></div>`;
+        return;
+    }
     _ajMovItems = entries.map(([key, m]) => ({ key, original: { ...m }, editado: { ...m } }));
     const ref0 = _ajMovItems[0].original;
     _ajMovHeader = {
@@ -6115,6 +6137,11 @@ function renderAjusteMovUI() {
             <div class="form-group">
                 <label class="form-label">Observaciones del documento</label>
                 <textarea class="form-textarea" id="ajm-h-obs" rows="2">${_ajmEsc(h.observaciones||'')}</textarea>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Motivo del ajuste <span style="color:var(--danger)">*</span></label>
+                <textarea class="form-textarea" id="ajm-h-motivo" rows="2" placeholder="Describa el motivo por el cual se realiza este ajuste (obligatorio para trazabilidad)">${_ajmEsc(h.motivoAjuste||'')}</textarea>
+                <div style="font-size:11px;color:var(--text3);margin-top:4px">Queda registrado en el historial y en la auditoría.</div>
             </div>
         </div>
     `;
@@ -6175,6 +6202,7 @@ function _readAjMovHeaderFromForm() {
     _ajMovHeader.proveedor      = document.getElementById('ajm-h-prov')?.value || '';
     _ajMovHeader.bodega         = document.getElementById('ajm-h-bodega')?.value || '';
     _ajMovHeader.observaciones  = document.getElementById('ajm-h-obs')?.value || '';
+    _ajMovHeader.motivoAjuste   = (document.getElementById('ajm-h-motivo')?.value || '').trim();
     if (_ajMovHeader.tipo === 'Salida') {
         _ajMovHeader.fechaDespacho = document.getElementById('ajm-h-fechaDespacho')?.value || '';
     }
@@ -6261,6 +6289,11 @@ function confirmGuardarAjusteMov() {
         if (!it.editado.lote) { alert(`El lote es obligatorio para líneas con cantidad > 0 (SKU ${it.editado.sku}). Si desea eliminar esta línea del documento, deje la cantidad en 0.`); return; }
     }
     if (!_ajMovHeader.bodega) { alert('Debe indicar la bodega.'); return; }
+    if (!_ajMovHeader.motivoAjuste || _ajMovHeader.motivoAjuste.length < 3) {
+        alert('Debe indicar el motivo del ajuste (mínimo 3 caracteres). Es obligatorio para trazabilidad.');
+        try { document.getElementById('ajm-h-motivo')?.focus(); } catch(_){}
+        return;
+    }
     if (lineasEliminadas.length === _ajMovItems.length) {
         // Todas las líneas en 0 → el documento queda sin efecto. Confirmar explícito.
         if (!confirm(`Todas las ${_ajMovItems.length} líneas quedarán en cantidad 0. El documento no tendrá efecto sobre el stock.\n\n¿Continúa de todos modos?`)) return;
@@ -6281,6 +6314,10 @@ function confirmGuardarAjusteMov() {
             ${cambios.map(c => `• ${_ajmEsc(c)}`).join('<br>')}
          </div>
          ${eliminadasBanner}
+         <div style="margin-top:8px;padding:8px 10px;border-radius:6px;background:rgba(8,84,160,.08);border:1px solid rgba(8,84,160,.28)">
+            <div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);font-weight:600">Motivo del ajuste</div>
+            <div style="margin-top:2px;font-size:13px;color:var(--text)">${_ajmEsc(_ajMovHeader.motivoAjuste)}</div>
+         </div>
          <div style="margin-top:8px;font-size:12px;color:var(--text2)">El stock se recalculará automáticamente y se generará un nuevo PDF.</div>`,
         'Guardar ajustes',
         'btn-primary',
@@ -6341,12 +6378,17 @@ function verDetalleAjusteMov(id) {
         : '<div style="font-size:12px;color:var(--text3);margin-top:8px">Sin cambios de detalle registrados.</div>';
     const body = `
         <div style="font-size:12px">
+            <div><strong>N° Movimiento:</strong> ${_ajmEsc(r.numeroMovimiento||'—')}</div>
             <div><strong>Documento:</strong> ${_ajmEsc(r.documentoId||'—')}</div>
             <div><strong>Referencia:</strong> ${_ajmEsc(r.referencia||'—')}</div>
             <div><strong>Fecha:</strong> ${_ajmEsc(fmtDateTime(r.fecha||''))}</div>
             <div><strong>Usuario:</strong> ${_ajmEsc(r.usuario||'—')} ${r.usuarioPerfil?`(${_ajmEsc(r.usuarioPerfil)})`:''}</div>
             <div><strong>Total ítems:</strong> ${r.totalItems||0} · <strong>Cambios:</strong> ${r.totalCambios||0}</div>
         </div>
+        ${r.motivoAjuste ? `<div style="margin-top:8px;padding:8px 10px;border-radius:6px;background:rgba(8,84,160,.08);border:1px solid rgba(8,84,160,.28)">
+            <div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);font-weight:600">Motivo del ajuste</div>
+            <div style="margin-top:2px;font-size:13px;color:var(--text)">${_ajmEsc(r.motivoAjuste)}</div>
+        </div>` : ''}
         <div style="max-height:340px;overflow:auto;background:var(--bg2);padding:10px;border-radius:6px;margin-top:8px">
             ${headerHtml}
             ${itemsHtml}
@@ -6429,6 +6471,7 @@ function guardarAjusteMov() {
         referencia: h.referencia || (ref0.referencia || ''),
         tipoMovimiento: ref0.tipo || '',
         bodega: h.bodega || '',
+        motivoAjuste: h.motivoAjuste || '',
         totalItems: _ajMovItems.length,
         totalCambios: cambios.length,
         cambiosHeader,
@@ -6440,7 +6483,7 @@ function guardarAjusteMov() {
     db.ref().update(updates)
         .then(() => {
             // Auditoría: resumen general + una entrada por cada cambio (recortada si es grande)
-            logAudit('Ajuste Movimiento', 'Movimientos', `${_ajMovItems.length} ítems`, h.documentoId, `Ref: ${h.referencia||'—'} · Cambios: ${cambios.length} · ajusteId=${ajusteId}`);
+            logAudit('Ajuste Movimiento', 'Movimientos', `${_ajMovItems.length} ítems`, h.documentoId, `Ref: ${h.referencia||'—'} · Cambios: ${cambios.length} · Motivo: ${h.motivoAjuste||'—'} · ajusteId=${ajusteId}`);
             cambios.slice(0, 50).forEach(d => {
                 logAudit('Ajuste Movimiento (detalle)', 'Movimientos', '', h.documentoId, d);
             });

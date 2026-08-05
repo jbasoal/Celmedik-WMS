@@ -163,6 +163,7 @@
             "referencia":      { ".validate": "newData.isString() && newData.val().length <= 200" },
             "tipoMovimiento":  { ".validate": "newData.isString() && newData.val().length <= 50" },
             "bodega":          { ".validate": "newData.isString() && newData.val().length <= 100" },
+            "motivoAjuste":    { ".validate": "newData.isString() && newData.val().length <= 2000" },
             "totalItems":      { ".validate": "newData.isNumber()" },
             "totalCambios":    { ".validate": "newData.isNumber()" }
           }
