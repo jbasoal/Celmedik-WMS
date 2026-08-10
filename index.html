@@ -1776,6 +1776,14 @@
                     <label class="form-label">Cantidad <span style="color:var(--danger)">*</span></label>
                     <input type="number" class="form-input no-spinner" id="mi-qty" min="0.001" step="any" placeholder="0" onwheel="this.blur()" oninput="_autoFillPalletsForSku(); _updPalletSum()">
                 </div>
+                <div class="form-group" id="mi-pallet-max-group" style="display:none">
+                    <label class="form-label">Máx. unid. por pallet <span style="color:var(--danger)">*</span></label>
+                    <select class="form-select" id="mi-pallet-max" onchange="_autoFillPalletsForSku()">
+                        <option value="">Seleccionar...</option>
+                        <option value="120">120 uds</option>
+                        <option value="126">126 uds</option>
+                    </select>
+                </div>
                 <div class="form-group" id="mi-pallet-qty-group">
                     <label class="form-label">Cantidad de Pallet</label>
                     <input type="number" class="form-input no-spinner" id="mi-pallet-qty" min="1" placeholder="1" onwheel="this.blur()" oninput="onMiPalletQtyChange()">
@@ -4421,6 +4429,15 @@ function _refreshMiStatusField(tipo) {
     if (miVenceGroup)   miVenceGroup.style.display   = (isCambioUbic || tipo === 'Salida') ? 'none' : '';
     if (miPalletGroup)  miPalletGroup.style.display  = isCambioUbic ? 'none' : '';
     if (miUbicDestGroup) miUbicDestGroup.style.display = isCambioUbic ? 'block' : 'none';
+    // Selector 120/126 uds/pallet: sólo tiene sentido para Entrada de concentrados.
+    // Fuera de Entrada lo ocultamos y limpiamos para que _autoFillPalletsForSku
+    // no bloquee el flujo de otros tipos de movimiento.
+    if (tipo !== 'Entrada') {
+        const palMaxGroup = document.getElementById('mi-pallet-max-group');
+        const palMaxSel   = document.getElementById('mi-pallet-max');
+        if (palMaxGroup) palMaxGroup.style.display = 'none';
+        if (palMaxSel)   palMaxSel.value = '';
+    }
 
     if (isCambioUbic) {
         if (miStatusGroup) miStatusGroup.style.display = 'none';
@@ -4521,15 +4538,34 @@ function _palletSizeForSku(sku) {
     return PALLET_SIZE_BY_SKU[(sku||'').trim().toUpperCase()] || null;
 }
 
+// Para Entrada de concentrados: el operador debe elegir 120 o 126 uds/pallet
+// (mismos SKU pueden despacharse en pallets de distinta capacidad según turno).
+// Muestra/oculta el selector "Máx. unid. por pallet" y devuelve el valor a usar
+// para el cálculo (null → aún no seleccionado, no calcular).
+function _resolveConcentradoPalletMax(sku, tipo) {
+    const group = document.getElementById('mi-pallet-max-group');
+    const sel   = document.getElementById('mi-pallet-max');
+    const isConcentradoEntrada = (tipo === 'Entrada') && CONCENTRADO_SKUS && CONCENTRADO_SKUS.has((sku||'').trim().toUpperCase());
+    if (!group || !sel) return null;
+    if (!isConcentradoEntrada) {
+        group.style.display = 'none';
+        sel.value = '';
+        return _palletSizeForSku(sku);
+    }
+    group.style.display = '';
+    const v = parseInt(sel.value, 10);
+    return (v === 120 || v === 126) ? v : null;
+}
+
 // Calcula y prellena la distribución por pallet cuando el SKU está mapeado.
 // Conserva las ubicaciones previamente cargadas si la cantidad cambia y se
 // re-renderiza la grilla. Sólo aplica para Entrada/Salida.
 function _autoFillPalletsForSku() {
     const sku = (document.getElementById('mi-sku')?.value || '').trim().toUpperCase();
-    const palletSize = _palletSizeForSku(sku);
-    if (!palletSize) return;
     const tipo = document.getElementById('md-tipo')?.value || '';
     if (tipo !== 'Entrada' && tipo !== 'Salida') return;
+    const palletSize = _resolveConcentradoPalletMax(sku, tipo);
+    if (!palletSize) return;
     const qty = parseFloat(document.getElementById('mi-qty')?.value) || 0;
     if (qty <= 0) return;
     const palletCount = Math.ceil(qty / palletSize);
@@ -4571,6 +4607,10 @@ function onMiSKUChange() {
     const lastSku = skuEl.dataset.lastProcessedSku || '';
     if (sku && sku === lastSku) { _autoFillPalletsForSku(); return; }
     skuEl.dataset.lastProcessedSku = sku;
+    // Al cambiar de SKU, resetear el selector 120/126 uds/pallet para forzar
+    // al operador a re-elegir conscientemente la capacidad del nuevo pallet.
+    const palMaxSel = document.getElementById('mi-pallet-max');
+    if (palMaxSel) palMaxSel.value = '';
     const prod = data.productos[sku];
     const info = document.getElementById('mi-sku-info');
     const descEl = document.getElementById('mi-desc');
@@ -5173,6 +5213,11 @@ function resetItemForm() {
     const skuEl = document.getElementById('mi-sku'); if (skuEl) delete skuEl.dataset.lastProcessedSku;
     document.getElementById('mi-lote-wrap').innerHTML = '<input type="text" class="form-input" id="mi-lote" placeholder="Número de lote">';
     const dist = document.getElementById('mi-pallet-dist'); if (dist) { dist.style.display = 'none'; dist.innerHTML = ''; }
+    // Limpieza del selector 120/126 uds/pallet (Entrada de concentrados)
+    const palMaxSel = document.getElementById('mi-pallet-max');
+    if (palMaxSel) palMaxSel.value = '';
+    const palMaxGroup = document.getElementById('mi-pallet-max-group');
+    if (palMaxGroup) palMaxGroup.style.display = 'none';
     const info = document.getElementById('mi-sku-info'); if (info) info.style.display = 'none';
     const err = document.getElementById('mi-err'); if (err) err.style.display = 'none';
     // Restore Estatus field visibility and default value for current tipo
