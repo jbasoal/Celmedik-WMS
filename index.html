@@ -1391,6 +1391,7 @@
                                             <option value="10">Top 10</option>
                                             <option value="20">Top 20</option>
                                             <option value="30">Top 30</option>
+                                            <option value="todos">Todos</option>
                                         </select>
                                         <button class="btn btn-ghost btn-sm" onclick="exportDCTableCSV('productos')" title="Exportar CSV">↓ CSV</button>
                                     </div>
@@ -1412,6 +1413,7 @@
                                             <option value="10">Top 10</option>
                                             <option value="20">Top 20</option>
                                             <option value="30">Top 30</option>
+                                            <option value="todos">Todos</option>
                                         </select>
                                         <button class="btn btn-ghost btn-sm" onclick="exportDCTableCSV('clientes')" title="Exportar CSV">↓ CSV</button>
                                     </div>
@@ -1436,6 +1438,7 @@
                                             <option value="10">Top 10</option>
                                             <option value="20">Top 20</option>
                                             <option value="30">Top 30</option>
+                                            <option value="todos">Todos</option>
                                         </select>
                                         <button class="btn btn-ghost btn-sm" onclick="exportDCTableCSV('comunas')" title="Exportar CSV">↓ CSV</button>
                                     </div>
@@ -1457,6 +1460,7 @@
                                             <option value="10">Top 10</option>
                                             <option value="20">Top 20</option>
                                             <option value="30">Top 30</option>
+                                            <option value="todos">Todos</option>
                                         </select>
                                         <button class="btn btn-ghost btn-sm" onclick="exportDCTableCSV('facturas')" title="Exportar CSV">↓ CSV</button>
                                     </div>
@@ -8459,6 +8463,16 @@ let _dcCharts = {};
 
 function _dcDestroy(id) { if (_dcCharts[id]) { _dcCharts[id].destroy(); delete _dcCharts[id]; } }
 
+// Resuelve el valor del selector "Top N": número entero o Infinity para "todos".
+// Usado por productos, clientes, comunas y facturas — con Infinity el slice
+// devuelve todo el arreglo.
+function _dcResolveTop(id, def) {
+    const v = (document.getElementById(id)?.value || '').trim().toLowerCase();
+    if (v === 'todos' || v === 'all') return Infinity;
+    const n = parseInt(v, 10);
+    return Number.isFinite(n) && n > 0 ? n : def;
+}
+
 function getDCRango() {
     const periodo = document.getElementById('dcPeriodo')?.value || 'mes';
     const hoy = new Date(); hoy.setHours(23, 59, 59, 999);
@@ -8606,7 +8620,7 @@ function _dcAggProds(salidas) {
 }
 
 function renderDCProductos(salidas) {
-    const top  = parseInt(document.getElementById('dcTopProds')?.value || 10);
+    const top  = _dcResolveTop('dcTopProds', 10);
     const prods = data.productos || {};
     const rows = _dcAggProds(salidas).sort((a, b) => b.unidades - a.unidades).slice(0, top);
 
@@ -8667,7 +8681,7 @@ function _dcAggClients(salidas) {
 }
 
 function renderDCClientes(salidas) {
-    const top  = parseInt(document.getElementById('dcTopClients')?.value || 10);
+    const top  = _dcResolveTop('dcTopClients', 10);
     const rows = _dcAggClients(salidas).sort((a, b) => b.unidades - a.unidades).slice(0, top);
 
     const tb = document.getElementById('dcTbClientes');
@@ -8735,7 +8749,7 @@ function _dcAggComunas(salidas) {
 }
 
 function renderDCComunas(salidas) {
-    const top  = parseInt(document.getElementById('dcTopComunas')?.value || 10);
+    const top  = _dcResolveTop('dcTopComunas', 10);
     const rows = _dcAggComunas(salidas).sort((a, b) => b.movs - a.movs).slice(0, top);
 
     const tb = document.getElementById('dcTbComunas');
@@ -8802,7 +8816,7 @@ function _dcAggFacturas(salidas) {
 }
 
 function renderDCFacturas(salidas) {
-    const top  = parseInt(document.getElementById('dcTopFacturas')?.value || 10);
+    const top  = _dcResolveTop('dcTopFacturas', 10);
     const rows = _dcAggFacturas(salidas).sort((a, b) => b.facturas - a.facturas).slice(0, top);
 
     const tb = document.getElementById('dcTbFacturas');
@@ -9070,22 +9084,22 @@ function exportDCTableCSV(type) {
     let headers, rows;
 
     if (type === 'productos') {
-        const top  = parseInt(document.getElementById('dcTopProds')?.value || 10);
+        const top  = _dcResolveTop('dcTopProds', 10);
         const data_rows = _dcAggProds(salidas).sort((a, b) => b.unidades - a.unidades).slice(0, top);
         headers = ['Ranking','SKU','Nombre','Principio Activo','Total Unidades','Movimientos','Último Despacho'];
         rows = data_rows.map((r, i) => [i+1, r.sku, prods[r.sku]?.descripcion||'', prods[r.sku]?.principioActivo||'', r.unidades, r.movs, r.ultimo ? fmtDate(r.ultimo) : '']);
     } else if (type === 'comunas') {
-        const top  = parseInt(document.getElementById('dcTopComunas')?.value || 10);
+        const top  = _dcResolveTop('dcTopComunas', 10);
         const data_rows = _dcAggComunas(salidas).sort((a, b) => b.movs - a.movs).slice(0, top);
         headers = ['Ranking','Comuna','N° Movimientos','Total Unidades','Clientes Distintos','Último Despacho'];
         rows = data_rows.map((r, i) => [i+1, r.comuna, r.movs, r.unidades, r.clientes, r.ultimo ? fmtDate(r.ultimo) : '']);
     } else if (type === 'facturas') {
-        const top  = parseInt(document.getElementById('dcTopFacturas')?.value || 10);
+        const top  = _dcResolveTop('dcTopFacturas', 10);
         const data_rows = _dcAggFacturas(salidas).sort((a, b) => b.facturas - a.facturas).slice(0, top);
         headers = ['Ranking','Cliente','RUT','N° Facturas','Total Unidades','Último Documento'];
         rows = data_rows.map((r, i) => [i+1, r.cliente, r.rut || '', r.facturas, r.unidades, r.ultimo ? fmtDate(r.ultimo) : '']);
     } else {
-        const top  = parseInt(document.getElementById('dcTopClients')?.value || 10);
+        const top  = _dcResolveTop('dcTopClients', 10);
         const data_rows = _dcAggClients(salidas).sort((a, b) => b.unidades - a.unidades).slice(0, top);
         headers = ['Ranking','Cliente','Total Unidades','Despachos','Productos Distintos','Último Despacho'];
         rows = data_rows.map((r, i) => [i+1, r.cliente, r.unidades, r.despachos, r.prods.size, r.ultimo ? fmtDate(r.ultimo) : '']);
