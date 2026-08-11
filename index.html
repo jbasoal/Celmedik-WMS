@@ -1362,6 +1362,9 @@
                                 <span style="color:var(--text3);font-size:13px">—</span>
                                 <input type="date" class="form-input" id="dcHasta" style="width:auto" onchange="renderDashComercial()">
                             </div>
+                            <select class="form-select" id="dcBodega" style="width:auto" onchange="renderDashComercial()" title="Filtrar por bodega">
+                                <option value="">Todas las bodegas</option>
+                            </select>
                             <span id="dcPeriodoLabel" style="font-size:11.5px;color:var(--text3)"></span>
                             <button class="btn btn-primary btn-sm" onclick="renderDashComercial()">↺ Actualizar</button>
                             <button class="btn btn-ghost btn-sm" onclick="exportDCPDF()" style="margin-left:auto">↓ Exportar PDF</button>
@@ -1418,6 +1421,51 @@
                                     <table><thead><tr>
                                         <th style="width:36px">#</th><th>Cliente</th><th style="text-align:right">Unidades</th><th style="text-align:center">Despachos</th><th style="text-align:center">Prods.</th><th>Último despacho</th>
                                     </tr></thead><tbody id="dcTbClientes"><tr class="empty-row"><td colspan="6">Sin datos</td></tr></tbody></table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Sección 3.5: Comunas y Facturas por cliente -->
+                        <div class="dc-two-col">
+                            <!-- Salidas por comuna -->
+                            <div class="card">
+                                <div class="card-header">
+                                    <div><div class="card-title">Salidas por comuna</div><div class="card-subtitle">N° de movimientos de salida por comuna de destino</div></div>
+                                    <div style="display:flex;gap:8px;align-items:center">
+                                        <select class="form-select" id="dcTopComunas" style="width:auto;font-size:12px" onchange="dcRefreshComunas()">
+                                            <option value="10">Top 10</option>
+                                            <option value="20">Top 20</option>
+                                            <option value="30">Top 30</option>
+                                        </select>
+                                        <button class="btn btn-ghost btn-sm" onclick="exportDCTableCSV('comunas')" title="Exportar CSV">↓ CSV</button>
+                                    </div>
+                                </div>
+                                <div class="dc-chart-wrap" style="height:220px"><canvas id="dcChartComunas"></canvas></div>
+                                <div class="table-wrap" style="max-height:280px;overflow-y:auto">
+                                    <table><thead><tr>
+                                        <th style="width:36px">#</th><th>Comuna</th><th style="text-align:center">N° Movs.</th><th style="text-align:right">Unidades</th><th style="text-align:center">Clientes</th><th>Último despacho</th>
+                                    </tr></thead><tbody id="dcTbComunas"><tr class="empty-row"><td colspan="6">Sin datos</td></tr></tbody></table>
+                                </div>
+                            </div>
+
+                            <!-- Facturas emitidas por cliente -->
+                            <div class="card">
+                                <div class="card-header">
+                                    <div><div class="card-title">Facturas emitidas por cliente</div><div class="card-subtitle">N° de facturas/documentos únicos emitidos por cliente</div></div>
+                                    <div style="display:flex;gap:8px;align-items:center">
+                                        <select class="form-select" id="dcTopFacturas" style="width:auto;font-size:12px" onchange="dcRefreshFacturas()">
+                                            <option value="10">Top 10</option>
+                                            <option value="20">Top 20</option>
+                                            <option value="30">Top 30</option>
+                                        </select>
+                                        <button class="btn btn-ghost btn-sm" onclick="exportDCTableCSV('facturas')" title="Exportar CSV">↓ CSV</button>
+                                    </div>
+                                </div>
+                                <div class="dc-chart-wrap" style="height:220px"><canvas id="dcChartFacturas"></canvas></div>
+                                <div class="table-wrap" style="max-height:280px;overflow-y:auto">
+                                    <table><thead><tr>
+                                        <th style="width:36px">#</th><th>Cliente</th><th style="text-align:center">N° Facturas</th><th style="text-align:right">Unidades</th><th>Último documento</th>
+                                    </tr></thead><tbody id="dcTbFacturas"><tr class="empty-row"><td colspan="5">Sin datos</td></tr></tbody></table>
                                 </div>
                             </div>
                         </div>
@@ -8449,12 +8497,50 @@ function getDCRango() {
 }
 
 function getDCSalidas(desde, hasta) {
+    const bodegaSel = (document.getElementById('dcBodega')?.value || '').trim();
     return Object.values(data.movimientos || {}).filter(m => {
         if (m.tipo !== 'Salida') return false;
         if (!_bodegaPermitida(m.bodega)) return false;
+        if (bodegaSel && m.bodega !== bodegaSel) return false;
         const f = new Date(m.fecha);
         return f >= desde && f <= hasta;
     });
+}
+
+// Puebla el <select> de bodega con las bodegas que este perfil puede ver.
+// Preserva la selección previa si sigue siendo válida.
+function populateDCBodegaFilter() {
+    const sel = document.getElementById('dcBodega');
+    if (!sel) return;
+    const prev = sel.value;
+    const permitidas = Object.values(data.bodegas || {})
+        .map(b => b && b.nombre)
+        .filter(n => n && _bodegaPermitida(n))
+        .sort((a, b) => a.localeCompare(b, 'es'));
+    sel.innerHTML = '<option value="">Todas las bodegas</option>' +
+        permitidas.map(n => `<option value="${n}">${n}</option>`).join('');
+    if (prev && permitidas.includes(prev)) sel.value = prev;
+}
+
+// Extrae la comuna asociada al destino de un movimiento de Salida.
+// Prioriza el match exacto contra los destinos del cliente (por RUT); si no,
+// parsea el string "Dirección — Comuna" y devuelve el segmento tras el separador.
+function _dcExtractComuna(m) {
+    const destino = (m.destino || '').trim();
+    if (!destino) return '(Sin comuna)';
+    const rutKey = _rutKey(m.rutCliente || '');
+    if (rutKey) {
+        const cli = Object.values(data.clientes || {}).find(c => _rutKey(c.rut) === rutKey);
+        if (cli && cli.destinos) {
+            const match = Object.values(cli.destinos).find(d =>
+                [d.direccion, d.comuna].filter(Boolean).join(' — ') === destino
+            );
+            if (match && (match.comuna || '').trim()) return match.comuna.trim().toUpperCase();
+        }
+    }
+    const parts = destino.split(/\s—\s|\s-\s/);
+    const last = parts[parts.length - 1].trim();
+    return last ? last.toUpperCase() : '(Sin comuna)';
 }
 
 function dcVarHTML(val, ant) {
@@ -8602,6 +8688,140 @@ function renderDCClientes(salidas) {
             },
             scales: {
                 x: { grid: { color: 'rgba(0,0,0,0.04)' }, ticks: { font: { size: 10 } }, beginAtZero: true },
+                y: { grid: { display: false }, ticks: { font: { size: 10 } } }
+            }
+        }
+    });
+}
+
+// Agrupa salidas por comuna de destino. Cuenta movimientos ÚNICOS (por
+// numeroMovimiento) porque una salida con varios ítems se registra como
+// múltiples filas que comparten el mismo N° de movimiento.
+function _dcAggComunas(salidas) {
+    const map = {};
+    salidas.forEach(m => {
+        const comuna = _dcExtractComuna(m);
+        if (!map[comuna]) map[comuna] = { comuna, movsSet: new Set(), unidades: 0, clientesSet: new Set(), ultimo: '' };
+        const movKey = m.numeroMovimiento || m.documentoId || m.referencia || (m.fecha + '|' + m.bodega + '|' + (m.proveedor || ''));
+        map[comuna].movsSet.add(movKey);
+        map[comuna].unidades += parseFloat(m.cantidad) || 0;
+        const cli = (m.proveedor || '').trim().toUpperCase();
+        if (cli) map[comuna].clientesSet.add(cli);
+        if (!map[comuna].ultimo || m.fecha > map[comuna].ultimo) map[comuna].ultimo = m.fecha;
+    });
+    return Object.values(map).map(r => ({
+        comuna: r.comuna, movs: r.movsSet.size, unidades: r.unidades,
+        clientes: r.clientesSet.size, ultimo: r.ultimo
+    }));
+}
+
+function renderDCComunas(salidas) {
+    const top  = parseInt(document.getElementById('dcTopComunas')?.value || 10);
+    const rows = _dcAggComunas(salidas).sort((a, b) => b.movs - a.movs).slice(0, top);
+
+    const tb = document.getElementById('dcTbComunas');
+    if (tb) {
+        tb.innerHTML = !rows.length
+            ? '<tr class="empty-row"><td colspan="6">Sin salidas en el período</td></tr>'
+            : rows.map((r, i) => `<tr>
+                <td style="font-weight:700;color:var(--accent2);text-align:center">${i + 1}</td>
+                <td style="font-weight:500">${r.comuna}</td>
+                <td style="font-weight:700;text-align:center">${r.movs}</td>
+                <td style="text-align:right">${r.unidades.toLocaleString('es-CL')}</td>
+                <td style="text-align:center">${r.clientes}</td>
+                <td style="font-size:11px">${fmtDate(r.ultimo)}</td>
+              </tr>`).join('');
+    }
+
+    _dcDestroy('chartComunas');
+    const ctx = document.getElementById('dcChartComunas')?.getContext('2d');
+    if (!ctx || !rows.length) return;
+    const palette = rows.map((_, i) => `hsla(${28 + i * 10},72%,52%,0.85)`);
+    _dcCharts['chartComunas'] = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: rows.map(r => r.comuna.length > 18 ? r.comuna.slice(0, 18) + '…' : r.comuna),
+            datasets: [{ label: 'N° Movimientos', data: rows.map(r => r.movs), backgroundColor: palette, borderRadius: 4, borderSkipped: false }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: {
+                    title: ctx => rows[ctx[0].dataIndex].comuna,
+                    label: ctx => ` ${ctx.raw} movimiento(s) de salida`,
+                    afterLabel: ctx => ` ${rows[ctx.dataIndex].unidades.toLocaleString('es-CL')} unidades · ${rows[ctx.dataIndex].clientes} cliente(s)`
+                }}
+            },
+            scales: {
+                x: { grid: { color: 'rgba(0,0,0,0.04)' }, ticks: { font: { size: 10 }, precision: 0 }, beginAtZero: true },
+                y: { grid: { display: false }, ticks: { font: { size: 10 } } }
+            }
+        }
+    });
+}
+
+// Agrupa por cliente y cuenta cuántas facturas/documentos únicos se emitieron.
+// El identificador de "factura" es el N° de referencia externo (numDoc/referencia);
+// si un movimiento no tiene numDoc se cuenta como una factura independiente
+// usando el numeroMovimiento interno como fallback.
+function _dcAggFacturas(salidas) {
+    const map = {};
+    salidas.forEach(m => {
+        const cl = (m.proveedor || '').trim().toUpperCase() || '(Sin cliente)';
+        if (!map[cl]) map[cl] = { cliente: cl, rut: '', facturasSet: new Set(), unidades: 0, ultimo: '' };
+        const fac = (m.referencia || m.numDoc || '').trim() || `__mov:${m.numeroMovimiento || m.documentoId || ''}`;
+        map[cl].facturasSet.add(fac);
+        map[cl].unidades += parseFloat(m.cantidad) || 0;
+        if (m.rutCliente && !map[cl].rut) map[cl].rut = m.rutCliente;
+        if (!map[cl].ultimo || m.fecha > map[cl].ultimo) map[cl].ultimo = m.fecha;
+    });
+    return Object.values(map).map(r => ({
+        cliente: r.cliente, rut: r.rut, facturas: r.facturasSet.size, unidades: r.unidades, ultimo: r.ultimo
+    }));
+}
+
+function renderDCFacturas(salidas) {
+    const top  = parseInt(document.getElementById('dcTopFacturas')?.value || 10);
+    const rows = _dcAggFacturas(salidas).sort((a, b) => b.facturas - a.facturas).slice(0, top);
+
+    const tb = document.getElementById('dcTbFacturas');
+    if (tb) {
+        tb.innerHTML = !rows.length
+            ? '<tr class="empty-row"><td colspan="5">Sin salidas en el período</td></tr>'
+            : rows.map((r, i) => `<tr>
+                <td style="font-weight:700;color:var(--accent2);text-align:center">${i + 1}</td>
+                <td style="font-weight:500">${r.cliente}${r.rut ? `<div style="font-size:10.5px;color:var(--text3)">RUT ${r.rut}</div>` : ''}</td>
+                <td style="font-weight:700;text-align:center">${r.facturas}</td>
+                <td style="text-align:right">${r.unidades.toLocaleString('es-CL')}</td>
+                <td style="font-size:11px">${fmtDate(r.ultimo)}</td>
+              </tr>`).join('');
+    }
+
+    _dcDestroy('chartFacturas');
+    const ctx = document.getElementById('dcChartFacturas')?.getContext('2d');
+    if (!ctx || !rows.length) return;
+    const palette = rows.map((_, i) => `hsla(${268 + i * 5},58%,55%,0.85)`);
+    _dcCharts['chartFacturas'] = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: rows.map(r => r.cliente.length > 18 ? r.cliente.slice(0, 18) + '…' : r.cliente),
+            datasets: [{ label: 'N° Facturas', data: rows.map(r => r.facturas), backgroundColor: palette, borderRadius: 4, borderSkipped: false }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: {
+                    title: ctx => rows[ctx[0].dataIndex].cliente,
+                    label: ctx => ` ${ctx.raw} factura(s) emitida(s)`,
+                    afterLabel: ctx => ` ${rows[ctx.dataIndex].unidades.toLocaleString('es-CL')} unidades`
+                }}
+            },
+            scales: {
+                x: { grid: { color: 'rgba(0,0,0,0.04)' }, ticks: { font: { size: 10 }, precision: 0 }, beginAtZero: true },
                 y: { grid: { display: false }, ticks: { font: { size: 10 } } }
             }
         }
@@ -8769,6 +8989,7 @@ function renderDCAlertas() {
 }
 
 function renderDashComercial() {
+    populateDCBodegaFilter();
     const { desdeDate, hastaDate, desdeAnt, hastaAnt } = getDCRango();
     const salidas    = getDCSalidas(desdeDate, hastaDate);
     const salidasAnt = getDCSalidas(desdeAnt, hastaAnt);
@@ -8776,11 +8997,17 @@ function renderDashComercial() {
     renderDCKPIs(salidas, salidasAnt);
     renderDCProductos(salidas);
     renderDCClientes(salidas);
+    renderDCComunas(salidas);
+    renderDCFacturas(salidas);
     renderDCEvolucion(salidas, desdeDate, hastaDate);
     renderDCAlertas();
 
     const lbl = document.getElementById('dcPeriodoLabel');
-    if (lbl) lbl.textContent = `${desdeDate.toLocaleDateString('es-CL')} — ${hastaDate.toLocaleDateString('es-CL')}`;
+    if (lbl) {
+        const bod = (document.getElementById('dcBodega')?.value || '').trim();
+        const bodTxt = bod ? ` · Bodega: ${bod}` : ' · Todas las bodegas';
+        lbl.textContent = `${desdeDate.toLocaleDateString('es-CL')} — ${hastaDate.toLocaleDateString('es-CL')}${bodTxt}`;
+    }
 }
 
 function dcOnPeriodoChange() {
@@ -8788,9 +9015,11 @@ function dcOnPeriodoChange() {
     document.getElementById('dcRangoCustom').style.display = custom ? 'flex' : 'none';
     renderDashComercial();
 }
-function dcRefreshProds()   { const { desdeDate, hastaDate } = getDCRango(); renderDCProductos(getDCSalidas(desdeDate, hastaDate)); }
-function dcRefreshClients() { const { desdeDate, hastaDate } = getDCRango(); renderDCClientes(getDCSalidas(desdeDate, hastaDate)); }
-function dcRefreshEvol()    { const { desdeDate, hastaDate } = getDCRango(); renderDCEvolucion(getDCSalidas(desdeDate, hastaDate), desdeDate, hastaDate); }
+function dcRefreshProds()    { const { desdeDate, hastaDate } = getDCRango(); renderDCProductos(getDCSalidas(desdeDate, hastaDate)); }
+function dcRefreshClients()  { const { desdeDate, hastaDate } = getDCRango(); renderDCClientes(getDCSalidas(desdeDate, hastaDate)); }
+function dcRefreshComunas()  { const { desdeDate, hastaDate } = getDCRango(); renderDCComunas(getDCSalidas(desdeDate, hastaDate)); }
+function dcRefreshFacturas() { const { desdeDate, hastaDate } = getDCRango(); renderDCFacturas(getDCSalidas(desdeDate, hastaDate)); }
+function dcRefreshEvol()     { const { desdeDate, hastaDate } = getDCRango(); renderDCEvolucion(getDCSalidas(desdeDate, hastaDate), desdeDate, hastaDate); }
 
 function exportDCTableCSV(type) {
     const { desdeDate, hastaDate } = getDCRango();
@@ -8803,6 +9032,16 @@ function exportDCTableCSV(type) {
         const data_rows = _dcAggProds(salidas).sort((a, b) => b.unidades - a.unidades).slice(0, top);
         headers = ['Ranking','SKU','Nombre','Principio Activo','Total Unidades','Movimientos','Último Despacho'];
         rows = data_rows.map((r, i) => [i+1, r.sku, prods[r.sku]?.descripcion||'', prods[r.sku]?.principioActivo||'', r.unidades, r.movs, r.ultimo ? fmtDate(r.ultimo) : '']);
+    } else if (type === 'comunas') {
+        const top  = parseInt(document.getElementById('dcTopComunas')?.value || 10);
+        const data_rows = _dcAggComunas(salidas).sort((a, b) => b.movs - a.movs).slice(0, top);
+        headers = ['Ranking','Comuna','N° Movimientos','Total Unidades','Clientes Distintos','Último Despacho'];
+        rows = data_rows.map((r, i) => [i+1, r.comuna, r.movs, r.unidades, r.clientes, r.ultimo ? fmtDate(r.ultimo) : '']);
+    } else if (type === 'facturas') {
+        const top  = parseInt(document.getElementById('dcTopFacturas')?.value || 10);
+        const data_rows = _dcAggFacturas(salidas).sort((a, b) => b.facturas - a.facturas).slice(0, top);
+        headers = ['Ranking','Cliente','RUT','N° Facturas','Total Unidades','Último Documento'];
+        rows = data_rows.map((r, i) => [i+1, r.cliente, r.rut || '', r.facturas, r.unidades, r.ultimo ? fmtDate(r.ultimo) : '']);
     } else {
         const top  = parseInt(document.getElementById('dcTopClients')?.value || 10);
         const data_rows = _dcAggClients(salidas).sort((a, b) => b.unidades - a.unidades).slice(0, top);
