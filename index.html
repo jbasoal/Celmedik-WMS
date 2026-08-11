@@ -1358,9 +1358,9 @@
                                 <option value="custom">Rango personalizado</option>
                             </select>
                             <div id="dcRangoCustom" style="display:none;gap:8px;align-items:center">
-                                <input type="date" class="form-input" id="dcDesde" style="width:auto" onchange="renderDashComercial()">
+                                <input type="date" class="form-input" id="dcDesde" style="width:auto" onchange="dcOnDateChange()">
                                 <span style="color:var(--text3);font-size:13px">—</span>
-                                <input type="date" class="form-input" id="dcHasta" style="width:auto" onchange="renderDashComercial()">
+                                <input type="date" class="form-input" id="dcHasta" style="width:auto" onchange="dcOnDateChange()">
                             </div>
                             <select class="form-select" id="dcBodega" style="width:auto" onchange="renderDashComercial()" title="Filtrar por bodega">
                                 <option value="">Todas las bodegas</option>
@@ -8489,6 +8489,13 @@ function getDCRango() {
         const hv = document.getElementById('dcHasta')?.value;
         desdeDate = dv ? new Date(dv + 'T00:00:00') : new Date(start.getFullYear(), 0, 1);
         hastaDate = hv ? new Date(hv + 'T23:59:59') : new Date(hoy);
+        // Guarda contra fechas parciales/inválidas que el input date entrega
+        // mientras el usuario aún escribe; si son NaN, caemos a defaults seguros.
+        if (isNaN(desdeDate.getTime())) desdeDate = new Date(start.getFullYear(), 0, 1);
+        if (isNaN(hastaDate.getTime())) hastaDate = new Date(hoy);
+        // Rango invertido (dcDesde > dcHasta): swap silencioso para evitar
+        // periodos vacíos y cálculos anteriores absurdos.
+        if (desdeDate > hastaDate) { const t = desdeDate; desdeDate = hastaDate; hastaDate = t; }
         const diff = hastaDate - desdeDate;
         hastaAnt = new Date(desdeDate.getTime() - 1); hastaAnt.setHours(23, 59, 59, 999);
         desdeAnt = new Date(hastaAnt.getTime() - diff);
@@ -8522,6 +8529,17 @@ function populateDCBodegaFilter() {
     if (prev && permitidas.includes(prev)) sel.value = prev;
 }
 
+// Cache por-render de RUT → cliente para evitar Object.values().find() por
+// cada salida en _dcExtractComuna. Se invalida al inicio de renderDashComercial.
+let _dcRutClienteMap = null;
+function _dcBuildRutClienteMap() {
+    _dcRutClienteMap = {};
+    Object.values(data.clientes || {}).forEach(c => {
+        const k = _rutKey(c && c.rut);
+        if (k) _dcRutClienteMap[k] = c;
+    });
+}
+
 // Extrae la comuna asociada al destino de un movimiento de Salida.
 // Prioriza el match exacto contra los destinos del cliente (por RUT); si no,
 // parsea el string "Dirección — Comuna" y devuelve el segmento tras el separador.
@@ -8530,7 +8548,8 @@ function _dcExtractComuna(m) {
     if (!destino) return '(Sin comuna)';
     const rutKey = _rutKey(m.rutCliente || '');
     if (rutKey) {
-        const cli = Object.values(data.clientes || {}).find(c => _rutKey(c.rut) === rutKey);
+        if (!_dcRutClienteMap) _dcBuildRutClienteMap();
+        const cli = _dcRutClienteMap[rutKey];
         if (cli && cli.destinos) {
             const match = Object.values(cli.destinos).find(d =>
                 [d.direccion, d.comuna].filter(Boolean).join(' — ') === destino
@@ -8829,7 +8848,16 @@ function renderDCFacturas(salidas) {
 }
 
 function renderDCEvolucion(salidas, desdeDate, hastaDate) {
-    const agrup = document.getElementById('dcAgrupacion')?.value || 'dia';
+    let agrup = document.getElementById('dcAgrupacion')?.value || 'dia';
+    // Guarda de rendimiento: si el rango excede 366 días con agrupación diaria,
+    // Chart.js debe pintar miles de barras y el navegador se congela. Forzamos
+    // agrupación mensual y notificamos al usuario en el subtítulo.
+    const rangoDias = Math.max(0, Math.ceil((hastaDate - desdeDate) / 86400000));
+    let forzadoMes = false;
+    if (agrup === 'dia' && rangoDias > 366) {
+        agrup = 'mes';
+        forzadoMes = true;
+    }
     const map = {};
 
     if (agrup === 'dia') {
@@ -8855,7 +8883,11 @@ function renderDCEvolucion(salidas, desdeDate, hastaDate) {
         : `${meses[parseInt(l.slice(5, 7)) - 1]} ${l.slice(0, 4)}`;
 
     const subtitleEl = document.getElementById('dcEvolSubtitle');
-    if (subtitleEl) subtitleEl.textContent = `Total: ${values.reduce((a,v)=>a+v,0).toLocaleString('es-CL')} unidades — ${agrup === 'dia' ? 'vista diaria' : 'vista mensual'}`;
+    if (subtitleEl) {
+        const vistaTxt = agrup === 'dia' ? 'vista diaria' : 'vista mensual';
+        const nota = forzadoMes ? ' · rango > 1 año: cambiado a mensual' : '';
+        subtitleEl.textContent = `Total: ${values.reduce((a,v)=>a+v,0).toLocaleString('es-CL')} unidades — ${vistaTxt}${nota}`;
+    }
 
     _dcDestroy('chartEvol');
     const ctx = document.getElementById('dcChartEvol')?.getContext('2d');
@@ -8990,6 +9022,7 @@ function renderDCAlertas() {
 
 function renderDashComercial() {
     populateDCBodegaFilter();
+    _dcBuildRutClienteMap();
     const { desdeDate, hastaDate, desdeAnt, hastaAnt } = getDCRango();
     const salidas    = getDCSalidas(desdeDate, hastaDate);
     const salidasAnt = getDCSalidas(desdeAnt, hastaAnt);
@@ -9014,6 +9047,15 @@ function dcOnPeriodoChange() {
     const custom = document.getElementById('dcPeriodo').value === 'custom';
     document.getElementById('dcRangoCustom').style.display = custom ? 'flex' : 'none';
     renderDashComercial();
+}
+
+// Debounce para los inputs de fecha del rango custom: el datepicker nativo
+// puede disparar change varias veces al navegar por meses/años; agrupamos las
+// llamadas para evitar re-renders encadenados que pueden congelar el navegador.
+let _dcDateChangeTimer = null;
+function dcOnDateChange() {
+    if (_dcDateChangeTimer) clearTimeout(_dcDateChangeTimer);
+    _dcDateChangeTimer = setTimeout(() => { _dcDateChangeTimer = null; renderDashComercial(); }, 250);
 }
 function dcRefreshProds()    { const { desdeDate, hastaDate } = getDCRango(); renderDCProductos(getDCSalidas(desdeDate, hastaDate)); }
 function dcRefreshClients()  { const { desdeDate, hastaDate } = getDCRango(); renderDCClientes(getDCSalidas(desdeDate, hastaDate)); }
