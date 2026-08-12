@@ -1028,8 +1028,8 @@
                     <div class="card" style="margin-top:14px">
                         <div class="card-header">
                             <div>
-                                <div class="card-title">Historial de Ajustes de Movimiento</div>
-                                <div class="card-subtitle">Registro inmutable de cada ajuste realizado · trazabilidad NT 147</div>
+                                <div class="card-title">Historial de Ajustes y Anulaciones de Movimiento</div>
+                                <div class="card-subtitle">Registro inmutable de cada ajuste y anulación realizados · trazabilidad NT 147</div>
                             </div>
                         </div>
                         <div class="filter-bar">
@@ -1048,7 +1048,9 @@
                                 <input type="date" class="form-input" id="fAjMovHistHasta" style="width:auto" onchange="renderAjustesMovHistorial()">
                             </div>
                             <input type="text" class="form-input" id="fAjMovHistRef" placeholder="Filtrar por referencia / documento..." onkeyup="renderAjustesMovHistorial()" style="max-width:280px">
-                            <input type="text" class="form-input" id="fAjMovHistUsr" placeholder="Filtrar por usuario..." onkeyup="renderAjustesMovHistorial()" style="max-width:220px">
+                            <select class="form-select" id="fAjMovHistBodega" style="width:auto" onchange="renderAjustesMovHistorial()">
+                                <option value="">Todas las bodegas</option>
+                            </select>
                             <button class="btn btn-ghost btn-sm" onclick="limpiarFiltrosAjMovHist()">Limpiar</button>
                             <span id="fAjMovHistCount" style="margin-left:auto;font-size:12px;color:var(--text3)"></span>
                         </div>
@@ -6480,17 +6482,34 @@ function ajMovHistOnPeriodoChange() {
 function limpiarFiltrosAjMovHist() {
     const sel = document.getElementById('fAjMovHistPer'); if (sel) sel.value = 'todos';
     const rango = document.getElementById('fAjMovHistRango'); if (rango) rango.style.display = 'none';
-    ['fAjMovHistDesde','fAjMovHistHasta','fAjMovHistRef','fAjMovHistUsr'].forEach(id => {
+    ['fAjMovHistDesde','fAjMovHistHasta','fAjMovHistRef'].forEach(id => {
         const el = document.getElementById(id); if (el) el.value = '';
     });
+    const bod = document.getElementById('fAjMovHistBodega'); if (bod) bod.value = '';
     renderAjustesMovHistorial();
+}
+
+// Puebla el <select> de bodega con las bodegas visibles para este perfil.
+// Preserva la selección previa si sigue siendo válida.
+function _populateAjMovHistBodegaFilter() {
+    const sel = document.getElementById('fAjMovHistBodega');
+    if (!sel) return;
+    const prev = sel.value;
+    const permitidas = Object.values(data.bodegas || {})
+        .map(b => b && b.nombre)
+        .filter(n => n && _bodegaPermitida(n))
+        .sort((a, b) => a.localeCompare(b, 'es'));
+    sel.innerHTML = '<option value="">Todas las bodegas</option>' +
+        permitidas.map(n => `<option value="${n}">${n}</option>`).join('');
+    if (prev && permitidas.includes(prev)) sel.value = prev;
 }
 
 function renderAjustesMovHistorial() {
     const tb = document.getElementById('tAjMovHist');
     if (!tb) return;
+    _populateAjMovHistBodegaFilter();
     const fRef = (document.getElementById('fAjMovHistRef')?.value || '').toLowerCase();
-    const fUsr = (document.getElementById('fAjMovHistUsr')?.value || '').toLowerCase();
+    const fBod = (document.getElementById('fAjMovHistBodega')?.value || '').trim();
     const rango = _ajMovHistRango();
     const all = Object.entries(data.ajustesMovimiento || {}).map(([id, a]) => ({ id, ...a }));
     let rows = all.slice();
@@ -6501,7 +6520,7 @@ function renderAjustesMovHistorial() {
         });
     }
     if (fRef) rows = rows.filter(r => ((r.referencia||'')+' '+(r.documentoId||'')).toLowerCase().includes(fRef));
-    if (fUsr) rows = rows.filter(r => (r.usuario||'').toLowerCase().includes(fUsr));
+    if (fBod) rows = rows.filter(r => (r.bodega||'') === fBod);
     rows.sort((a,b) => new Date(b.fecha) - new Date(a.fecha));
 
     const countEl = document.getElementById('fAjMovHistCount');
@@ -6513,12 +6532,20 @@ function renderAjustesMovHistorial() {
 
     if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="10">Sin ajustes en el período/filtro seleccionado</td></tr>'; return; }
     tb.innerHTML = rows.map(r => {
-        const tipoLabel = r.tipoMovimiento === 'CambioUbicacion' ? 'Cambio de Ubicación' : (r.tipoMovimiento === 'Ajuste' ? 'Cambio de Status' : (r.tipoMovimiento||'—'));
+        const tm = r.tipoMovimiento || '';
+        const esAnul = tm === 'AnulacionSalida' || tm === 'AnulacionEntrada';
+        const tipoLabel =
+            tm === 'CambioUbicacion' ? 'Cambio de Ubicación' :
+            tm === 'Ajuste' ? 'Cambio de Status' :
+            tm === 'AnulacionSalida' ? 'Anulación Salida' :
+            tm === 'AnulacionEntrada' ? 'Anulación Entrada' :
+            (tm || '—');
+        const badgeCls = esAnul ? 'badge-danger' : 'badge-blue';
         return `<tr>
             <td class="text-mono" style="font-size:11px">${_ajmEsc(fmtDateTime(r.fecha||''))}</td>
             <td class="text-mono" style="font-size:11px">${_ajmEsc(r.documentoId||'—')}</td>
             <td>${_ajmEsc(r.referencia||'—')}</td>
-            <td><span class="badge badge-blue" style="font-size:10px">${_ajmEsc(tipoLabel)}</span></td>
+            <td><span class="badge ${badgeCls}" style="font-size:10px">${_ajmEsc(tipoLabel)}</span></td>
             <td style="font-size:12px">${_ajmEsc(r.bodega||'—')}</td>
             <td style="font-weight:600">${r.totalItems||0}</td>
             <td style="font-weight:600;color:var(--accent2)">${r.totalCambios||0}</td>
@@ -6546,24 +6573,36 @@ function verDetalleAjusteMov(id) {
         ? '<div style="font-weight:600;margin:6px 0 4px;font-size:12px">Cabecera</div>' +
           Object.entries(hdr).map(([k,v]) => `<div style="font-size:12px;color:var(--text2)">• ${_ajmEsc(labels[k]||k)}: «${_ajmEsc(v.before||'—')}» → «${_ajmEsc(v.after||'—')}»</div>`).join('')
         : '';
-    const itemsHtml = items.length
-        ? '<div style="font-weight:600;margin:10px 0 4px;font-size:12px">Ítems modificados</div>' +
-          items.map(it => `<div style="font-size:12px;color:var(--text2);margin-bottom:4px">
-              <strong style="color:var(--accent2)">${_ajmEsc(it.sku||'—')}</strong> · Lote ${_ajmEsc(it.lote||'—')}<br>
-              ${Object.entries(it.cambios||{}).map(([k,v]) => `&nbsp;&nbsp;◦ ${_ajmEsc(labels[k]||k)}: «${_ajmEsc((v.before??'')+'')}» → «${_ajmEsc((v.after??'')+'')}»`).join('<br>')}
-            </div>`).join('')
-        : '<div style="font-size:12px;color:var(--text3);margin-top:8px">Sin cambios de detalle registrados.</div>';
+    const esAnul = r.tipoMovimiento === 'AnulacionSalida' || r.tipoMovimiento === 'AnulacionEntrada';
+    let itemsHtml;
+    if (esAnul) {
+        const lineas = Array.isArray(r.resumen) ? r.resumen : [];
+        itemsHtml = '<div style="font-weight:600;margin:10px 0 4px;font-size:12px">Líneas anuladas</div>' +
+            (lineas.length
+                ? lineas.map(s => `<div style="font-size:12px;color:var(--text2);margin-bottom:2px">• ${_ajmEsc(s)}</div>`).join('')
+                : '<div style="font-size:12px;color:var(--text3)">Sin detalle de líneas.</div>');
+    } else {
+        itemsHtml = items.length
+            ? '<div style="font-weight:600;margin:10px 0 4px;font-size:12px">Ítems modificados</div>' +
+              items.map(it => `<div style="font-size:12px;color:var(--text2);margin-bottom:4px">
+                  <strong style="color:var(--accent2)">${_ajmEsc(it.sku||'—')}</strong> · Lote ${_ajmEsc(it.lote||'—')}<br>
+                  ${Object.entries(it.cambios||{}).map(([k,v]) => `&nbsp;&nbsp;◦ ${_ajmEsc(labels[k]||k)}: «${_ajmEsc((v.before??'')+'')}» → «${_ajmEsc((v.after??'')+'')}»`).join('<br>')}
+                </div>`).join('')
+            : '<div style="font-size:12px;color:var(--text3);margin-top:8px">Sin cambios de detalle registrados.</div>';
+    }
     const body = `
         <div style="font-size:12px">
-            <div><strong>N° Movimiento:</strong> ${_ajmEsc(r.numeroMovimiento||'—')}</div>
+            ${esAnul ? `<div><strong>Tipo:</strong> <span style="color:var(--danger);font-weight:600">${r.tipoMovimiento === 'AnulacionSalida' ? 'Anulación de Salida' : 'Anulación de Entrada'}</span></div>` : ''}
+            <div><strong>N° Movimiento${esAnul ? ' (anulación)' : ''}:</strong> ${_ajmEsc(r.numeroMovimiento||'—')}</div>
+            ${esAnul && r.numeroMovimientoAnulado ? `<div><strong>N° Movimiento anulado:</strong> ${_ajmEsc(r.numeroMovimientoAnulado)}</div>` : ''}
             <div><strong>Documento:</strong> ${_ajmEsc(r.documentoId||'—')}</div>
             <div><strong>Referencia:</strong> ${_ajmEsc(r.referencia||'—')}</div>
             <div><strong>Fecha:</strong> ${_ajmEsc(fmtDateTime(r.fecha||''))}</div>
             <div><strong>Usuario:</strong> ${_ajmEsc(r.usuario||'—')} ${r.usuarioPerfil?`(${_ajmEsc(r.usuarioPerfil)})`:''}</div>
-            <div><strong>Total ítems:</strong> ${r.totalItems||0} · <strong>Cambios:</strong> ${r.totalCambios||0}</div>
+            <div><strong>Total ítems:</strong> ${r.totalItems||0} · <strong>${esAnul ? 'Líneas anuladas' : 'Cambios'}:</strong> ${r.totalCambios||0}</div>
         </div>
         ${r.motivoAjuste ? `<div style="margin-top:8px;padding:8px 10px;border-radius:6px;background:rgba(8,84,160,.08);border:1px solid rgba(8,84,160,.28)">
-            <div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);font-weight:600">Motivo del ajuste</div>
+            <div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);font-weight:600">${esAnul ? 'Motivo de la anulación' : 'Motivo del ajuste'}</div>
             <div style="margin-top:2px;font-size:13px;color:var(--text)">${_ajmEsc(r.motivoAjuste)}</div>
         </div>` : ''}
         <div style="max-height:340px;overflow:auto;background:var(--bg2);padding:10px;border-radius:6px;margin-top:8px">
@@ -6796,6 +6835,7 @@ async function confirmarAnularSalida() {
     const updates = {};
     const ts0 = Date.now();
     let n = 0;
+    const resumenLineas = [];
     _ajMovItems.forEach((it) => {
         const o = it.original; // usar valores originales de la salida, no los editados
         const qty = parseFloat(o.cantidad) || 0;
@@ -6813,11 +6853,32 @@ async function confirmarAnularSalida() {
             anulacionDe: docId,
             anulacionLineaKey: it.key
         };
+        resumenLineas.push(`${o.sku} · Lote ${o.lote||'—'} · +${qty} ud.`);
         n++;
     });
     if (!n) { showFormError('anular-err', 'La salida no tiene líneas con cantidad > 0 para anular.'); return; }
     // Captura items para el recálculo posterior (evita mutaciones intermedias).
     const itemsSnapshot = _ajMovItems.map(it => ({ original: { ...it.original } }));
+    // Registrar en el Historial de Ajustes de Movimiento — así aparece en
+    // el mismo listado que los ajustes de datos, distinguido como Anulación.
+    const ajusteId = db.ref(`usuarios/${uid}/ajustesMovimiento`).push().key;
+    updates[`usuarios/${uid}/ajustesMovimiento/${ajusteId}`] = {
+        fecha: ahora,
+        usuario: currentUser.email,
+        usuarioPerfil: userPerfil || '',
+        numeroMovimiento,
+        numeroMovimientoAnulado: _ajMovHeader.numeroMovimiento || '',
+        documentoId: docId,
+        referencia: _ajMovHeader.referencia || '',
+        tipoMovimiento: 'AnulacionSalida',
+        bodega: _ajMovHeader.bodega || '',
+        motivoAjuste: motivo,
+        totalItems: n,
+        totalCambios: n,
+        cambiosHeader: {},
+        cambiosItems: [],
+        resumen: resumenLineas.slice(0, 30)
+    };
     db.ref().update(updates)
         .then(() => {
             logAudit('Anular Salida', 'Movimientos', `${n} líneas`, docId, `Ajustes positivos generados · Motivo: ${motivo}`);
@@ -6869,6 +6930,7 @@ async function confirmarAnularEntrada() {
     const updates = {};
     const ts0 = Date.now();
     let n = 0;
+    const resumenLineas = [];
     _ajMovItems.forEach((it) => {
         const o = it.original; // usar valores originales de la entrada, no los editados
         const qty = parseFloat(o.cantidad) || 0;
@@ -6886,9 +6948,30 @@ async function confirmarAnularEntrada() {
             anulacionDe: docId,
             anulacionLineaKey: it.key
         };
+        resumenLineas.push(`${o.sku} · Lote ${o.lote||'—'} · −${qty} ud.`);
         n++;
     });
     if (!n) { showFormError('anular-ent-err', 'La entrada no tiene líneas con cantidad > 0 para anular.'); return; }
+    // Registrar en el Historial de Ajustes de Movimiento — así aparece en
+    // el mismo listado que los ajustes de datos, distinguido como Anulación.
+    const ajusteId = db.ref(`usuarios/${uid}/ajustesMovimiento`).push().key;
+    updates[`usuarios/${uid}/ajustesMovimiento/${ajusteId}`] = {
+        fecha: ahora,
+        usuario: currentUser.email,
+        usuarioPerfil: userPerfil || '',
+        numeroMovimiento,
+        numeroMovimientoAnulado: _ajMovHeader.numeroMovimiento || '',
+        documentoId: docId,
+        referencia: _ajMovHeader.referencia || '',
+        tipoMovimiento: 'AnulacionEntrada',
+        bodega: _ajMovHeader.bodega || '',
+        motivoAjuste: motivo,
+        totalItems: n,
+        totalCambios: n,
+        cambiosHeader: {},
+        cambiosItems: [],
+        resumen: resumenLineas.slice(0, 30)
+    };
     db.ref().update(updates)
         .then(() => {
             logAudit('Anular Entrada', 'Movimientos', `${n} líneas`, docId, `Ajustes negativos generados · Motivo: ${motivo}`);
