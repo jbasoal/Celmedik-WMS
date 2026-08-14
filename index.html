@@ -2096,7 +2096,7 @@
         <div class="alert-banner warning" style="margin:8px 0;padding:8px 12px"><div class="alert-banner-text">Se creará un <strong>Ajuste de Inventario negativo</strong> por cada línea (mismo SKU, lote, bodega, ubicación y cantidad). La entrada original permanece en Movimientos para trazabilidad. Verifique que haya stock suficiente para descontar.</div></div>
         <div class="btn-row">
             <button type="button" class="btn btn-ghost" onclick="closeModal('anularEntradaModal')">Cancelar</button>
-            <button type="button" class="btn" style="background:var(--danger);color:white;border-color:var(--danger)" onclick="confirmarAnularEntrada()">Anular y generar ajustes</button>
+            <button type="button" id="btn-confirmar-anular-ent" class="btn" style="background:var(--danger);color:white;border-color:var(--danger)" onclick="confirmarAnularEntrada()">Anular y generar ajustes</button>
         </div>
     </div>
 </div>
@@ -6895,6 +6895,56 @@ async function confirmarAnularSalida() {
 // Genera un AjusteInventario negativo por cada línea de la entrada cargada en
 // el editor de Ajuste de Movimiento. La entrada original permanece intacta para
 // trazabilidad. Solo Maestro. Aparece en el módulo Ajuste de Inventario.
+//
+// Restricción: no se permite anular una entrada si alguna de sus líneas
+// (sku+lote) tiene salidas o destrucciones posteriores no anuladas, o si el
+// stock disponible del sku+lote es menor a la cantidad que aportó la entrada
+// (lo que dejaría el saldo negativo). El usuario debe anular primero esas
+// salidas asociadas.
+function _salidasAsociadasEntrada(items, fechaEntrada) {
+    // Devuelve, por línea, las salidas y destrucciones NO anuladas del mismo
+    // sku+lote posteriores a la fecha de la entrada. También compara el stock
+    // disponible agregado del sku+lote contra la cantidad de la línea.
+    const anuladasDocs = new Set(
+        Object.values(data.movimientos || {})
+            .filter(m => m && m.tipo === 'AjusteInventario' && m.ajusteTipo === 'Positivo' && m.anulacionDe)
+            .map(m => m.anulacionDe)
+    );
+    const stock = calcStock();
+    const stockPorSkuLote = {};
+    Object.values(stock).forEach(r => {
+        const k = `${r.sku}|${r.lote}`;
+        stockPorSkuLote[k] = (stockPorSkuLote[k] || 0) + (parseFloat(r.cantidad) || 0);
+    });
+    const fEnt = fechaEntrada ? new Date(fechaEntrada) : null;
+    const bloqueos = [];
+    items.forEach(it => {
+        const o = it.original;
+        const qty = parseFloat(o.cantidad) || 0;
+        if (qty <= 0) return;
+        const key = `${o.sku}|${o.lote}`;
+        const disp = stockPorSkuLote[key] || 0;
+        const salidas = Object.values(data.movimientos || {}).filter(m => {
+            if (!m) return false;
+            if (m.tipo !== 'Salida' && m.tipo !== 'Destrucción') return false;
+            if (m.sku !== o.sku || m.lote !== o.lote) return false;
+            if (anuladasDocs.has(m.documentoId || '')) return false;
+            if (fEnt && m.fecha && new Date(m.fecha) < fEnt) return false;
+            return (parseFloat(m.cantidad) || 0) > 0;
+        });
+        const salidasTot = salidas.reduce((a, m) => a + (parseFloat(m.cantidad) || 0), 0);
+        const stockInsuficiente = disp < qty;
+        if (salidas.length || stockInsuficiente) {
+            bloqueos.push({
+                sku: o.sku, lote: o.lote, qtyEntrada: qty,
+                stockDisponible: disp, stockInsuficiente,
+                salidas, salidasTot
+            });
+        }
+    });
+    return bloqueos;
+}
+
 function abrirAnularEntrada() {
     if (userPerfil !== 'Maestro') { alert('Solo el perfil Maestro puede anular entradas.'); return; }
     if (!_ajMovHeader || _ajMovHeader.tipo !== 'Entrada' || !_ajMovItems.length) {
@@ -6905,10 +6955,34 @@ function abrirAnularEntrada() {
     const yaAnul = Object.values(data.movimientos || {}).some(m => m.tipo === 'AjusteInventario' && (m.anulacionDe || '') === docId);
     const totalLineas = _ajMovItems.length;
     const totalQty = _ajMovItems.reduce((a, it) => a + (parseFloat(it.original.cantidad) || 0), 0);
-    const warn = yaAnul
-        ? `<br><span style="color:var(--warning);font-weight:600">⚠ Este documento ya tiene una anulación previa registrada. Si confirmas, se generarán ajustes adicionales (riesgo de duplicación de descuento).</span>`
-        : '';
-    document.getElementById('anular-ent-info').innerHTML = `Documento <strong>${docId}</strong> · <strong>${totalLineas}</strong> línea(s) · Total <strong>${totalQty}</strong> ud.${warn}`;
+    const bloqueos = _salidasAsociadasEntrada(_ajMovItems, _ajMovHeader.fecha);
+    const info = document.getElementById('anular-ent-info');
+    const btnConfirmar = document.getElementById('btn-confirmar-anular-ent');
+    let warn = '';
+    if (bloqueos.length) {
+        const detalle = bloqueos.map(b => {
+            const salidasList = b.salidas.slice(0, 5).map(s => {
+                const f = s.fecha ? new Date(s.fecha).toLocaleDateString('es-CL') : '—';
+                return `&nbsp;&nbsp;• ${f} · doc ${s.documentoId||s.referencia||'—'} · ${parseFloat(s.cantidad)||0} ud.`;
+            }).join('<br>');
+            const mas = b.salidas.length > 5 ? `<br>&nbsp;&nbsp;… y ${b.salidas.length - 5} más` : '';
+            const razon = [];
+            if (b.salidas.length) razon.push(`${b.salidas.length} salida(s) no anulada(s) · ${b.salidasTot} ud.`);
+            if (b.stockInsuficiente) razon.push(`stock disponible ${b.stockDisponible} < ${b.qtyEntrada} (quedaría negativo)`);
+            return `<div style="margin-top:6px"><strong>${b.sku}</strong> · Lote ${b.lote || '—'} — ${razon.join(' · ')}${salidasList ? '<br>' + salidasList + mas : ''}</div>`;
+        }).join('');
+        warn = `<div style="margin-top:10px;padding:10px 12px;background:rgba(239,68,68,0.08);border:1px solid var(--danger);border-radius:6px;color:var(--danger);font-size:12px">
+            <strong>⛔ No se puede anular esta entrada.</strong> Hay líneas con salidas asociadas posteriores o stock insuficiente. Anula primero las salidas indicadas.
+            ${detalle}
+        </div>`;
+        if (btnConfirmar) { btnConfirmar.disabled = true; btnConfirmar.style.opacity = '0.5'; btnConfirmar.style.cursor = 'not-allowed'; }
+    } else {
+        if (btnConfirmar) { btnConfirmar.disabled = false; btnConfirmar.style.opacity = ''; btnConfirmar.style.cursor = ''; }
+        if (yaAnul) {
+            warn = `<br><span style="color:var(--warning);font-weight:600">⚠ Este documento ya tiene una anulación previa registrada. Si confirmas, se generarán ajustes adicionales (riesgo de duplicación de descuento).</span>`;
+        }
+    }
+    info.innerHTML = `Documento <strong>${docId}</strong> · <strong>${totalLineas}</strong> línea(s) · Total <strong>${totalQty}</strong> ud.${warn}`;
     document.getElementById('anular-ent-motivo').value = '';
     const err = document.getElementById('anular-ent-err'); if (err) err.style.display = 'none';
     openModal('anularEntradaModal');
@@ -6918,6 +6992,14 @@ async function confirmarAnularEntrada() {
     if (userPerfil !== 'Maestro') { showFormError('anular-ent-err', 'Solo el perfil Maestro puede anular entradas.'); return; }
     if (!_ajMovHeader || _ajMovHeader.tipo !== 'Entrada' || !_ajMovItems.length) {
         showFormError('anular-ent-err', 'No hay una entrada cargada.'); return;
+    }
+    // Revalidación al submit: si hay salidas asociadas / stock insuficiente,
+    // no se puede anular (evita bypass del botón deshabilitado).
+    const bloqueosSubmit = _salidasAsociadasEntrada(_ajMovItems, _ajMovHeader.fecha);
+    if (bloqueosSubmit.length) {
+        const resumen = bloqueosSubmit.map(b => `${b.sku}/${b.lote||'—'} (${b.salidas.length} salida(s), stock ${b.stockDisponible})`).join('; ');
+        showFormError('anular-ent-err', `No se puede anular: hay salidas asociadas o stock insuficiente en ${resumen}. Anula primero las salidas.`);
+        return;
     }
     const motivo = (document.getElementById('anular-ent-motivo')?.value || '').trim();
     if (!motivo) { showFormError('anular-ent-err', 'Ingrese el motivo de la anulación.'); return; }
@@ -6940,7 +7022,10 @@ async function confirmarAnularEntrada() {
             tipo: 'AjusteInventario', ajusteTipo: 'Negativo',
             sku: o.sku, lote: o.lote, vence: o.vence || '',
             descripcion: o.descripcion || (data.productos[o.sku]?.descripcion || ''),
-            cantidad: qty,
+            // calcStock() suma cantidad tal cual para AjusteInventario (no mira
+            // ajusteTipo). El flujo normal (línea ~8093) guarda -qty cuando es
+            // Negativo; aquí hacemos lo mismo para no dejar el stock inflado.
+            cantidad: -qty,
             bodega: o.bodega || '', ubicacion: o.ubicacion || '',
             observaciones: `Anulación entrada N° ${docId} — ${motivo}`,
             fecha: ahora, usuario: currentUser.email,
