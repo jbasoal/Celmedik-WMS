@@ -1125,9 +1125,9 @@
                         <div class="table-wrap">
                             <table>
                                 <thead><tr>
-                                    <th>Fecha ingreso</th><th>SKU</th><th>Descripción</th><th>Tipo</th><th>Lote</th><th>Qty ingresada</th><th>Bodega</th><th>Ubicación</th><th>Vencimiento</th><th>Estatus actual</th><th>Fecha cambio</th><th>Motivo cambio</th><th>Usuario ingreso</th>
+                                    <th>Fecha ingreso</th><th>SKU</th><th>Descripción</th><th>Tipo</th><th>Lote</th><th>Qty ingresada</th><th>Referencia</th><th>Bodega</th><th>Ubicación</th><th>Vencimiento</th><th>Estatus actual</th><th>Fecha cambio</th><th>Motivo cambio</th><th>Usuario ingreso</th>
                                 </tr></thead>
-                                <tbody id="tCuarHist"><tr class="empty-row"><td colspan="13">Sin ingresos a cuarentena en el período/filtro seleccionado</td></tr></tbody>
+                                <tbody id="tCuarHist"><tr class="empty-row"><td colspan="14">Sin ingresos a cuarentena en el período/filtro seleccionado</td></tr></tbody>
                             </table>
                         </div>
                     </div>
@@ -7737,6 +7737,7 @@ function renderCuarentenaHistorial() {
             tipo: prod.tipo || '',
             lote: m.lote || '',
             cantidad: parseFloat(m.cantidad) || 0,
+            referencia: m.referencia || '',
             bodega: m.bodega || '',
             ubicacion: m.ubicacion || '',
             vence: m.vence || '',
@@ -7783,6 +7784,7 @@ function renderCuarentenaHistorial() {
         <td>${r.tipo ? badgeTipo(r.tipo) : '—'}</td>
         <td class="text-mono" style="font-size:11px">${r.lote || '—'}</td>
         <td style="font-weight:600">${r.cantidad}</td>
+        <td class="text-mono" style="font-size:11px">${r.referencia || '—'}</td>
         <td>${r.bodega || '—'}</td>
         <td style="font-size:12px">${r.ubicacion || '—'}</td>
         <td>${r.vence ? fmtDate(r.vence) : '—'}</td>
