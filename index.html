@@ -4661,16 +4661,21 @@ function _palletSizeForSku(sku) {
     return PALLET_SIZE_BY_SKU[(sku||'').trim().toUpperCase()] || null;
 }
 
-// Para Entrada de concentrados: el operador debe elegir 120 o 126 uds/pallet
-// (mismos SKU pueden despacharse en pallets de distinta capacidad según turno).
-// Muestra/oculta el selector "Máx. unid. por pallet" y devuelve el valor a usar
-// para el cálculo (null → aún no seleccionado, no calcular).
+// Selector "Máx. unid. por pallet" (120/126) para concentrados. Aparece:
+//   1) En Entrada de concentrado (siempre — el operador elige según turno).
+//   2) En CambioUbicacion de concentrado cuando la cantidad total > 120
+//      (requiere distribuir en varios pallets — origen y destino por pallet).
+// Devuelve el valor elegido, o null si aún no se ha seleccionado.
 function _resolveConcentradoPalletMax(sku, tipo) {
     const group = document.getElementById('mi-pallet-max-group');
     const sel   = document.getElementById('mi-pallet-max');
-    const isConcentradoEntrada = (tipo === 'Entrada') && CONCENTRADO_SKUS && CONCENTRADO_SKUS.has((sku||'').trim().toUpperCase());
     if (!group || !sel) return null;
-    if (!isConcentradoEntrada) {
+    const skuU = (sku || '').trim().toUpperCase();
+    const isConc = CONCENTRADO_SKUS && CONCENTRADO_SKUS.has(skuU);
+    const qty = parseFloat(document.getElementById('mi-qty')?.value) || 0;
+    const isEntradaConc   = (tipo === 'Entrada')         && isConc;
+    const isCambioBigConc = (tipo === 'CambioUbicacion') && isConc && qty > 120;
+    if (!isEntradaConc && !isCambioBigConc) {
         group.style.display = 'none';
         sel.value = '';
         return _palletSizeForSku(sku);
@@ -4682,14 +4687,36 @@ function _resolveConcentradoPalletMax(sku, tipo) {
 
 // Calcula y prellena la distribución por pallet cuando el SKU está mapeado.
 // Conserva las ubicaciones previamente cargadas si la cantidad cambia y se
-// re-renderiza la grilla. Sólo aplica para Entrada/Salida.
+// re-renderiza la grilla. Aplica para Entrada/Salida y para CambioUbicacion
+// de concentrado con qty > 120 (donde se necesita distribuir en pallets con
+// ubicación origen y destino por pallet).
 function _autoFillPalletsForSku() {
     const sku = (document.getElementById('mi-sku')?.value || '').trim().toUpperCase();
     const tipo = document.getElementById('md-tipo')?.value || '';
-    if (tipo !== 'Entrada' && tipo !== 'Salida') return;
+    if (tipo !== 'Entrada' && tipo !== 'Salida' && tipo !== 'CambioUbicacion') return;
+    const qty = parseFloat(document.getElementById('mi-qty')?.value) || 0;
+    // Para CambioUbicacion controlamos aquí la visibilidad del grupo "Cantidad
+    // de Pallet" (que _refreshMiStatusField mantiene oculto por defecto). Solo
+    // aparece cuando el SKU es concentrado y qty > 120.
+    if (tipo === 'CambioUbicacion') {
+        const palQtyGroup = document.getElementById('mi-pallet-qty-group');
+        const necesario = CONCENTRADO_SKUS && CONCENTRADO_SKUS.has(sku) && qty > 120;
+        if (palQtyGroup) palQtyGroup.style.display = necesario ? '' : 'none';
+        if (!necesario) {
+            // Reset del pallet-qty y de la grilla si dejó de ser necesario.
+            const palQtyEl = document.getElementById('mi-pallet-qty');
+            if (palQtyEl) palQtyEl.value = '';
+            const dist = document.getElementById('mi-pallet-dist');
+            if (dist) { dist.style.display = 'none'; dist.innerHTML = ''; }
+            // Reactivar los campos únicos de origen y destino para CambioUbic.
+            const uG  = document.getElementById('mi-ubic-group');
+            const uDG = document.getElementById('mi-ubic-dest-group');
+            if (uG)  uG.style.display  = 'block';
+            if (uDG) uDG.style.display = 'block';
+        }
+    }
     const palletSize = _resolveConcentradoPalletMax(sku, tipo);
     if (!palletSize) return;
-    const qty = parseFloat(document.getElementById('mi-qty')?.value) || 0;
     if (qty <= 0) return;
     const palletCount = Math.ceil(qty / palletSize);
     const palletQtyEl = document.getElementById('mi-pallet-qty');
@@ -5003,66 +5030,96 @@ function selectLoteDestruccion(sku, lote, vence, status, stockQty, bodega, ubica
     openModal('destruccionModal');
 }
 
-// Construye/oculta las filas de distribución por pallet. Cada fila pide cantidad
-// y ubicación para ese pallet. Si cantidad de pallet ≤ 1 vuelve al flujo simple
-// con un único campo de ubicación.
+// Construye/oculta las filas de distribución por pallet. Cada fila pide
+// cantidad + ubicación(es) para ese pallet. Si cantidad de pallet ≤ 1 vuelve
+// al flujo simple con un único campo de ubicación.
+// Para CambioUbicacion se generan DOS selects por fila (origen y destino).
 function onMiPalletQtyChange() {
     const palletCount = parseInt(document.getElementById('mi-pallet-qty')?.value) || 1;
     const dist = document.getElementById('mi-pallet-dist');
-    const ubicGroup = document.getElementById('mi-ubic-group');
+    const ubicGroup     = document.getElementById('mi-ubic-group');
+    const ubicDestGroup = document.getElementById('mi-ubic-dest-group');
     if (!dist) return;
+
+    const tipo = document.getElementById('md-tipo')?.value || '';
 
     if (palletCount <= 1) {
         dist.style.display = 'none';
         dist.innerHTML = '';
         if (ubicGroup) {
             // Reactivar el campo único de ubicación si era visible antes
-            const tipo = document.getElementById('md-tipo')?.value || '';
-            if (tipo === 'Entrada' || tipo === 'Devolución' || tipo === 'Salida') ubicGroup.style.display = 'block';
+            if (tipo === 'Entrada' || tipo === 'Devolución' || tipo === 'Salida' || tipo === 'CambioUbicacion') ubicGroup.style.display = 'block';
         }
+        if (ubicDestGroup && tipo === 'CambioUbicacion') ubicDestGroup.style.display = 'block';
         return;
     }
 
-    const tipo = document.getElementById('md-tipo')?.value || '';
     const bodegaNombre = document.getElementById('md-bodega')?.value || '';
     const bodega = Object.values(data.bodegas||{}).find(b => b.nombre === bodegaNombre);
     const sku   = (document.getElementById('mi-sku')?.value || '').trim().toUpperCase();
     const lote  = (document.getElementById('mi-lote')?.value || '').trim();
 
-    // Para Salida, las ubicaciones disponibles vienen del stock real del SKU+Lote+Bodega.
-    let ubicOptions = [];
-    if (tipo === 'Salida' && sku && lote && bodegaNombre) {
+    // Origen/destino según tipo de movimiento.
+    //   • Salida y CambioUbicacion: ubicaciones origen = solo las que tienen
+    //     stock aprobado del SKU+LOTE+BODEGA (para no permitir seleccionar
+    //     ubicaciones vacías).
+    //   • Entrada/Devolución: ubicaciones destino = ubicaciones predefinidas
+    //     de la bodega.
+    let ubicOrigenOptions = [];
+    let ubicDestOptions   = [];
+    if ((tipo === 'Salida' || tipo === 'CambioUbicacion') && sku && lote && bodegaNombre) {
         const stock = calcStock();
-        ubicOptions = Object.values(stock)
+        ubicOrigenOptions = Object.values(stock)
             .filter(s => s.sku === sku && s.lote === lote && s.bodega === bodegaNombre && (parseFloat(s.cantidad)||0) > 0 && getLoteStatus(s) === 'Aprobado')
             .sort((a, b) => (a.ubicacion||'').localeCompare(b.ubicacion||''))
             .map(s => ({ value: s.ubicacion || '', label: `${s.ubicacion || '—'} (${s.cantidad} ud.)` }));
-    } else if (bodega && Array.isArray(bodega.ubicaciones) && bodega.ubicaciones.length) {
-        ubicOptions = bodega.ubicaciones.map(u => ({ value: u, label: u }));
+    }
+    if (bodega && Array.isArray(bodega.ubicaciones) && bodega.ubicaciones.length) {
+        ubicDestOptions = bodega.ubicaciones.map(u => ({ value: u, label: u }));
     }
 
+    const isCambioUbic = (tipo === 'CambioUbicacion');
+    // Para Entrada/Devolución/Salida, la "ubicación" única sigue siendo destino
+    // salvo en Salida (donde funciona como origen porque restamos stock).
+    const singleOptions = (tipo === 'Salida') ? ubicOrigenOptions : ubicDestOptions;
+
     let html = '<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text2);margin-bottom:8px">Distribución por pallet</div>';
-    html += '<div style="display:grid;grid-template-columns:60px 1fr 2fr;gap:8px;font-size:11px;color:var(--text3);margin-bottom:4px;font-weight:600"><span>Pallet</span><span>Cantidad</span><span>Ubicación</span></div>';
+    if (isCambioUbic) {
+        html += '<div style="display:grid;grid-template-columns:50px 1fr 1.6fr 1.6fr;gap:8px;font-size:11px;color:var(--text3);margin-bottom:4px;font-weight:600"><span>Pallet</span><span>Cantidad</span><span>Ubicación origen</span><span>Nueva ubicación</span></div>';
+    } else {
+        html += '<div style="display:grid;grid-template-columns:60px 1fr 2fr;gap:8px;font-size:11px;color:var(--text3);margin-bottom:4px;font-weight:600"><span>Pallet</span><span>Cantidad</span><span>Ubicación</span></div>';
+    }
+
+    const buildSelect = (id, opts, placeholder) => opts.length
+        ? `<select class="form-select" id="${id}" style="font-size:12px"><option value="">${placeholder}</option>${opts.map(o => `<option value="${o.value}">${o.label}</option>`).join('')}</select>`
+        : `<input type="text" class="form-input" id="${id}" placeholder="${placeholder}" style="font-size:12px">`;
+
     for (let i = 1; i <= palletCount; i++) {
-        let ubicCtrl;
-        if (ubicOptions.length) {
-            ubicCtrl = `<select class="form-select" id="mi-pal-ubic-${i}" style="font-size:12px"><option value="">Seleccionar ubicación...</option>` +
-                ubicOptions.map(o => `<option value="${o.value}">${o.label}</option>`).join('') + '</select>';
+        if (isCambioUbic) {
+            const orig = buildSelect(`mi-pal-ubic-orig-${i}`, ubicOrigenOptions, 'Seleccionar origen...');
+            const dest = buildSelect(`mi-pal-ubic-${i}`,      ubicDestOptions,   'Seleccionar destino...');
+            html += `<div style="display:grid;grid-template-columns:50px 1fr 1.6fr 1.6fr;gap:8px;align-items:center;margin-bottom:6px">
+                <span style="font-weight:600;color:var(--text2);text-align:center">${i}</span>
+                <input type="number" class="form-input" id="mi-pal-qty-${i}" min="0.001" step="any" placeholder="0" style="font-size:12px" oninput="_updPalletSum()">
+                ${orig}
+                ${dest}
+            </div>`;
         } else {
-            ubicCtrl = `<input type="text" class="form-input" id="mi-pal-ubic-${i}" placeholder="Ubicación pallet ${i}" style="font-size:12px">`;
+            const ubicCtrl = buildSelect(`mi-pal-ubic-${i}`, singleOptions, `Ubicación pallet ${i}`);
+            html += `<div style="display:grid;grid-template-columns:60px 1fr 2fr;gap:8px;align-items:center;margin-bottom:6px">
+                <span style="font-weight:600;color:var(--text2);text-align:center">${i}</span>
+                <input type="number" class="form-input" id="mi-pal-qty-${i}" min="0.001" step="any" placeholder="0" style="font-size:12px" oninput="_updPalletSum()">
+                ${ubicCtrl}
+            </div>`;
         }
-        html += `<div style="display:grid;grid-template-columns:60px 1fr 2fr;gap:8px;align-items:center;margin-bottom:6px">
-            <span style="font-weight:600;color:var(--text2);text-align:center">${i}</span>
-            <input type="number" class="form-input" id="mi-pal-qty-${i}" min="0.001" step="any" placeholder="0" style="font-size:12px" oninput="_updPalletSum()">
-            ${ubicCtrl}
-        </div>`;
     }
     html += '<div id="mi-pal-sum" style="font-size:11px;color:var(--text3);margin-top:6px;text-align:right"></div>';
     dist.innerHTML = html;
     dist.style.display = 'block';
 
-    // Oculta el campo único de ubicación cuando se trabaja con varios pallets
-    if (ubicGroup) ubicGroup.style.display = 'none';
+    // Oculta los campos únicos de ubicación al trabajar con varios pallets.
+    if (ubicGroup)     ubicGroup.style.display     = 'none';
+    if (ubicDestGroup) ubicDestGroup.style.display = 'none';
     _updPalletSum();
 }
 
@@ -5099,16 +5156,75 @@ function addItemToDoc() {
     if (!lote)  { showFormError('mi-err', (tipo === 'Salida' || tipo === 'CambioUbicacion') ? 'Seleccione un lote de la lista.' : 'Ingrese el número de lote.'); return; }
     if (!qty || qty <= 0) { showFormError('mi-err', 'La cantidad debe ser mayor a cero.'); return; }
 
-    // ── CAMBIO DE UBICACIÓN ── Validaciones y armado de ítem
+    // ── CAMBIO DE UBICACIÓN ── Validaciones y armado de ítem(s)
     if (tipo === 'CambioUbicacion') {
         const bodegaSel = (document.getElementById('md-bodega')?.value || '').trim();
         if (!bodegaSel) { showFormError('mi-err', 'Seleccione primero la bodega.'); return; }
+        const prod = data.productos[sku];
+        const stock = calcStock();
+        const palletCountCU = parseInt(document.getElementById('mi-pallet-qty')?.value) || 1;
+
+        // Ruta multi-pallet: cada fila tiene su propia cantidad + origen + destino.
+        if (palletCountCU > 1) {
+            let sumPal = 0;
+            const items = [];
+            const totalPorOrigen = {}; // sku|lote|origen → suma acumulada solicitada
+            for (let i = 1; i <= palletCountCU; i++) {
+                const palQty  = parseFloat(document.getElementById(`mi-pal-qty-${i}`)?.value) || 0;
+                const palOrig = (document.getElementById(`mi-pal-ubic-orig-${i}`)?.value || '').trim();
+                const palDest = (document.getElementById(`mi-pal-ubic-${i}`)?.value || '').trim();
+                if (!palQty || palQty <= 0)       { showFormError('mi-err', `Pallet ${i}: ingrese la cantidad.`); return; }
+                if (!palOrig)                     { showFormError('mi-err', `Pallet ${i}: seleccione la ubicación origen.`); return; }
+                if (!palDest)                     { showFormError('mi-err', `Pallet ${i}: seleccione la nueva ubicación.`); return; }
+                if (palOrig === palDest)          { showFormError('mi-err', `Pallet ${i}: origen y destino deben ser distintos.`); return; }
+                sumPal += palQty;
+                totalPorOrigen[palOrig] = (totalPorOrigen[palOrig] || 0) + palQty;
+                items.push({ palQty, palOrig, palDest });
+            }
+            if (Math.abs(sumPal - qty) > 0.0001) { showFormError('mi-err', `La suma de pallets (${sumPal}) debe coincidir con la cantidad total (${qty}).`); return; }
+
+            // Validación de stock por cada origen (agregado + lo ya cargado en el documento).
+            for (const [orig, req] of Object.entries(totalPorOrigen)) {
+                const origenEntry = Object.values(stock).find(s =>
+                    s.sku === sku && s.lote === lote && s.bodega === bodegaSel && (s.ubicacion||'') === orig);
+                if (!origenEntry || origenEntry.cantidad <= 0) {
+                    showFormError('mi-err', `Sin stock en la ubicación origen ${orig} para el lote ${lote}.`); return;
+                }
+                const st = getLoteStatus(origenEntry);
+                if (st !== 'Aprobado') { showFormError('mi-err', `Ubicación ${orig}: el lote está en estado "${st}". Sólo se pueden reubicar lotes Aprobados.`); return; }
+                const enDoc = movDocItems
+                    .filter(i => i.sku === sku && i.lote === lote && (i.ubicacionOrigen||'') === orig)
+                    .reduce((a, i) => a + i.qty, 0);
+                if (req + enDoc > origenEntry.cantidad) {
+                    showFormError('mi-err', `Ubicación origen ${orig}: stock ${origenEntry.cantidad}, ya en documento ${enDoc}, solicitado ${req}. Máximo: ${origenEntry.cantidad - enDoc}.`);
+                    return;
+                }
+            }
+
+            // Vence/status del lote — tomamos del primer origen (todo el lote comparte).
+            const anyEntry = Object.values(stock).find(s => s.sku === sku && s.lote === lote && s.bodega === bodegaSel && (parseFloat(s.cantidad)||0) > 0) || {};
+            const palletGroupId = `PG-${Date.now()}-${Math.random().toString(36).slice(2,7)}`;
+            items.forEach((p, idx) => {
+                movDocItems.push({
+                    sku, descripcion: prod?.descripcion || '', tipo: prod?.tipo || '',
+                    lote, vence: anyEntry.vence || '', qty: p.palQty, precio: 0,
+                    status: anyEntry.status || 'Aprobado',
+                    ubicacion: p.palDest,
+                    ubicacionOrigen: p.palOrig,
+                    palletNum: idx + 1, palletTotal: items.length, palletGroupId
+                });
+            });
+            renderDocItems();
+            resetItemForm();
+            return;
+        }
+
+        // Ruta simple (1 pallet o cantidad ≤ 120): campos únicos origen/destino.
         const ubicOrigen = (document.getElementById('mi-ubic')?.value || '').trim();
         const ubicDest   = (document.getElementById('mi-ubic-dest')?.value || '').trim();
         if (!ubicOrigen) { showFormError('mi-err', 'Seleccione la ubicación origen del lote.'); return; }
         if (!ubicDest)   { showFormError('mi-err', 'Indique la nueva ubicación destino.'); return; }
         if (ubicOrigen === ubicDest) { showFormError('mi-err', 'La ubicación destino debe ser distinta a la origen.'); return; }
-        const stock = calcStock();
         const origenEntry = Object.values(stock).find(s =>
             s.sku === sku && s.lote === lote && s.bodega === bodegaSel && (s.ubicacion||'') === ubicOrigen);
         if (!origenEntry || origenEntry.cantidad <= 0) {
@@ -5125,7 +5241,6 @@ function addItemToDoc() {
             showFormError('mi-err', `Stock insuficiente en origen. Disponible: ${origenEntry.cantidad}. Ya en documento: ${enDoc}. Máximo: ${origenEntry.cantidad - enDoc}.`);
             return;
         }
-        const prod = data.productos[sku];
         movDocItems.push({
             sku, descripcion: prod?.descripcion || '', tipo: prod?.tipo || '',
             lote, vence: origenEntry.vence || '', qty, precio: 0,
