@@ -6097,10 +6097,13 @@ function generatePDF(docData, opts) {
     addInfo('Fecha documento:', docData.fechaDoc ? fmtDate(docData.fechaDoc) : '—', col2, y, 38);
     y += 6;
     addInfo('Proveedor/Destinatario:', docData.proveedor || '—', margin, y, 52);
-    if (docData.tipo === 'Salida' && docData.clienteRut) {
-        addInfo('RUT Cliente:', docData.clienteRut, col2, y, 28);
-    }
     y += 6;
+    // RUT Cliente en su propia línea para evitar que el nombre largo del
+    // proveedor/destinatario se solape con la etiqueta/valor del RUT.
+    if (docData.tipo === 'Salida' && docData.clienteRut) {
+        addInfo('RUT Cliente:', docData.clienteRut, margin, y, 28);
+        y += 6;
+    }
     if (docData.tipo === 'Salida' && docData.destino) {
         addInfo('Destino:', docData.destino, margin, y, 20);
         y += 6;
