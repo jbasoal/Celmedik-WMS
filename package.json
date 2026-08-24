@@ -1,4 +1,9 @@
 {
+  "scripts": {
+    "version:write": "node scripts/write-version.js",
+    "predeploy": "node scripts/write-version.js",
+    "deploy": "firebase deploy --only hosting"
+  },
   "devDependencies": {
     "firebase-admin": "^13.7.0"
   }

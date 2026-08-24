@@ -552,9 +552,31 @@
         .lote-sel-meta { font-size:11px; color:var(--text3); line-height:1.5; }
         .lote-warn-msg { font-size:11px; margin-top:3px; font-weight:500; }
         .badge-gray { background:rgba(100,100,100,0.12); color:#555; }
+        /* Banner de nueva versión disponible */
+        .app-update-banner {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+            background: linear-gradient(90deg, #107E3E, #0d6b34);
+            color: #fff; padding: 10px 16px;
+            display: none; align-items: center; justify-content: center; gap: 14px;
+            font-size: 13px; font-weight: 500;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .app-update-banner.visible { display: flex; }
+        .app-update-banner .app-update-msg { flex: 0 1 auto; }
+        .app-update-banner .app-update-btn {
+            background: #fff; color: #107E3E; border: 0; border-radius: 4px;
+            padding: 6px 14px; font-size: 12px; font-weight: 600;
+            cursor: pointer; transition: transform .1s;
+        }
+        .app-update-banner .app-update-btn:hover { transform: translateY(-1px); }
+        body.has-update-banner { padding-top: 42px; }
     </style>
 </head>
 <body>
+<div id="appUpdateBanner" class="app-update-banner" role="alert" aria-live="polite">
+    <span class="app-update-msg">🔄 Hay una nueva versión de la aplicación disponible.</span>
+    <button type="button" class="app-update-btn" onclick="_appReloadForUpdate()">Actualizar ahora</button>
+</div>
 <img id="logoImg" src="Logo Celmedik.png" style="display:none" crossorigin="anonymous">
 
 <!-- ══════════════════════════════════════
@@ -11216,6 +11238,59 @@ function fmtDateTime(iso) {
         if (isNaN(d.getTime())) return '—';
         return d.toLocaleDateString('es-CL', { day:'2-digit', month:'2-digit', year:'numeric' }) + ' ' + d.toLocaleTimeString('es-CL', { hour:'2-digit', minute:'2-digit' });
     } catch { return '—'; }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// Detección de nueva versión desplegada
+// ══════════════════════════════════════════════════════════════════
+// version.json se genera en cada deploy (scripts/write-version.js) y se
+// sirve sin caché (firebase.json). Al cargar, guardamos la versión inicial;
+// cada 60s consultamos y comparamos. Si cambió, mostramos un banner con
+// botón "Actualizar ahora". El usuario decide cuándo recargar para no
+// perder trabajo en formularios a medio llenar.
+(function initAppUpdateWatcher() {
+    const CHECK_INTERVAL_MS = 60 * 1000;
+    let initialVersion = null;
+    let banner = null;
+
+    async function fetchVersion() {
+        try {
+            const res = await fetch('/version.json?_=' + Date.now(), { cache: 'no-store' });
+            if (!res.ok) return null;
+            const data = await res.json();
+            return data && data.version ? String(data.version) : null;
+        } catch (_) { return null; }
+    }
+
+    function showBanner() {
+        banner = document.getElementById('appUpdateBanner');
+        if (!banner || banner.classList.contains('visible')) return;
+        banner.classList.add('visible');
+        document.body.classList.add('has-update-banner');
+    }
+
+    async function checkVersion() {
+        const current = await fetchVersion();
+        if (!current) return;
+        if (initialVersion === null) { initialVersion = current; return; }
+        if (current !== initialVersion) showBanner();
+    }
+
+    // Primer chequeo al iniciar + polling periódico
+    checkVersion();
+    setInterval(checkVersion, CHECK_INTERVAL_MS);
+    // Chequeo extra cuando la pestaña vuelve a estar visible (por si estuvo
+    // en background muchas horas y saltó el intervalo)
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') checkVersion();
+    });
+})();
+
+function _appReloadForUpdate() {
+    try {
+        // Fuerza obtener la nueva versión evitando el back/forward cache
+        window.location.reload();
+    } catch (_) { window.location.href = window.location.href; }
 }
 </script>
 </body>
