@@ -4738,6 +4738,15 @@ function _autoFillPalletsForSku() {
             if (uDG) uDG.style.display = 'block';
         }
     }
+    // Salida de concentrado: la distribución se calcula a partir del stock
+    // real (pallets físicos ingresados a 120/126/144). Se consumen los
+    // pallets completos más grandes primero (minimiza pallets rotos) y el
+    // último puede quedar parcial. Cortamos el flujo genérico antes de que
+    // aplique el palletSize fijo del mapa por SKU.
+    if (tipo === 'Salida' && CONCENTRADO_SKUS.has(sku) && qty > 0) {
+        _autoFillPalletsForSalidaConcentrado(sku, qty);
+        return;
+    }
     const palletSize = _resolveConcentradoPalletMax(sku, tipo);
     if (!palletSize) return;
     if (qty <= 0) return;
@@ -4761,6 +4770,85 @@ function _autoFillPalletsForSku() {
             if (el) el.value = ubicSnap[i];
         }
     }
+    _updPalletSum();
+}
+
+// Calcula la asignación por pallet para Salida de concentrado a partir del
+// stock real (cada ubicación = un pallet físico ingresado a 120/126/144 uds).
+// Ordena por cantidad desc para consumir primero los pallets completos más
+// grandes (minimiza la cantidad total de pallets movidos y evita romper
+// pallets completos cuando no es necesario).
+//   • Sin N: modo óptimo. Devuelve exactamente los pallets necesarios.
+//   • Con N: modo N fijo. Los primeros N-1 se consumen completos hasta
+//     agotar la cantidad; el último absorbe todo el saldo restante (aunque
+//     exceda su capacidad física, para que _updPalletSum destaque el faltante).
+function _computeSalidaConcAsig(sku, qty, N) {
+    const lote   = (document.getElementById('mi-lote')?.value || '').trim();
+    const bodega = (document.getElementById('md-bodega')?.value || '').trim();
+    if (!lote || !bodega || !(qty > 0)) return [];
+    const stock = calcStock();
+    const ubics = Object.values(stock)
+        .filter(s => s.sku === sku && s.lote === lote && (s.bodega||'') === bodega
+                  && (parseFloat(s.cantidad)||0) > 0 && getLoteStatus(s) === 'Aprobado')
+        .map(s => ({ ubicacion: s.ubicacion || '', cantidad: parseFloat(s.cantidad) || 0 }))
+        .sort((a, b) => (b.cantidad - a.cantidad) || (a.ubicacion||'').localeCompare(b.ubicacion||''));
+    if (!ubics.length) return [];
+
+    if (N === undefined || N === null) {
+        const asig = [];
+        let remaining = qty;
+        for (const u of ubics) {
+            if (remaining <= 0) break;
+            const take = Math.min(u.cantidad, remaining);
+            asig.push({ ubicacion: u.ubicacion, cantidad: take });
+            remaining -= take;
+        }
+        // Si no alcanzó el stock, sumamos el faltante al último pallet para
+        // que el operador vea el hueco (la validación lo rechazará al guardar).
+        if (remaining > 0 && asig.length) {
+            asig[asig.length - 1].cantidad += remaining;
+        }
+        return asig;
+    }
+
+    const asig = [];
+    let remaining = qty;
+    for (let i = 0; i < N; i++) {
+        const u = ubics[i];
+        if (i === N - 1) {
+            asig.push({ ubicacion: u ? u.ubicacion : '', cantidad: Math.max(0, remaining) });
+        } else if (!u) {
+            asig.push({ ubicacion: '', cantidad: 0 });
+        } else {
+            const take = Math.min(u.cantidad, remaining);
+            asig.push({ ubicacion: u.ubicacion, cantidad: take });
+            remaining -= take;
+        }
+    }
+    return asig;
+}
+
+// Prellena la grilla de distribución por pallet para Salida de concentrado
+// usando el modo óptimo (mínima cantidad de pallets requeridos). La grilla
+// se renderiza vía onMiPalletQtyChange, que también aplica la asignación
+// (con N=palletCount) para el caso Salida+Concentrado.
+function _autoFillPalletsForSalidaConcentrado(sku, qty) {
+    const asignaciones = _computeSalidaConcAsig(sku, qty);
+    if (!asignaciones.length) return;
+    const palletQtyEl = document.getElementById('mi-pallet-qty');
+    if (!palletQtyEl) return;
+    palletQtyEl.value = asignaciones.length;
+    onMiPalletQtyChange();
+}
+
+// Vuelca una asignación {ubicacion, cantidad}[] a las filas de la grilla.
+function _applySalidaConcAsig(asignaciones) {
+    asignaciones.forEach((a, i) => {
+        const qEl = document.getElementById(`mi-pal-qty-${i + 1}`);
+        const uEl = document.getElementById(`mi-pal-ubic-${i + 1}`);
+        if (qEl) qEl.value = a.cantidad;
+        if (uEl) uEl.value = a.ubicacion;
+    });
     _updPalletSum();
 }
 
@@ -4972,6 +5060,13 @@ function selectLoteNormal(lote, vence, status, stock) {
     }
     // Mostrar ubicaciones disponibles para el lote seleccionado
     loadUbicacionesParaLote(sku, lote);
+    // Si es Salida de concentrado y ya hay cantidad ingresada, recalcular
+    // la distribución por pallet usando el stock real del lote elegido.
+    const tipoLN = document.getElementById('md-tipo')?.value || '';
+    const qtyLN  = parseFloat(document.getElementById('mi-qty')?.value) || 0;
+    if (tipoLN === 'Salida' && CONCENTRADO_SKUS.has(sku) && qtyLN > 0) {
+        _autoFillPalletsForSalidaConcentrado(sku, qtyLN);
+    }
 }
 
 // Selección de lote específica para Cambio de Status (Ajuste).
@@ -5195,9 +5290,17 @@ function onMiPalletQtyChange() {
     // máximo permitido (120/126/144) y el último absorbe el saldo. Si el
     // usuario reduce manualmente la cantidad de pallets por debajo del
     // mínimo teórico, el último pallet queda con el excedente acumulado.
+    const _esSalidaConc = (tipo === 'Salida') && CONCENTRADO_SKUS.has(sku);
     const _palletSize = _resolveConcentradoPalletMax(sku, tipo);
     const _qtyTotal   = parseFloat(document.getElementById('mi-qty')?.value) || 0;
-    if (_palletSize && _qtyTotal > 0 && palletCount >= 1) {
+    if (_esSalidaConc && _qtyTotal > 0 && palletCount >= 1) {
+        // Para Salida de concentrado la distribución se basa en el stock real
+        // por ubicación (pallets físicos ingresados a 120/126/144). Con N fijo
+        // se asignan los primeros N-1 pallets completos y el último absorbe
+        // el saldo, poniendo también la ubicación en cada fila.
+        const asig = _computeSalidaConcAsig(sku, _qtyTotal, palletCount);
+        if (asig.length) _applySalidaConcAsig(asig);
+    } else if (_palletSize && _qtyTotal > 0 && palletCount >= 1) {
         const dist2 = _distributePalletQty(_qtyTotal, _palletSize, palletCount);
         for (let i = 0; i < dist2.length; i++) {
             const el = document.getElementById(`mi-pal-qty-${i + 1}`);
