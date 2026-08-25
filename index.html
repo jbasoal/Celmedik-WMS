@@ -11408,6 +11408,66 @@ function fmtDateTime(iso) {
     });
 })();
 
+// Herramienta de diagnóstico masivo — se ejecuta desde la consola con:
+//     barridoIntegridad()
+// Reconstruye el stock movimiento por movimiento y lista:
+//   (1) ubicaciones con stock negativo hoy (síntoma del bug PISO fantasma
+//       o de una salida/TRF grabados contra una ubicación equivocada);
+//   (2) todos los movimientos históricos donde hubo sobreconsumo silencioso
+//       (Salida/CambioUbicacion que restaron de una clave con menos stock
+//       del solicitado — antes del fix quedaba en negativo sin aviso).
+// Copia el reporte al portapapeles para pegarlo fácilmente.
+window.barridoIntegridad = async function() {
+    if (!window.data || !window.data.movimientos) {
+        console.log('Descargando movimientos de Firebase...');
+        const uid = (window.currentUser && window.currentUser.uid)
+            || (firebase.auth().currentUser && firebase.auth().currentUser.uid);
+        if (!uid) { console.log('ERROR: no hay usuario logueado.'); return; }
+        const snap = await firebase.database().ref('usuarios/' + uid + '/movimientos').once('value');
+        window.data = window.data || {};
+        window.data.movimientos = snap.val() || {};
+    }
+    const movs = Object.values(window.data.movimientos)
+        .filter(m => m)
+        .sort((a, b) => new Date(a.fecha || 0) - new Date(b.fecha || 0));
+    const st = {}, anom = [];
+    const k = (m, u) => `${m.sku}|${m.lote}|${m.bodega || ''}|${u || ''}`;
+    movs.forEach(m => {
+        const q = parseFloat(m.cantidad) || 0;
+        if (m.tipo === 'Entrada' || m.tipo === 'AjusteInventario' || m.tipo === 'Devolución') {
+            const K = k(m, m.ubicacion); st[K] = (st[K] || 0) + q;
+        } else if (m.tipo === 'Salida' || m.tipo === 'Destrucción') {
+            const K = k(m, m.ubicacion); const prev = st[K] || 0;
+            if (prev < q) anom.push({ sev:'SALIDA_SOBRECONSUMO', sku:m.sku, lote:m.lote, bodega:m.bodega, ubic:m.ubicacion, fecha:m.fecha, mov:m.numeroMovimiento, tipo:m.tipo, qty:q, tenia:prev, resultado:prev-q });
+            st[K] = prev - q;
+        } else if (m.tipo === 'CambioUbicacion') {
+            const Ko = k(m, m.ubicacionOrigen), Kd = k(m, m.ubicacion); const prev = st[Ko] || 0;
+            if (prev < q) anom.push({ sev:'TRF_SOBRECONSUMO', sku:m.sku, lote:m.lote, bodega:m.bodega, ubic:m.ubicacionOrigen, fecha:m.fecha, mov:m.numeroMovimiento, tipo:'TRF->'+m.ubicacion, qty:q, tenia:prev, resultado:prev-q });
+            st[Ko] = prev - q; st[Kd] = (st[Kd] || 0) + q;
+        }
+    });
+    const negativos = Object.entries(st)
+        .filter(e => e[1] < -0.0001)
+        .map(e => { const p = e[0].split('|'); return { sku:p[0], lote:p[1], bodega:p[2], ubic:p[3], cantidad:e[1] }; })
+        .sort((a, b) => a.cantidad - b.cantidad);
+    const out = [];
+    out.push('==== BARRIDO MASIVO DE INCONSISTENCIAS ====');
+    out.push('Total movimientos analizados: ' + movs.length);
+    out.push('');
+    out.push('-- (1) UBICACIONES CON STOCK NEGATIVO HOY (' + negativos.length + ') --');
+    negativos.forEach(n => out.push('  ' + n.sku + ' | Lote ' + n.lote + ' | ' + n.bodega + ' :: ' + n.ubic + ' = ' + n.cantidad));
+    if (!negativos.length) out.push('  (ninguna)');
+    out.push('');
+    out.push('-- (2) MOVIMIENTOS CON SOBRECONSUMO SILENCIOSO (' + anom.length + ') --');
+    anom.sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''));
+    anom.forEach(a => out.push('  [' + a.sev + '] ' + a.fecha + ' | ' + a.mov + ' | ' + a.sku + ' L' + a.lote + ' | ' + a.bodega + ' :: ' + a.ubic + ' | ' + a.tipo + ' qty=' + a.qty + ' | tenia ' + a.tenia + ' -> quedo ' + a.resultado));
+    if (!anom.length) out.push('  (ninguno)');
+    const text = out.join('\n');
+    console.log(text);
+    try { copy(text); console.log('\n(reporte copiado al portapapeles)'); } catch (_) {}
+    return { negativos, anom };
+};
+
 function _appReloadForUpdate() {
     try {
         // Fuerza obtener la nueva versión evitando el back/forward cache
