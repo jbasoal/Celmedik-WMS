@@ -5486,11 +5486,32 @@ function addItemToDoc() {
         // aunque la bodega correcta tuviera stock.
         const bodegaSelSal = (document.getElementById('md-bodega')?.value || '').trim();
 
+        // Bug histórico (incidente B-001 lote 04100826 SAL-2026-01004): cuando el
+        // operador no seleccionaba ubicación (select en "Seleccionar ubicación..."),
+        // el sistema hacía un find sin filtrar por cantidad > 0 y podía tomar una
+        // entrada residual de calcStock (ubicación con stock 0 tras un TRF previo),
+        // dejándola de origen y grabando la salida contra esa ubicación aunque no
+        // tuviera stock. Además validaba contra el TOTAL del lote, no contra esa
+        // ubicación puntual. Resultado: stock virtual en negativo en la ubicación
+        // vieja y stock real no descontado en las ubicaciones donde estaba el pallet.
+        // Ahora: (1) el fallback filtra por stock aprobado > 0, (2) si hay más de
+        // una candidata y el operador no eligió, se rechaza con error claro,
+        // (3) la validación de disponibilidad SIEMPRE es contra la ubicación puntual.
         let loteStock = miUbic
             ? Object.values(stock).find(s => s.sku === sku && s.lote === lote && (s.bodega||'') === bodegaSelSal && s.ubicacion === miUbic)
             : null;
-        if (!loteStock) loteStock = Object.values(stock).find(s => s.sku === sku && s.lote === lote && (s.bodega||'') === bodegaSelSal);
-        if (!loteStock) { showFormError('mi-err', `Lote no encontrado en stock de la bodega ${bodegaSelSal || '(sin bodega)'}.`); return; }
+        const candidatas = Object.values(stock).filter(s =>
+            s.sku === sku && s.lote === lote && (s.bodega||'') === bodegaSelSal
+            && (parseFloat(s.cantidad)||0) > 0 && getLoteStatus(s) === 'Aprobado');
+        if (!loteStock) {
+            if (candidatas.length === 0) {
+                showFormError('mi-err', `Lote ${lote} sin stock aprobado en la bodega ${bodegaSelSal || '(sin bodega)'}.`); return;
+            }
+            if (candidatas.length > 1) {
+                showFormError('mi-err', 'Seleccione la ubicación de origen — el lote está en varias ubicaciones.'); return;
+            }
+            loteStock = candidatas[0];
+        }
 
         const st = getLoteStatus(loteStock);
         itemUbic = miUbic || loteStock.ubicacion || '';
@@ -5504,20 +5525,15 @@ function addItemToDoc() {
             return;
         }
 
-        // Validar stock: por ubicación específica si fue seleccionada, o por lote total
+        // Validación de disponibilidad contra la ubicación específica del ítem
+        // (nunca contra el total del lote — ver comentario del bug histórico arriba).
         const enDoc = movDocItems.filter(i => i.sku === sku && i.lote === lote && i.ubicacion === itemUbic).reduce((a, i) => a + i.qty, 0);
-        let disponible;
-        if (miUbic) {
-            const locEntry = Object.values(stock).find(s => s.sku === sku && s.lote === lote && (s.bodega||'') === bodegaSelSal && s.ubicacion === miUbic && getLoteStatus(s) === 'Aprobado');
-            disponible = locEntry ? locEntry.cantidad : 0;
-        } else {
-            disponible = Object.values(stock)
-                .filter(s => s.sku === sku && s.lote === lote && (s.bodega||'') === bodegaSelSal && getLoteStatus(s) === 'Aprobado')
-                .reduce((a, s) => a + s.cantidad, 0);
-        }
-        const locLabel = miUbic ? `ubicación ${miUbic}` : `lote ${lote}`;
+        const locEntry = Object.values(stock).find(s =>
+            s.sku === sku && s.lote === lote && (s.bodega||'') === bodegaSelSal
+            && s.ubicacion === itemUbic && getLoteStatus(s) === 'Aprobado');
+        const disponible = locEntry ? locEntry.cantidad : 0;
         if (qty + enDoc > disponible) {
-            showFormError('mi-err', `Stock insuficiente. Disponible aprobado en ${locLabel}: ${disponible} ud. Ya en documento: ${enDoc}. Máximo: ${disponible - enDoc} ud.`);
+            showFormError('mi-err', `Stock insuficiente en ubicación ${itemUbic || '(sin ubicación)'}: disponible aprobado ${disponible} ud., ya en documento ${enDoc}, requerido ${qty}.`);
             return;
         }
     }
