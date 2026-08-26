@@ -1465,13 +1465,13 @@
                         </div>
                         <div class="filter-bar" style="align-items:flex-end">
                             <div style="display:flex;flex-direction:column;gap:4px;min-width:200px;flex:1">
-                                <label class="form-label" style="margin:0">SKU</label>
-                                <input type="text" class="form-input" id="kxSKU" list="kxSKUList" placeholder="Ej: MED-001" autocomplete="off">
+                                <label class="form-label" style="margin:0">SKU <span style="color:var(--danger);font-weight:700">*</span></label>
+                                <input type="text" class="form-input" id="kxSKU" list="kxSKUList" placeholder="Ej: MED-001 (obligatorio)" autocomplete="off">
                                 <datalist id="kxSKUList"></datalist>
                             </div>
                             <div style="display:flex;flex-direction:column;gap:4px;min-width:180px;flex:1">
-                                <label class="form-label" style="margin:0">Lote</label>
-                                <input type="text" class="form-input" id="kxLote" list="kxLoteList" placeholder="Ej: 20241001" autocomplete="off">
+                                <label class="form-label" style="margin:0">Lote <span style="color:var(--text3);font-weight:400;font-size:10px">(opcional)</span></label>
+                                <input type="text" class="form-input" id="kxLote" list="kxLoteList" placeholder="Vacío = todos los lotes del SKU" autocomplete="off">
                                 <datalist id="kxLoteList"></datalist>
                             </div>
                             <div style="display:flex;flex-direction:column;gap:4px;min-width:170px">
@@ -7925,7 +7925,7 @@ function initKardexPage() {
     if (kxHasta && !kxHasta.value) kxHasta.value = new Date().toISOString().slice(0, 10);
     const cont = document.getElementById('kardexResultado');
     if (cont && !cont.innerHTML.trim()) {
-        cont.innerHTML = `<div class="card"><p class="text-muted text-sm" style="padding:14px 4px;text-align:center">Ingrese SKU y Lote y presione <strong>Consultar Kardex</strong> para ver el historial cronológico con saldo progresivo.</p></div>`;
+        cont.innerHTML = `<div class="card"><p class="text-muted text-sm" style="padding:14px 4px;text-align:center">Ingrese el <strong>SKU</strong> (obligatorio) y opcionalmente un <strong>Lote</strong>, y presione <strong>Consultar Kardex</strong>. Sin lote se muestran todos los lotes del SKU con el saldo progresivo del SKU total.</p></div>`;
     }
 }
 
@@ -7946,13 +7946,15 @@ function consultarKardex() {
     const hasta  = document.getElementById('kxHasta').value || '';
     const cont   = document.getElementById('kardexResultado');
 
-    if (!sku || !lote) {
-        cont.innerHTML = `<div class="card"><p class="text-muted text-sm" style="padding:10px 4px">Ingrese SKU y Lote para consultar el Kardex.</p></div>`;
+    if (!sku) {
+        cont.innerHTML = `<div class="card"><p class="text-muted text-sm" style="padding:10px 4px">Ingrese el SKU para consultar el Kardex. El lote es opcional (déjelo vacío para ver todos los lotes del SKU).</p></div>`;
         return;
     }
 
+    const conLote = !!lote;
     const arrFijas = bodegasFijasActual();
-    let movs = Object.values(data.movimientos || {}).filter(m => (m.sku || '').toUpperCase() === sku && (m.lote || '') === lote);
+    let movs = Object.values(data.movimientos || {}).filter(m => (m.sku || '').toUpperCase() === sku);
+    if (conLote)  movs = movs.filter(m => (m.lote || '') === lote);
     if (arrFijas) movs = movs.filter(m => arrFijas.includes(m.bodega || ''));
     if (bodega)   movs = movs.filter(m => (m.bodega || '') === bodega);
     if (tipo)     movs = movs.filter(m => m.tipo === tipo);
@@ -7962,12 +7964,14 @@ function consultarKardex() {
 
     // Datos de cabecera
     const prod = (data.productos || {})[sku] || {};
-    const venceRef = movs.find(m => m.vence)?.vence || '';
     const totInfo = movs.length;
+    // Lotes distintos y vencimiento representativo
+    const lotesSet = new Set(movs.map(m => m.lote).filter(Boolean));
+    const venceRef = conLote ? (movs.find(m => m.vence)?.vence || '') : '';
 
-    // Alertas por vencimiento
+    // Alertas por vencimiento (solo aplican con lote específico)
     let alertaHTML = '';
-    if (venceRef) {
+    if (conLote && venceRef) {
         const hoy = new Date(); hoy.setHours(0,0,0,0);
         const vD  = new Date(venceRef + 'T00:00:00');
         const dias = Math.ceil((vD - hoy) / 86400000);
@@ -7975,14 +7979,21 @@ function consultarKardex() {
         else if (dias <= 90) alertaHTML = `<div class="kardex-alerta warn">⚠ Lote próximo a vencer: ${dias} días para el ${fmtDate(venceRef)}.</div>`;
     }
 
-    // Cabecera resumen
+    // Cabecera resumen — adapta lote/vencimiento cuando no hay lote específico
+    const loteCell = conLote
+        ? `<span class="kx-val text-mono">${lote}</span>`
+        : `<span class="kx-val" style="color:var(--text2)">Todos${lotesSet.size ? ` (${lotesSet.size} distinto${lotesSet.size===1?'':'s'})` : ''}</span>`;
+    const venceCell = conLote
+        ? `<span class="kx-val">${venceRef ? fmtDate(venceRef) : '—'}</span>`
+        : `<span class="kx-val" style="color:var(--text3)">—</span>`;
+
     const cabecera = `
         <div class="card kardex-header-card">
             <div class="card-header" style="border-bottom:1px solid var(--border);padding-bottom:10px">
                 <div style="display:flex;align-items:center;justify-content:space-between;width:100%;gap:12px;flex-wrap:wrap">
                     <div>
                         <div class="card-title">Kardex — ${prod.descripcion || sku}</div>
-                        <div class="card-subtitle">Historial cronológico con saldo progresivo</div>
+                        <div class="card-subtitle">${conLote ? 'Historial cronológico con saldo progresivo por lote' : 'Historial cronológico con saldo progresivo (todos los lotes del SKU)'}</div>
                     </div>
                     <div id="kardexPrintBtnBar" style="display:flex;gap:8px">
                         <button class="btn btn-ghost btn-sm" onclick="imprimirKardex()" style="width:auto">
@@ -7997,8 +8008,8 @@ function consultarKardex() {
                 <div class="kx-row"><span class="kx-lbl">SKU</span><span class="kx-val text-mono" style="color:var(--accent2)">${sku}</span></div>
                 <div class="kx-row"><span class="kx-lbl">N° Reg. ISP</span><span class="kx-val">${prod.registroSanitario ? `<span class="rs-number">${prod.registroSanitario}</span>` : '—'}</span></div>
                 <div class="kx-row"><span class="kx-lbl">Fabricante</span><span class="kx-val">${prod.fabricante || '—'}</span></div>
-                <div class="kx-row"><span class="kx-lbl">Lote</span><span class="kx-val text-mono">${lote}</span></div>
-                <div class="kx-row"><span class="kx-lbl">Vencimiento</span><span class="kx-val">${venceRef ? fmtDate(venceRef) : '—'}</span></div>
+                <div class="kx-row"><span class="kx-lbl">Lote</span>${loteCell}</div>
+                <div class="kx-row"><span class="kx-lbl">Vencimiento</span>${venceCell}</div>
                 <div class="kx-row"><span class="kx-lbl">Bodega</span><span class="kx-val">${bodega || 'Todas'}</span></div>
                 <div class="kx-row"><span class="kx-lbl">Período</span><span class="kx-val">${desde ? fmtDate(desde) : '—'} al ${hasta ? fmtDate(hasta) : '—'}</span></div>
             </div>
@@ -8006,23 +8017,26 @@ function consultarKardex() {
     `;
 
     if (totInfo === 0) {
-        cont.innerHTML = alertaHTML + cabecera + `<div class="card"><p class="text-muted text-sm" style="padding:14px 4px">Sin movimientos registrados para este SKU + Lote en el período y filtros seleccionados.</p></div>`;
+        const scope = conLote ? 'este SKU + Lote' : 'este SKU';
+        cont.innerHTML = alertaHTML + cabecera + `<div class="card"><p class="text-muted text-sm" style="padding:14px 4px">Sin movimientos registrados para ${scope} en el período y filtros seleccionados.</p></div>`;
         return;
     }
 
-    // ── Consolidación por N° Movimiento ──
+    // ── Consolidación por N° Movimiento + Lote ──
     // Un mismo N° movimiento puede tener múltiples registros en Firebase (uno
     // por pallet/ubicación consumida en un despacho FEFO, por ejemplo). En el
-    // Kardex queremos ver UNA sola línea por operación: N° Movimiento + Tipo,
-    // con la cantidad total sumada. Los movimientos históricos sin N°
-    // movimiento se mantienen como filas individuales (no hay forma de saber
-    // si pertenecen a la misma operación).
+    // Kardex queremos ver UNA sola línea por operación (N° Movimiento + Tipo
+    // + Lote), con la cantidad total sumada. Incluir el lote en la clave evita
+    // colapsar movimientos de lotes distintos cuando el filtro es todos los
+    // lotes del SKU (raro que compartan N° movimiento, pero posible).
+    // Los movimientos históricos sin N° movimiento se mantienen como filas
+    // individuales (no hay forma de saber si pertenecen a la misma operación).
     const consolidados = [];
     const idxByKey = {};
     movs.forEach(m => {
         const cls = _kxClasificarMov(m);
         if (m.numeroMovimiento) {
-            const key = `${m.numeroMovimiento}|${m.tipo}`;
+            const key = `${m.numeroMovimiento}|${m.tipo}|${m.lote || ''}`;
             let i = idxByKey[key];
             if (i === undefined) {
                 i = consolidados.length;
@@ -8031,6 +8045,7 @@ function consultarKardex() {
                     fecha: m.fecha,
                     numeroMovimiento: m.numeroMovimiento,
                     tipo: m.tipo,
+                    lote: m.lote || '',
                     direccion: cls.direccion,
                     badge: cls.badge,
                     cantidad: cls.cantidad,
@@ -8056,6 +8071,7 @@ function consultarKardex() {
                 fecha: m.fecha,
                 numeroMovimiento: '',
                 tipo: m.tipo,
+                lote: m.lote || '',
                 direccion: cls.direccion,
                 badge: cls.badge,
                 cantidad: cls.cantidad,
@@ -8084,10 +8100,12 @@ function consultarKardex() {
         if (g._count > 1) extra += ` <span style="color:var(--text3);font-size:10px;font-style:italic" title="${g._count} registros consolidados${g._ubicaciones.size ? ' · ubicaciones: ' + [...g._ubicaciones].join(', ') : ''}">(${g._count} pallets)</span>`;
         const rowCls = g.direccion === 'info' ? 'kx-info' : '';
         const salCls = 'kx-sal' + (saldo < 0 ? ' neg' : '');
+        const loteCol = conLote ? '' : `<td class="text-mono" style="font-size:11px">${g.lote || '—'}</td>`;
         return `<tr class="${rowCls}">
             <td class="text-mono" style="font-size:11px">${fmtDateTime(g.fecha)}</td>
             <td class="text-mono" style="font-size:11px;color:var(--accent)">${g.numeroMovimiento || '—'}</td>
             <td><span class="badge ${_kxBadgeCls(g.badge)}">${g.badge}</span>${extra}</td>
+            ${loteCol}
             <td>${g.referencia || '—'}</td>
             <td>${g.contraparte || '—'}</td>
             <td class="kx-in">${inCell}</td>
@@ -8096,20 +8114,22 @@ function consultarKardex() {
         </tr>`;
     }).join('');
 
+    const loteTh   = conLote ? '' : '<th>Lote</th>';
+    const tfootCol = conLote ? 5 : 6;
     const tabla = `
         <div class="card">
             <div class="table-wrap">
                 <table class="kardex-table">
                     <thead>
                         <tr>
-                            <th>Fecha</th><th>N° Mov.</th><th>Tipo</th><th>N° Documento</th><th>Proveedor / Cliente</th>
+                            <th>Fecha</th><th>N° Mov.</th><th>Tipo</th>${loteTh}<th>N° Documento</th><th>Proveedor / Cliente</th>
                             <th style="text-align:right">Entradas</th><th style="text-align:right">Salidas</th><th style="text-align:right">Saldo</th>
                         </tr>
                     </thead>
                     <tbody>${filas}</tbody>
                     <tfoot>
                         <tr>
-                            <td colspan="5" style="text-align:right">Totales del período</td>
+                            <td colspan="${tfootCol}" style="text-align:right">Totales del período</td>
                             <td class="kx-in">${totIn}</td>
                             <td class="kx-out">${totOut}</td>
                             <td class="kx-sal${saldo < 0 ? ' neg' : ''}">${saldo}</td>
