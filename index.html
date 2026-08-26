@@ -570,6 +570,46 @@
         }
         .app-update-banner .app-update-btn:hover { transform: translateY(-1px); }
         body.has-update-banner { padding-top: 42px; }
+
+        /* ── KARDEX / RECEPCIONES / DESPACHOS ── */
+        .kardex-header-card { border-top: 3px solid var(--accent); }
+        .kardex-header-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px 24px; padding:14px 4px 6px; }
+        .kardex-header-grid .kx-lbl { color:var(--text3); font-size:11.5px; font-weight:600; text-transform:uppercase; letter-spacing:.4px; }
+        .kardex-header-grid .kx-val { color:var(--text); font-size:13px; font-weight:600; }
+        .kardex-header-grid .kx-row { display:flex; align-items:baseline; gap:8px; padding:2px 0; }
+        .kardex-table td.kx-in  { color: var(--success); font-weight:600; text-align:right; font-variant-numeric: tabular-nums; }
+        .kardex-table td.kx-out { color: var(--danger);  font-weight:600; text-align:right; font-variant-numeric: tabular-nums; }
+        .kardex-table td.kx-sal { color: var(--text);    font-weight:700; text-align:right; font-variant-numeric: tabular-nums; }
+        .kardex-table td.kx-sal.neg { color: var(--danger); background: rgba(200,50,50,0.08); }
+        .kardex-table tr.kx-info td { color: var(--text3); font-style: italic; background: var(--surface2); }
+        .kardex-table tfoot td { background: var(--bg3); font-weight: 700; border-top: 2px solid var(--border2); }
+        .kardex-alerta { padding:10px 14px; border-radius:6px; margin-bottom:12px; font-size:13px; font-weight:600; }
+        .kardex-alerta.warn { background: rgba(245,158,11,0.12); color: #92400e; border:1px solid rgba(245,158,11,0.35); }
+        .kardex-alerta.danger { background: rgba(200,50,50,0.10); color: #7f1d1d; border:1px solid rgba(200,50,50,0.35); }
+        /* Fila expandible Recepciones / Despachos */
+        tr.doc-detalle-row td { padding:0 !important; background: var(--bg3); }
+        tr.doc-detalle-row .doc-detalle-panel { padding: 14px 18px; border-left: 3px solid var(--accent); animation: doc-open .18s ease; }
+        tr.doc-detalle-row .doc-detalle-panel.despacho { border-left-color: var(--danger); }
+        tr.doc-detalle-row .doc-detalle-panel table { width:100%; background: var(--surface); border-radius: 4px; }
+        tr.doc-detalle-row .doc-detalle-panel table th { font-size:11px; text-transform:uppercase; letter-spacing:.4px; color: var(--text3); }
+        tr.doc-detalle-row .doc-detalle-panel table td { font-size:12.5px; }
+        tr.doc-detalle-row .doc-detalle-panel tfoot td { font-weight:700; background: var(--bg3); }
+        .doc-toggle-btn { transition: transform .15s; }
+        .doc-toggle-btn.open { transform: rotate(90deg); }
+        @keyframes doc-open { from { opacity:0; transform: translateY(-4px); } to { opacity:1; transform:none; } }
+
+        /* Print (Kardex) */
+        @media print {
+            .sidebar, .sidebar-overlay, .app-header, .app-update-banner,
+            .kardex-filtros-card, #kardexPrintBtnBar { display: none !important; }
+            .main { margin-left: 0 !important; }
+            .page { display: block !important; }
+            body { background: white !important; padding-top: 0 !important; font-size: 11pt; }
+            .card { box-shadow: none !important; border: 1px solid #999 !important; page-break-inside: avoid; }
+            .kardex-table { font-size: 10pt; }
+            .kardex-print-footer { margin-top:12px; font-size:9pt; color:#555; text-align:center; }
+            .kardex-header-card { border-top: 3px solid #000 !important; }
+        }
     </style>
 </head>
 <body>
@@ -652,6 +692,14 @@
                 <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></span>
                 Movimientos
             </a>
+            <a class="nav-link" data-page="recepciones">
+                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
+                Recepciones
+            </a>
+            <a class="nav-link" data-page="despachos">
+                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></span>
+                Despachos
+            </a>
             <a class="nav-link" data-page="facturasPorDespachar" id="nav-fpd">
                 <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></span>
                 Pedidos por Despachar
@@ -687,6 +735,10 @@
             </a>
 
             <div class="nav-section">Trazabilidad</div>
+            <a class="nav-link" data-page="kardex">
+                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="9" y1="4" x2="9" y2="20"/></svg></span>
+                Kardex
+            </a>
             <a class="nav-link" data-page="trazabilidad">
                 <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" y1="9" x2="6" y2="21"/></svg></span>
                 Trazabilidad Lotes
@@ -950,6 +1002,70 @@
                             </tr></thead><tbody id="tMovimientos"><tr class="empty-row"><td colspan="17">No hay movimientos registrados</td></tr></tbody></table>
                         </div>
                         <div id="movPaginacionFooter"></div>
+                    </div>
+                </div>
+
+                <!-- ── RECEPCIONES (entradas consolidadas por documento) ── -->
+                <div id="recepciones" class="page">
+                    <div class="card">
+                        <div class="card-header">
+                            <div><div class="card-title">Recepciones</div><div class="card-subtitle">Entradas de mercadería consolidadas por N° de documento</div></div>
+                        </div>
+                        <div class="filter-bar">
+                            <input type="text" class="form-input" id="fRecDoc" placeholder="N° Documento..." oninput="renderRecepciones()" style="max-width:200px">
+                            <input type="text" class="form-input" id="fRecProv" placeholder="Proveedor..." oninput="renderRecepciones()" style="max-width:220px">
+                            <input type="text" class="form-input" id="fRecSKU" placeholder="SKU..." oninput="renderRecepciones()" style="max-width:140px">
+                            <input type="text" class="form-input" id="fRecLote" placeholder="Lote..." oninput="renderRecepciones()" style="max-width:140px">
+                            <select class="form-select filtro-bodega-mov" id="fRecBodega" onchange="renderRecepciones()" style="width:auto" title="Bodega">
+                                <option value="">Todas las bodegas</option>
+                            </select>
+                            <select class="form-select" id="fRecTipo" onchange="renderRecepciones()" style="width:auto" title="Tipo de ingreso">
+                                <option value="">Todos los ingresos</option>
+                                <option value="Entrada">Solo Entradas</option>
+                                <option value="Devolución">Solo Devoluciones</option>
+                                <option value="AjusteInventarioPos">Solo Ajustes +</option>
+                            </select>
+                            <input type="date" class="form-input" id="fRecDesde" onchange="renderRecepciones()" style="width:auto" title="Desde">
+                            <input type="date" class="form-input" id="fRecHasta" onchange="renderRecepciones()" style="width:auto" title="Hasta">
+                            <button class="btn btn-ghost btn-sm" onclick="clearFiltrosRecepciones()">Limpiar</button>
+                        </div>
+                        <div class="table-wrap">
+                            <table><thead><tr>
+                                <th>Fecha</th><th>N° Documento</th><th>Proveedor</th><th>Tipo</th><th>SKUs distintos</th><th>Total unidades</th><th>Bodega</th><th>Usuario</th><th style="width:80px">Detalle</th>
+                            </tr></thead><tbody id="tRecepciones"><tr class="empty-row"><td colspan="9">Sin recepciones registradas</td></tr></tbody></table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── DESPACHOS (salidas consolidadas por documento) ── -->
+                <div id="despachos" class="page">
+                    <div class="card">
+                        <div class="card-header">
+                            <div><div class="card-title">Despachos</div><div class="card-subtitle">Salidas de mercadería consolidadas por N° de documento</div></div>
+                        </div>
+                        <div class="filter-bar">
+                            <input type="text" class="form-input" id="fDespDoc" placeholder="N° Documento..." oninput="renderDespachos()" style="max-width:200px">
+                            <input type="text" class="form-input" id="fDespCli" placeholder="Cliente..." oninput="renderDespachos()" style="max-width:220px">
+                            <input type="text" class="form-input" id="fDespSKU" placeholder="SKU..." oninput="renderDespachos()" style="max-width:140px">
+                            <input type="text" class="form-input" id="fDespLote" placeholder="Lote..." oninput="renderDespachos()" style="max-width:140px">
+                            <select class="form-select filtro-bodega-mov" id="fDespBodega" onchange="renderDespachos()" style="width:auto" title="Bodega">
+                                <option value="">Todas las bodegas</option>
+                            </select>
+                            <select class="form-select" id="fDespTipo" onchange="renderDespachos()" style="width:auto" title="Tipo de salida">
+                                <option value="">Todas las salidas</option>
+                                <option value="Salida">Solo Salidas</option>
+                                <option value="Destrucción">Solo Destrucciones</option>
+                                <option value="AjusteInventarioNeg">Solo Ajustes −</option>
+                            </select>
+                            <input type="date" class="form-input" id="fDespDesde" onchange="renderDespachos()" style="width:auto" title="Desde">
+                            <input type="date" class="form-input" id="fDespHasta" onchange="renderDespachos()" style="width:auto" title="Hasta">
+                            <button class="btn btn-ghost btn-sm" onclick="clearFiltrosDespachos()">Limpiar</button>
+                        </div>
+                        <div class="table-wrap">
+                            <table><thead><tr>
+                                <th>Fecha</th><th>N° Documento</th><th>Cliente</th><th>Tipo</th><th>SKUs distintos</th><th>Total unidades</th><th>Bodega</th><th>Usuario</th><th style="width:80px">Detalle</th>
+                            </tr></thead><tbody id="tDespachos"><tr class="empty-row"><td colspan="9">Sin despachos registrados</td></tr></tbody></table>
+                        </div>
                     </div>
                 </div>
 
@@ -1339,6 +1455,58 @@
                             </div>
                         </div>
                     </div>
+                </div>
+
+                <!-- ── KARDEX FARMACÉUTICO ── -->
+                <div id="kardex" class="page">
+                    <div class="card kardex-filtros-card">
+                        <div class="card-header">
+                            <div><div class="card-title">Kardex Farmacéutico</div><div class="card-subtitle">Historial cronológico por SKU + Lote con saldo progresivo — NT 147 ISP Chile</div></div>
+                        </div>
+                        <div class="filter-bar" style="align-items:flex-end">
+                            <div style="display:flex;flex-direction:column;gap:4px;min-width:200px;flex:1">
+                                <label class="form-label" style="margin:0">SKU</label>
+                                <input type="text" class="form-input" id="kxSKU" list="kxSKUList" placeholder="Ej: MED-001" autocomplete="off">
+                                <datalist id="kxSKUList"></datalist>
+                            </div>
+                            <div style="display:flex;flex-direction:column;gap:4px;min-width:180px;flex:1">
+                                <label class="form-label" style="margin:0">Lote</label>
+                                <input type="text" class="form-input" id="kxLote" list="kxLoteList" placeholder="Ej: 20241001" autocomplete="off">
+                                <datalist id="kxLoteList"></datalist>
+                            </div>
+                            <div style="display:flex;flex-direction:column;gap:4px;min-width:170px">
+                                <label class="form-label" style="margin:0">Bodega</label>
+                                <select class="form-select filtro-bodega-mov" id="kxBodega">
+                                    <option value="">Todas las bodegas</option>
+                                </select>
+                            </div>
+                            <div style="display:flex;flex-direction:column;gap:4px;min-width:170px">
+                                <label class="form-label" style="margin:0">Tipo Movimiento</label>
+                                <select class="form-select" id="kxTipo">
+                                    <option value="">Todos los tipos</option>
+                                    <option value="Entrada">Entrada</option>
+                                    <option value="Salida">Salida</option>
+                                    <option value="Devolución">Devolución</option>
+                                    <option value="Destrucción">Destrucción</option>
+                                    <option value="AjusteInventario">Ajuste Inventario</option>
+                                    <option value="Ajuste">Cambio de Status</option>
+                                    <option value="CambioEstado">Cambio de Estado</option>
+                                    <option value="CambioUbicacion">Cambio de Ubicación</option>
+                                </select>
+                            </div>
+                            <div style="display:flex;flex-direction:column;gap:4px">
+                                <label class="form-label" style="margin:0">Desde</label>
+                                <input type="date" class="form-input" id="kxDesde" style="width:auto">
+                            </div>
+                            <div style="display:flex;flex-direction:column;gap:4px">
+                                <label class="form-label" style="margin:0">Hasta</label>
+                                <input type="date" class="form-input" id="kxHasta" style="width:auto">
+                            </div>
+                            <button class="btn btn-primary btn-sm" onclick="consultarKardex()" style="width:auto">Consultar Kardex</button>
+                            <button class="btn btn-ghost btn-sm" onclick="limpiarKardex()">Limpiar</button>
+                        </div>
+                    </div>
+                    <div id="kardexResultado"></div>
                 </div>
 
                 <!-- ── TRAZABILIDAD ── -->
@@ -3571,7 +3739,7 @@ function navigateTo(page) {
     if (pg) pg.classList.add('active');
     const lnk = document.querySelector(`.nav-link[data-page="${page}"]`);
     if (lnk) lnk.classList.add('active');
-    const titles = { dashboard:'Dashboard', productos:'Productos Maestro', stock:'Stock Actual', bodegas:'Bodegas', movimientos:'Movimientos', facturasPorDespachar:'Pedidos por Despachar', ordenTransporte:'Orden de Transporte', ajusteMov:'Ajuste de Movimiento', cuarentena:'Cuarentena', devoluciones:'Devoluciones', retiro:'Retiro de Mercado', ajustes:'Ajuste de Inventario', trazabilidad:'Trazabilidad de Lotes', alertas:'Alertas', reportes:'Reportes ISP', auditoria:'Auditoría', dashComercial:'Dashboard Comercial' };
+    const titles = { dashboard:'Dashboard', productos:'Productos Maestro', stock:'Stock Actual', bodegas:'Bodegas', movimientos:'Movimientos', recepciones:'Recepciones', despachos:'Despachos', kardex:'Kardex Farmacéutico', facturasPorDespachar:'Pedidos por Despachar', ordenTransporte:'Orden de Transporte', ajusteMov:'Ajuste de Movimiento', cuarentena:'Cuarentena', devoluciones:'Devoluciones', retiro:'Retiro de Mercado', ajustes:'Ajuste de Inventario', trazabilidad:'Trazabilidad de Lotes', alertas:'Alertas', reportes:'Reportes ISP', auditoria:'Auditoría', dashComercial:'Dashboard Comercial' };
     document.getElementById('pageTitle').textContent = titles[page] || page;
     if (page === 'ordenTransporte') {
         const perfilesOT = ['Maestro','Farmacéutico','Operador','Operador Los Angeles'];
@@ -3590,6 +3758,9 @@ function navigateTo(page) {
     if (page === 'clientes')     renderClientes();
     if (page === 'stock')        renderStock();
     if (page === 'movimientos')  renderMovimientos();
+    if (page === 'recepciones')  renderRecepciones();
+    if (page === 'despachos')    renderDespachos();
+    if (page === 'kardex')       initKardexPage();
     if (page === 'cuarentena')   renderCuarentena();
     if (page === 'devoluciones') renderDevoluciones();
     if (page === 'facturasPorDespachar') renderFacturasPorDespachar();
@@ -3612,10 +3783,17 @@ function _flushPendingRenders() {
     _renderRafHandle = null;
     const q = new Set(_pendingRenders);
     _pendingRenders.clear();
-    if (q.has('bodegas'))           { renderBodegas(); renderBodegaBtns(); updateBodegaSelect(); }
+    if (q.has('bodegas'))           {
+        renderBodegas(); renderBodegaBtns(); updateBodegaSelect();
+        if (_isPageActive('recepciones')) _poblarBodegasSelect('fRecBodega');
+        if (_isPageActive('despachos'))   _poblarBodegasSelect('fDespBodega');
+        if (_isPageActive('kardex'))      _poblarBodegasSelect('kxBodega');
+    }
     if (q.has('clientes') && _isPageActive('clientes'))         renderClientes();
     if (q.has('productos') && _isPageActive('productos'))       renderProductos();
     if (q.has('movimientos') && _isPageActive('movimientos'))   renderMovimientos();
+    if (q.has('movimientos') && _isPageActive('recepciones'))   renderRecepciones();
+    if (q.has('movimientos') && _isPageActive('despachos'))     renderDespachos();
     if (q.has('stock') && _isPageActive('stock'))               renderStock();
     if (q.has('cuarentena') && _isPageActive('cuarentena'))     renderCuarentena();
     if (q.has('devoluciones') && _isPageActive('devoluciones')) renderDevoluciones();
@@ -7655,8 +7833,520 @@ function renderMovimientos(preservePage) {
     }
 }
 
+// ══════════════════════════════════════════════════════════════════
+// KARDEX / RECEPCIONES / DESPACHOS
+// ------------------------------------------------------------------
+// Tres vistas de consulta que consolidan los movimientos individuales
+// guardados en Firebase (`data.movimientos`). No modifican la estructura
+// de datos; sólo agrupan en el frontend.
+//
+// Criterio de tipos de movimiento (consistente con calcStock()):
+//   Entradas (suman al saldo):    Entrada, Devolución, AjusteInventario > 0
+//   Salidas  (restan al saldo):   Salida, Destrucción, AjusteInventario < 0
+//   Informativos (no afectan):    Ajuste (cambio status), CambioEstado, CambioUbicacion
+// ══════════════════════════════════════════════════════════════════
+
+// Clasifica un movimiento para el Kardex y las vistas consolidadas.
+// Devuelve: { direccion: 'in'|'out'|'info', cantidad: number, badge: string }
+function _kxClasificarMov(m) {
+    const qty = parseFloat(m.cantidad) || 0;
+    switch (m.tipo) {
+        case 'Entrada':
+            return { direccion: 'in',  cantidad: qty, badge: 'Entrada' };
+        case 'Devolución':
+            return { direccion: 'in',  cantidad: qty, badge: 'Devolución' };
+        case 'Salida':
+            return { direccion: 'out', cantidad: qty, badge: 'Salida' };
+        case 'Destrucción':
+            return { direccion: 'out', cantidad: qty, badge: 'Destrucción' };
+        case 'AjusteInventario':
+            return qty >= 0
+                ? { direccion: 'in',  cantidad: qty,        badge: 'Ajuste +' }
+                : { direccion: 'out', cantidad: Math.abs(qty), badge: 'Ajuste −' };
+        case 'Ajuste':
+            return { direccion: 'info', cantidad: 0, badge: 'Cambio Estatus' };
+        case 'CambioEstado':
+            return { direccion: 'info', cantidad: 0, badge: 'Cambio Estado' };
+        case 'CambioUbicacion':
+            return { direccion: 'info', cantidad: 0, badge: 'Cambio Ubicación' };
+        default:
+            return { direccion: 'info', cantidad: 0, badge: m.tipo || '—' };
+    }
+}
+
+function _kxBadgeCls(badge) {
+    if (badge === 'Entrada' || badge === 'Devolución' || badge === 'Ajuste +') return 'badge-success';
+    if (badge === 'Salida'  || badge === 'Destrucción' || badge === 'Ajuste −') return 'badge-danger';
+    return 'badge-gray';
+}
+
+// ── Poblado de selects de bodega (usa las bodegas del maestro y respeta bodegas fijas del perfil) ──
+function _poblarBodegasSelect(selectId) {
+    const sel = document.getElementById(selectId);
+    if (!sel) return;
+    const prev = sel.value;
+    const bodegas = Object.values(data.bodegas || {}).map(b => b.nombre).filter(Boolean).sort();
+    const arrFijas = bodegasFijasActual();
+    const lista = arrFijas ? bodegas.filter(b => arrFijas.includes(b)) : bodegas;
+    sel.innerHTML = '<option value="">Todas las bodegas</option>' + lista.map(b => `<option value="${b}">${b}</option>`).join('');
+    if (prev && lista.includes(prev)) sel.value = prev;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// KARDEX
+// ══════════════════════════════════════════════════════════════════
+
+function initKardexPage() {
+    _poblarBodegasSelect('kxBodega');
+    // Autocompletado SKU con SKUs del maestro (mostrando descripción)
+    const dlSku = document.getElementById('kxSKUList');
+    if (dlSku) {
+        const prods = Object.values(data.productos || {}).sort((a, b) => (a.sku || '').localeCompare(b.sku || ''));
+        dlSku.innerHTML = prods.map(p => `<option value="${p.sku}">${p.descripcion || ''}</option>`).join('');
+    }
+    // Autocompletado de lotes según el SKU tipeado
+    const inpSku = document.getElementById('kxSKU');
+    const dlLote = document.getElementById('kxLoteList');
+    if (inpSku && dlLote) {
+        inpSku.oninput = () => {
+            const sku = (inpSku.value || '').trim().toUpperCase();
+            if (!sku) { dlLote.innerHTML = ''; return; }
+            const lotes = new Set();
+            Object.values(data.movimientos || {}).forEach(m => {
+                if ((m.sku || '').toUpperCase() === sku && m.lote) lotes.add(m.lote);
+            });
+            dlLote.innerHTML = [...lotes].sort().map(l => `<option value="${l}">`).join('');
+        };
+    }
+    // Fechas por defecto: 1° de enero del año actual → hoy
+    const kxDesde = document.getElementById('kxDesde');
+    const kxHasta = document.getElementById('kxHasta');
+    if (kxDesde && !kxDesde.value) kxDesde.value = `${new Date().getFullYear()}-01-01`;
+    if (kxHasta && !kxHasta.value) kxHasta.value = new Date().toISOString().slice(0, 10);
+    const cont = document.getElementById('kardexResultado');
+    if (cont && !cont.innerHTML.trim()) {
+        cont.innerHTML = `<div class="card"><p class="text-muted text-sm" style="padding:14px 4px;text-align:center">Ingrese SKU y Lote y presione <strong>Consultar Kardex</strong> para ver el historial cronológico con saldo progresivo.</p></div>`;
+    }
+}
+
+function limpiarKardex() {
+    ['kxSKU','kxLote','kxTipo'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    const b = document.getElementById('kxBodega'); if (b) b.value = '';
+    const d = document.getElementById('kxDesde'); if (d) d.value = `${new Date().getFullYear()}-01-01`;
+    const h = document.getElementById('kxHasta'); if (h) h.value = new Date().toISOString().slice(0, 10);
+    document.getElementById('kardexResultado').innerHTML = '';
+}
+
+function consultarKardex() {
+    const sku    = (document.getElementById('kxSKU').value || '').trim().toUpperCase();
+    const lote   = (document.getElementById('kxLote').value || '').trim();
+    const bodega = document.getElementById('kxBodega').value || '';
+    const tipo   = document.getElementById('kxTipo').value || '';
+    const desde  = document.getElementById('kxDesde').value || '';
+    const hasta  = document.getElementById('kxHasta').value || '';
+    const cont   = document.getElementById('kardexResultado');
+
+    if (!sku || !lote) {
+        cont.innerHTML = `<div class="card"><p class="text-muted text-sm" style="padding:10px 4px">Ingrese SKU y Lote para consultar el Kardex.</p></div>`;
+        return;
+    }
+
+    const arrFijas = bodegasFijasActual();
+    let movs = Object.values(data.movimientos || {}).filter(m => (m.sku || '').toUpperCase() === sku && (m.lote || '') === lote);
+    if (arrFijas) movs = movs.filter(m => arrFijas.includes(m.bodega || ''));
+    if (bodega)   movs = movs.filter(m => (m.bodega || '') === bodega);
+    if (tipo)     movs = movs.filter(m => m.tipo === tipo);
+    if (desde)    movs = movs.filter(m => m.fecha && m.fecha.slice(0, 10) >= desde);
+    if (hasta)    movs = movs.filter(m => m.fecha && m.fecha.slice(0, 10) <= hasta);
+    movs.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+
+    // Datos de cabecera
+    const prod = (data.productos || {})[sku] || {};
+    const venceRef = movs.find(m => m.vence)?.vence || '';
+    const totInfo = movs.length;
+
+    // Alertas por vencimiento
+    let alertaHTML = '';
+    if (venceRef) {
+        const hoy = new Date(); hoy.setHours(0,0,0,0);
+        const vD  = new Date(venceRef + 'T00:00:00');
+        const dias = Math.ceil((vD - hoy) / 86400000);
+        if (dias < 0)       alertaHTML = `<div class="kardex-alerta danger">⛔ Lote VENCIDO hace ${Math.abs(dias)} días (${fmtDate(venceRef)}).</div>`;
+        else if (dias <= 90) alertaHTML = `<div class="kardex-alerta warn">⚠ Lote próximo a vencer: ${dias} días para el ${fmtDate(venceRef)}.</div>`;
+    }
+
+    // Cabecera resumen
+    const cabecera = `
+        <div class="card kardex-header-card">
+            <div class="card-header" style="border-bottom:1px solid var(--border);padding-bottom:10px">
+                <div style="display:flex;align-items:center;justify-content:space-between;width:100%;gap:12px;flex-wrap:wrap">
+                    <div>
+                        <div class="card-title">Kardex — ${prod.descripcion || sku}</div>
+                        <div class="card-subtitle">Historial cronológico con saldo progresivo</div>
+                    </div>
+                    <div id="kardexPrintBtnBar" style="display:flex;gap:8px">
+                        <button class="btn btn-ghost btn-sm" onclick="imprimirKardex()" style="width:auto">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                            Imprimir / PDF
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="kardex-header-grid">
+                <div class="kx-row"><span class="kx-lbl">Producto</span><span class="kx-val">${prod.descripcion || '—'}</span></div>
+                <div class="kx-row"><span class="kx-lbl">SKU</span><span class="kx-val text-mono" style="color:var(--accent2)">${sku}</span></div>
+                <div class="kx-row"><span class="kx-lbl">N° Reg. ISP</span><span class="kx-val">${prod.registroSanitario ? `<span class="rs-number">${prod.registroSanitario}</span>` : '—'}</span></div>
+                <div class="kx-row"><span class="kx-lbl">Fabricante</span><span class="kx-val">${prod.fabricante || '—'}</span></div>
+                <div class="kx-row"><span class="kx-lbl">Lote</span><span class="kx-val text-mono">${lote}</span></div>
+                <div class="kx-row"><span class="kx-lbl">Vencimiento</span><span class="kx-val">${venceRef ? fmtDate(venceRef) : '—'}</span></div>
+                <div class="kx-row"><span class="kx-lbl">Bodega</span><span class="kx-val">${bodega || 'Todas'}</span></div>
+                <div class="kx-row"><span class="kx-lbl">Período</span><span class="kx-val">${desde ? fmtDate(desde) : '—'} al ${hasta ? fmtDate(hasta) : '—'}</span></div>
+            </div>
+        </div>
+    `;
+
+    if (totInfo === 0) {
+        cont.innerHTML = alertaHTML + cabecera + `<div class="card"><p class="text-muted text-sm" style="padding:14px 4px">Sin movimientos registrados para este SKU + Lote en el período y filtros seleccionados.</p></div>`;
+        return;
+    }
+
+    // ── Consolidación por N° Movimiento ──
+    // Un mismo N° movimiento puede tener múltiples registros en Firebase (uno
+    // por pallet/ubicación consumida en un despacho FEFO, por ejemplo). En el
+    // Kardex queremos ver UNA sola línea por operación: N° Movimiento + Tipo,
+    // con la cantidad total sumada. Los movimientos históricos sin N°
+    // movimiento se mantienen como filas individuales (no hay forma de saber
+    // si pertenecen a la misma operación).
+    const consolidados = [];
+    const idxByKey = {};
+    movs.forEach(m => {
+        const cls = _kxClasificarMov(m);
+        if (m.numeroMovimiento) {
+            const key = `${m.numeroMovimiento}|${m.tipo}`;
+            let i = idxByKey[key];
+            if (i === undefined) {
+                i = consolidados.length;
+                idxByKey[key] = i;
+                consolidados.push({
+                    fecha: m.fecha,
+                    numeroMovimiento: m.numeroMovimiento,
+                    tipo: m.tipo,
+                    direccion: cls.direccion,
+                    badge: cls.badge,
+                    cantidad: cls.cantidad,
+                    referencia: m.referencia || '',
+                    contraparte: m.proveedor || m.proveedorCliente || m.clienteRut || '',
+                    status: m.status || '',
+                    ubicacionOrigen: m.ubicacionOrigen || '',
+                    ubicacion: m.ubicacion || '',
+                    _ubicaciones: new Set([m.ubicacion || m.ubicacionOrigen || ''].filter(Boolean)),
+                    _count: 1
+                });
+            } else {
+                const g = consolidados[i];
+                g.cantidad += cls.cantidad;
+                g._count += 1;
+                if (m.ubicacion) g._ubicaciones.add(m.ubicacion);
+                if (m.ubicacionOrigen) g._ubicaciones.add(m.ubicacionOrigen);
+                // Fecha más temprana del grupo (representa el momento de la operación)
+                if (new Date(m.fecha) < new Date(g.fecha)) g.fecha = m.fecha;
+            }
+        } else {
+            consolidados.push({
+                fecha: m.fecha,
+                numeroMovimiento: '',
+                tipo: m.tipo,
+                direccion: cls.direccion,
+                badge: cls.badge,
+                cantidad: cls.cantidad,
+                referencia: m.referencia || '',
+                contraparte: m.proveedor || m.proveedorCliente || m.clienteRut || '',
+                status: m.status || '',
+                ubicacionOrigen: m.ubicacionOrigen || '',
+                ubicacion: m.ubicacion || '',
+                _ubicaciones: new Set(),
+                _count: 1
+            });
+        }
+    });
+    consolidados.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+
+    // Filas del Kardex
+    let saldo = 0, totIn = 0, totOut = 0;
+    const filas = consolidados.map(g => {
+        let inCell = '—', outCell = '—';
+        if (g.direccion === 'in')       { saldo += g.cantidad; totIn  += g.cantidad; inCell  = g.cantidad; }
+        else if (g.direccion === 'out') { saldo -= g.cantidad; totOut += g.cantidad; outCell = g.cantidad; }
+        // Descripción adicional para movs informativos y consolidaciones
+        let extra = '';
+        if (g.tipo === 'CambioUbicacion') extra = ` <span style="color:var(--text3);font-size:11px">(${g.ubicacionOrigen || '—'} → ${g.ubicacion || '—'})</span>`;
+        else if (g.tipo === 'Ajuste' || g.tipo === 'CambioEstado') extra = g.status ? ` <span style="color:var(--text3);font-size:11px">→ ${g.status}</span>` : '';
+        if (g._count > 1) extra += ` <span style="color:var(--text3);font-size:10px;font-style:italic" title="${g._count} registros consolidados${g._ubicaciones.size ? ' · ubicaciones: ' + [...g._ubicaciones].join(', ') : ''}">(${g._count} pallets)</span>`;
+        const rowCls = g.direccion === 'info' ? 'kx-info' : '';
+        const salCls = 'kx-sal' + (saldo < 0 ? ' neg' : '');
+        return `<tr class="${rowCls}">
+            <td class="text-mono" style="font-size:11px">${fmtDateTime(g.fecha)}</td>
+            <td class="text-mono" style="font-size:11px;color:var(--accent)">${g.numeroMovimiento || '—'}</td>
+            <td><span class="badge ${_kxBadgeCls(g.badge)}">${g.badge}</span>${extra}</td>
+            <td>${g.referencia || '—'}</td>
+            <td>${g.contraparte || '—'}</td>
+            <td class="kx-in">${inCell}</td>
+            <td class="kx-out">${outCell}</td>
+            <td class="${salCls}">${saldo}</td>
+        </tr>`;
+    }).join('');
+
+    const tabla = `
+        <div class="card">
+            <div class="table-wrap">
+                <table class="kardex-table">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th><th>N° Mov.</th><th>Tipo</th><th>N° Documento</th><th>Proveedor / Cliente</th>
+                            <th style="text-align:right">Entradas</th><th style="text-align:right">Salidas</th><th style="text-align:right">Saldo</th>
+                        </tr>
+                    </thead>
+                    <tbody>${filas}</tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="5" style="text-align:right">Totales del período</td>
+                            <td class="kx-in">${totIn}</td>
+                            <td class="kx-out">${totOut}</td>
+                            <td class="kx-sal${saldo < 0 ? ' neg' : ''}">${saldo}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+            <div class="kardex-print-footer" style="display:none">
+                Celmedik · Generado conforme NT 147 — ISP Chile<br>
+                Fecha de emisión: <span id="kxPrintFecha"></span> · Usuario: <span id="kxPrintUser"></span>
+            </div>
+        </div>
+    `;
+
+    cont.innerHTML = alertaHTML + cabecera + tabla;
+}
+
+function imprimirKardex() {
+    const f = document.getElementById('kxPrintFecha');
+    const u = document.getElementById('kxPrintUser');
+    if (f) f.textContent = fmtDateTime(new Date().toISOString());
+    if (u) u.textContent = ((typeof auth !== 'undefined' && auth.currentUser?.email) || '—');
+    const footer = document.querySelector('.kardex-print-footer');
+    if (footer) footer.style.display = 'block';
+    window.print();
+    setTimeout(() => { if (footer) footer.style.display = 'none'; }, 800);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// RECEPCIONES / DESPACHOS — consolidados por documento
+// ══════════════════════════════════════════════════════════════════
+
+// Agrupa por documento y consolida por SKU+Lote dentro del documento.
+// direccion: 'in' → sólo entradas; 'out' → sólo salidas.
+function _consolidarPorDocumento(direccion, filtros) {
+    const arrFijas = bodegasFijasActual();
+    const grupos = {};
+    Object.values(data.movimientos || {}).forEach(m => {
+        const cls = _kxClasificarMov(m);
+        if (cls.direccion !== direccion) return;
+        if (arrFijas && !arrFijas.includes(m.bodega || '')) return;
+        // Filtros específicos
+        if (filtros.bodega && (m.bodega || '') !== filtros.bodega) return;
+        if (filtros.doc && !(m.referencia || '').toLowerCase().includes(filtros.doc)) return;
+        if (filtros.contra) {
+            const c = (m.proveedor || m.proveedorCliente || '').toLowerCase();
+            if (!c.includes(filtros.contra)) return;
+        }
+        if (filtros.sku && !(m.sku || '').toLowerCase().includes(filtros.sku)) return;
+        if (filtros.lote && !(m.lote || '').toLowerCase().includes(filtros.lote)) return;
+        if (filtros.desde && (!m.fecha || m.fecha.slice(0, 10) < filtros.desde)) return;
+        if (filtros.hasta && (!m.fecha || m.fecha.slice(0, 10) > filtros.hasta)) return;
+
+        // Filtro de tipo especial (AjusteInventarioPos / AjusteInventarioNeg)
+        if (filtros.tipo) {
+            if (filtros.tipo === 'AjusteInventarioPos') {
+                if (m.tipo !== 'AjusteInventario' || (parseFloat(m.cantidad) || 0) < 0) return;
+            } else if (filtros.tipo === 'AjusteInventarioNeg') {
+                if (m.tipo !== 'AjusteInventario' || (parseFloat(m.cantidad) || 0) >= 0) return;
+            } else if (m.tipo !== filtros.tipo) return;
+        }
+
+        // Clave de agrupación: si no hay referencia, agrupa como "SIN-DOCUMENTO — [tipo] — [fecha]"
+        const fechaDia = (m.fecha || '').slice(0, 10);
+        const docKey = m.referencia
+            ? m.referencia
+            : `SIN-DOCUMENTO — ${m.tipo || 'MOV'} — ${fechaDia}`;
+
+        if (!grupos[docKey]) {
+            grupos[docKey] = {
+                referencia: m.referencia || `SIN-DOCUMENTO (${m.tipo || 'MOV'} · ${fmtDate(fechaDia)})`,
+                sinDoc: !m.referencia,
+                contraparte: m.proveedor || m.proveedorCliente || '—',
+                fecha: m.fecha,
+                bodega: m.bodega || '—',
+                bodegas: new Set([m.bodega || '—']),
+                usuario: m.usuario || m.usuarioEmail || '—',
+                tipoPrincipal: m.tipo || '—',
+                tiposPresentes: new Set([m.tipo || '—']),
+                pedidoVinculado: m.pedidoVinculado || '',
+                lineas: {}
+            };
+        }
+        const g = grupos[docKey];
+        if (new Date(m.fecha) > new Date(g.fecha)) g.fecha = m.fecha;
+        g.bodegas.add(m.bodega || '—');
+        g.tiposPresentes.add(m.tipo || '—');
+        if (m.pedidoVinculado && !g.pedidoVinculado) g.pedidoVinculado = m.pedidoVinculado;
+
+        // Clave de línea: N° Movimiento + SKU normalizado + Lote normalizado.
+        // Consolida todos los pallets registrados bajo el mismo N° movimiento
+        // para el mismo SKU+Lote en una única fila con cantidad total.
+        // SKU normalizado (trim + upper) y lote (trim) evitan que diferencias
+        // de espacios o capitalización rompan el agrupamiento.
+        const skuN  = (m.sku  || '').trim().toUpperCase();
+        const loteN = (m.lote || '').trim();
+        const nMov  = m.numeroMovimiento || `sinN°-${m.documentoId || m.fecha || ''}`;
+        const lineKey = `${nMov}|||${skuN}|||${loteN}`;
+        if (!g.lineas[lineKey]) {
+            g.lineas[lineKey] = {
+                numeroMovimiento: m.numeroMovimiento || '—',
+                sku: m.sku, lote: m.lote, vence: m.vence,
+                descripcion: (data.productos || {})[m.sku]?.descripcion || m.descripcion || '',
+                cantidad: 0, tipo: m.tipo
+            };
+        }
+        g.lineas[lineKey].cantidad += Math.abs(parseFloat(m.cantidad) || 0);
+        if (m.vence && !g.lineas[lineKey].vence) g.lineas[lineKey].vence = m.vence;
+    });
+    return grupos;
+}
+
+// Filas expandibles: guardamos qué docKeys están abiertos.
+const _docExpandidos = { recepciones: new Set(), despachos: new Set() };
+
+function _toggleDocDetalle(vista, docKey, btn) {
+    const set = _docExpandidos[vista];
+    if (set.has(docKey)) set.delete(docKey); else set.add(docKey);
+    if (vista === 'recepciones') renderRecepciones(); else renderDespachos();
+}
+
+function _renderConsolidado({ vista, direccion, tbodyId, colLabel, tipoLabelMap, panelCls }) {
+    const arrFijas = bodegasFijasActual();
+    _poblarBodegasSelect(vista === 'recepciones' ? 'fRecBodega' : 'fDespBodega');
+    const idPrefix = vista === 'recepciones' ? 'fRec' : 'fDesp';
+    const filtros = {
+        doc:    (document.getElementById(idPrefix + 'Doc')?.value    || '').trim().toLowerCase(),
+        contra: (document.getElementById(idPrefix + (vista === 'recepciones' ? 'Prov' : 'Cli'))?.value || '').trim().toLowerCase(),
+        sku:    (document.getElementById(idPrefix + 'SKU')?.value    || '').trim().toLowerCase(),
+        lote:   (document.getElementById(idPrefix + 'Lote')?.value   || '').trim().toLowerCase(),
+        bodega: (document.getElementById(idPrefix + 'Bodega')?.value || ''),
+        tipo:   (document.getElementById(idPrefix + 'Tipo')?.value   || ''),
+        desde:  (document.getElementById(idPrefix + 'Desde')?.value  || ''),
+        hasta:  (document.getElementById(idPrefix + 'Hasta')?.value  || '')
+    };
+
+    const grupos = _consolidarPorDocumento(direccion, filtros);
+    const filas = Object.entries(grupos).map(([k, g]) => ({ docKey: k, ...g }));
+    filas.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+
+    const tb = document.getElementById(tbodyId);
+    if (!tb) return;
+    if (!filas.length) { tb.innerHTML = `<tr class="empty-row"><td colspan="9">Sin registros para los filtros aplicados</td></tr>`; return; }
+
+    const setExpandidos = _docExpandidos[vista];
+    const html = [];
+    filas.forEach(g => {
+        const lineas = Object.values(g.lineas);
+        const skus = new Set(lineas.map(l => l.sku)).size;
+        const totalUd = lineas.reduce((a, l) => a + (l.cantidad || 0), 0);
+        const abierto = setExpandidos.has(g.docKey);
+        const tipoTag = [...g.tiposPresentes].map(t => `<span class="badge ${_kxBadgeCls(tipoLabelMap[t] || t)}" style="font-size:10px">${tipoLabelMap[t] || t}</span>`).join(' ');
+        const bodegasCell = [...g.bodegas].join(', ');
+        const docKeyEsc = g.docKey.replace(/'/g, "\\'");
+        html.push(`<tr${g.sinDoc ? ' style="opacity:.9"' : ''}>
+            <td class="text-mono" style="font-size:11px">${fmtDateTime(g.fecha)}</td>
+            <td>${g.sinDoc ? `<span style="color:var(--text3);font-size:11px">${g.referencia}</span>` : `<strong class="text-mono" style="color:var(--accent2)">${g.referencia}</strong>`}</td>
+            <td>${g.contraparte || '—'}</td>
+            <td>${tipoTag}</td>
+            <td style="text-align:right">${skus}</td>
+            <td style="text-align:right;font-weight:700;color:var(--text)">${totalUd}</td>
+            <td>${bodegasCell}</td>
+            <td style="font-size:11px;color:var(--text3)">${g.usuario}</td>
+            <td><button class="btn btn-sm btn-icon doc-toggle-btn ${abierto ? 'open' : ''}" onclick="_toggleDocDetalle('${vista}','${docKeyEsc}',this)" title="Detalle">▸</button></td>
+        </tr>`);
+        if (abierto) {
+            const pedidoInfo = (vista === 'despachos' && g.pedidoVinculado)
+                ? `<div style="margin-bottom:8px;font-size:12px;color:var(--text2)"><strong>Pedido vinculado:</strong> <span class="text-mono" style="color:var(--accent2)">${g.pedidoVinculado}</span></div>` : '';
+            const detTot = lineas.reduce((a, l) => a + (l.cantidad || 0), 0);
+            const detFilas = lineas
+                .sort((a, b) => (a.numeroMovimiento||'').localeCompare(b.numeroMovimiento||'')
+                             || (a.sku||'').localeCompare(b.sku||'')
+                             || (a.lote||'').localeCompare(b.lote||''))
+                .map(l => `<tr>
+                    <td class="text-mono" style="font-size:11px;color:var(--accent);font-weight:600">${l.numeroMovimiento || '—'}</td>
+                    <td class="text-mono" style="color:var(--accent2)">${l.sku}</td>
+                    <td>${l.descripcion || '—'}</td>
+                    <td class="text-mono" style="font-size:11px">${l.lote || '—'}</td>
+                    <td>${l.vence ? fmtDate(l.vence) : '—'}</td>
+                    <td style="text-align:right;font-weight:600">${l.cantidad}</td>
+                </tr>`).join('');
+            html.push(`<tr class="doc-detalle-row"><td colspan="9">
+                <div class="doc-detalle-panel ${panelCls}">
+                    ${pedidoInfo}
+                    <table>
+                        <thead><tr><th>N° Movimiento</th><th>SKU</th><th>Descripción</th><th>Lote</th><th>Vence</th><th style="text-align:right">Unidades</th></tr></thead>
+                        <tbody>${detFilas}</tbody>
+                        <tfoot><tr><td colspan="5" style="text-align:right">Total documento</td><td style="text-align:right">${detTot}</td></tr></tfoot>
+                    </table>
+                </div>
+            </td></tr>`);
+        }
+    });
+    tb.innerHTML = html.join('');
+}
+
+function renderRecepciones() {
+    _renderConsolidado({
+        vista: 'recepciones',
+        direccion: 'in',
+        tbodyId: 'tRecepciones',
+        colLabel: 'Proveedor',
+        tipoLabelMap: { Entrada: 'Entrada', Devolución: 'Devolución', AjusteInventario: 'Ajuste +' },
+        panelCls: ''
+    });
+}
+function renderDespachos() {
+    _renderConsolidado({
+        vista: 'despachos',
+        direccion: 'out',
+        tbodyId: 'tDespachos',
+        colLabel: 'Cliente',
+        tipoLabelMap: { Salida: 'Salida', 'Destrucción': 'Destrucción', AjusteInventario: 'Ajuste −' },
+        panelCls: 'despacho'
+    });
+}
+function clearFiltrosRecepciones() {
+    ['fRecDoc','fRecProv','fRecSKU','fRecLote','fRecTipo','fRecDesde','fRecHasta'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    const b = document.getElementById('fRecBodega'); if (b) b.value = '';
+    _docExpandidos.recepciones.clear();
+    renderRecepciones();
+}
+function clearFiltrosDespachos() {
+    ['fDespDoc','fDespCli','fDespSKU','fDespLote','fDespTipo','fDespDesde','fDespHasta'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    const b = document.getElementById('fDespBodega'); if (b) b.value = '';
+    _docExpandidos.despachos.clear();
+    renderDespachos();
+}
+
 // ══ STOCK ══
 let stockViewMode = 'lote';
+const _stockSkuExpandidos = new Set();
+function _toggleStockSku(sku) {
+    if (_stockSkuExpandidos.has(sku)) _stockSkuExpandidos.delete(sku);
+    else _stockSkuExpandidos.add(sku);
+    renderStock();
+}
 
 // Filtros de categoría del stock (toggles independientes). Si ninguno está
 // activo se muestran todos los productos. Particionan el catálogo sin solape:
@@ -7782,28 +8472,67 @@ function renderStock() {
 
     // ── VISTA TOTAL POR SKU ──
     if (stockViewMode === 'sku') {
-        if (thead) thead.innerHTML = '<th>SKU</th><th>Descripción</th><th>Stock Total</th><th>Unidad de Venta</th><th>Presentación</th><th>Lotes activos</th>';
-        if (subtitleEl) subtitleEl.textContent = 'Stock total consolidado por SKU';
+        if (thead) thead.innerHTML = '<th></th><th>SKU</th><th>Descripción</th><th>N° Reg. ISP</th><th>Presentación</th><th>Ud. Venta</th><th style="text-align:right">Lotes activos</th><th style="text-align:right">Total unidades</th><th style="text-align:right">Stock mín.</th><th>Estado</th>';
+        if (subtitleEl) subtitleEl.textContent = 'Stock total consolidado por SKU · clic en la fila para desglose FEFO';
         // Agrega por SKU. Como el stock viene "expandido" con reservas (dos
         // filas virtuales por lote reservado), usamos un Set para no contar
-        // dos veces el mismo lote-ubicación al totalizar la cantidad de lotes.
-        const skuRows = Object.values(rows.reduce((acc, s) => {
-            if (!acc[s.sku]) acc[s.sku] = { sku: s.sku, total: 0, _lotSet: new Set() };
-            acc[s.sku].total += parseFloat(s.cantidad)||0;
-            acc[s.sku]._lotSet.add(`${s.lote}|${s.bodega||''}|${s.ubicacion||''}`);
-            return acc;
-        }, {})).map(r => ({ sku: r.sku, total: r.total, lotes: r._lotSet.size })).sort((a, b) => a.sku.localeCompare(b.sku));
-        if (!skuRows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="6">No hay stock registrado</td></tr>'; return; }
+        // dos veces el mismo lote-ubicación al totalizar la cantidad de lotes,
+        // y guardamos las líneas reales para el detalle expandible (FEFO).
+        const acc = rows.reduce((a, s) => {
+            if (!a[s.sku]) a[s.sku] = { sku: s.sku, total: 0, _lotSet: new Set(), lineas: [] };
+            a[s.sku].total += parseFloat(s.cantidad) || 0;
+            a[s.sku]._lotSet.add(`${s.lote}|${s.bodega||''}|${s.ubicacion||''}`);
+            a[s.sku].lineas.push(s);
+            return a;
+        }, {});
+        const skuRows = Object.values(acc).map(r => ({ sku: r.sku, total: r.total, lotes: r._lotSet.size, lineas: r.lineas })).sort((x, y) => x.sku.localeCompare(y.sku));
+        if (!skuRows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="10">No hay stock registrado</td></tr>'; return; }
         tb.innerHTML = skuRows.map(s => {
-            const p = prods[s.sku];
-            return `<tr>
+            const p = prods[s.sku] || {};
+            const stockMin = parseFloat(p.stockMin) || 0;
+            const bajo = stockMin > 0 && s.total < stockMin;
+            const estadoHTML = bajo
+                ? `<span class="badge badge-danger">Bajo mínimo</span>`
+                : `<span class="badge badge-success">OK</span>`;
+            const abierto = _stockSkuExpandidos.has(s.sku);
+            // Filas del detalle FEFO
+            let detHTML = '';
+            if (abierto) {
+                const lineasFefo = s.lineas.slice().sort((la, lb) => {
+                    if (!la.vence) return 1; if (!lb.vence) return -1;
+                    return new Date(la.vence + 'T00:00:00') - new Date(lb.vence + 'T00:00:00');
+                });
+                const detRows = lineasFefo.filter(l => (parseFloat(l.cantidad)||0) > 0).map(l => `<tr>
+                    <td class="text-mono" style="font-size:11px">${l.lote}</td>
+                    <td>${l.vence ? fmtDate(l.vence) : '—'}</td>
+                    <td style="font-weight:600">${l.cantidad}</td>
+                    <td>${l.bodega || '—'}</td>
+                    <td style="font-size:12px">${l.ubicacion || '—'}</td>
+                    <td>${statusBadgeHTML(getLoteStatus(l))}</td>
+                </tr>`).join('');
+                detHTML = `<tr class="doc-detalle-row"><td colspan="10">
+                    <div class="doc-detalle-panel">
+                        <div style="font-size:12px;color:var(--text2);margin-bottom:8px"><strong>Desglose por lote (FEFO)</strong></div>
+                        <table>
+                            <thead><tr><th>Lote</th><th>Vence</th><th>Cantidad</th><th>Bodega</th><th>Ubicación</th><th>Estado</th></tr></thead>
+                            <tbody>${detRows || '<tr><td colspan="6" class="text-muted" style="text-align:center">Sin lotes activos</td></tr>'}</tbody>
+                        </table>
+                    </div>
+                </td></tr>`;
+            }
+            const skuEsc = s.sku.replace(/'/g, "\\'");
+            return `<tr onclick="_toggleStockSku('${skuEsc}')" style="cursor:pointer">
+                <td><button class="btn btn-sm btn-icon doc-toggle-btn ${abierto ? 'open' : ''}" onclick="event.stopPropagation();_toggleStockSku('${skuEsc}')" title="Detalle FEFO">▸</button></td>
                 <td class="text-mono" style="color:var(--accent2);font-weight:600">${s.sku}</td>
-                <td>${p?.descripcion||'—'}</td>
-                <td style="font-weight:700;font-size:15px;color:var(--text)">${s.total}</td>
-                <td>${p?.unidadVenta||'—'}</td>
-                <td style="font-size:12px;color:var(--text2)">${p?.presentacion||'—'}</td>
-                <td style="color:var(--text2)">${s.lotes} lote${s.lotes!==1?'s':''}</td>
-            </tr>`;
+                <td>${p.descripcion || '—'}</td>
+                <td>${p.registroSanitario ? `<span class="rs-number">${p.registroSanitario}</span>` : '<span class="text-muted">—</span>'}</td>
+                <td style="font-size:12px;color:var(--text2)">${p.presentacion || '—'}</td>
+                <td>${p.unidadVenta || '—'}</td>
+                <td style="text-align:right;color:var(--text2)">${s.lotes}</td>
+                <td style="text-align:right;font-weight:700;font-size:15px;color:var(--text)">${s.total}</td>
+                <td style="text-align:right;color:var(--text2)">${stockMin > 0 ? stockMin : '—'}</td>
+                <td>${estadoHTML}</td>
+            </tr>${detHTML}`;
         }).join('');
         return;
     }
