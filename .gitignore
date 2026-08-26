@@ -1,0 +1,34 @@
+# ── Firebase ──
+.firebase/
+firebase-debug.log
+firebase-debug.*.log
+
+# ── Node ──
+node_modules/
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+
+# ── Windows / Office temporales ──
+~$*
+~$*.xlsx
+~$*.docx
+~$*.xls
+Thumbs.db
+Desktop.ini
+
+# ── macOS ──
+.DS_Store
+
+# ── Editor ──
+.vscode/
+.idea/
+*.swp
+
+# ── Local secrets ──
+.env
+.env.local
+.env.*.local
+
+# ── Backups locales ──
+backups/
