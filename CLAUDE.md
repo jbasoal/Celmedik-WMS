@@ -2,6 +2,12 @@
 Sistema de gestión de bodega (WMS) para almacenamiento de
 medicamentos a temperatura ambiente.
 
+> **Alcance de este proyecto:** solo Celmedik WMS. **OT-Biodial es un
+> proyecto separado** que vive en otra carpeta y otro repositorio. Si el
+> usuario pide cambios de OT-Biodial, no los ejecutes aquí — pídele
+> abrir el otro proyecto. No leas ni referencies carpetas o archivos de
+> OT-Biodial desde este proyecto.
+
 ## Stack tecnológico
 - HTML + JavaScript + Firebase (Firestore + Hosting + Auth)
 - Desplegado en: celmedik-inventario.web.app

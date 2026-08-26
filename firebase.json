@@ -32,10 +32,6 @@
     ],
     "rewrites": [
       {
-        "source": "/ot-biodial/**",
-        "destination": "/OT-Biodial/index.html"
-      },
-      {
         "source": "**",
         "destination": "/index.html"
       }
