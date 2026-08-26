@@ -8,7 +8,27 @@
       "firebase.json",
       "**/.*",
       "**/node_modules/**",
-      ".kortix/**"
+      ".kortix/**",
+      "**/*.xlsx",
+      "**/~$*",
+      "**/*.md",
+      "imagen*.png",
+      "imagen*.jpg",
+      "imagen*.jpeg",
+      "backups/**",
+      "uploads/**",
+      "scripts/**",
+      "cargar-*.js",
+      "import-*.js",
+      "setup-*.js",
+      "wms-firebase-config.js",
+      "wms_check.js",
+      "database.rules.json",
+      "database.rules.reference",
+      "package.json",
+      "package-lock.json",
+      "firebase-debug.log",
+      "firebase-debug.*.log"
     ],
     "rewrites": [
       {

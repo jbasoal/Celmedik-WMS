@@ -30,5 +30,6 @@ Desktop.ini
 .env.local
 .env.*.local
 
-# ── Backups locales ──
+# ── Backups y uploads locales del operador ──
 backups/
+uploads/
