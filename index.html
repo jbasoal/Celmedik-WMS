@@ -1480,6 +1480,11 @@
                                     <option value="">Todas las bodegas</option>
                                 </select>
                             </div>
+                            <div style="display:flex;flex-direction:column;gap:4px;min-width:220px;flex:1">
+                                <label class="form-label" style="margin:0">Cliente / Proveedor <span style="color:var(--text3);font-weight:400;font-size:10px">(opcional)</span></label>
+                                <input type="text" class="form-input" id="kxContraparte" list="kxContraparteList" placeholder="Ej: CLINICA NEFROLOGICA..." autocomplete="off">
+                                <datalist id="kxContraparteList"></datalist>
+                            </div>
                             <div style="display:flex;flex-direction:column;gap:4px;min-width:170px">
                                 <label class="form-label" style="margin:0">Tipo Movimiento</label>
                                 <select class="form-select" id="kxTipo">
@@ -7918,6 +7923,22 @@ function initKardexPage() {
             dlLote.innerHTML = [...lotes].sort().map(l => `<option value="${l}">`).join('');
         };
     }
+    // Autocompletado de Cliente/Proveedor con valores distintos usados en
+    // movimientos históricos (unión de m.proveedor y m.proveedorCliente).
+    // El datalist HTML nativo ya filtra por match parcial mientras el usuario
+    // tipea, así que basta con poblar el set completo una vez.
+    const dlContra = document.getElementById('kxContraparteList');
+    if (dlContra) {
+        const contras = new Set();
+        Object.values(data.movimientos || {}).forEach(m => {
+            const v1 = (m.proveedor || '').trim();
+            const v2 = (m.proveedorCliente || '').trim();
+            if (v1) contras.add(v1);
+            if (v2) contras.add(v2);
+        });
+        dlContra.innerHTML = [...contras].sort((a, b) => a.localeCompare(b))
+            .map(c => `<option value="${c.replace(/"/g, '&quot;')}">`).join('');
+    }
     // Fechas por defecto: 1° de enero del año actual → hoy
     const kxDesde = document.getElementById('kxDesde');
     const kxHasta = document.getElementById('kxHasta');
@@ -7930,7 +7951,7 @@ function initKardexPage() {
 }
 
 function limpiarKardex() {
-    ['kxSKU','kxLote','kxTipo'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    ['kxSKU','kxLote','kxTipo','kxContraparte'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
     const b = document.getElementById('kxBodega'); if (b) b.value = '';
     const d = document.getElementById('kxDesde'); if (d) d.value = `${new Date().getFullYear()}-01-01`;
     const h = document.getElementById('kxHasta'); if (h) h.value = new Date().toISOString().slice(0, 10);
@@ -7942,6 +7963,7 @@ function consultarKardex() {
     const lote   = (document.getElementById('kxLote').value || '').trim();
     const bodega = document.getElementById('kxBodega').value || '';
     const tipo   = document.getElementById('kxTipo').value || '';
+    const contra = (document.getElementById('kxContraparte')?.value || '').trim().toLowerCase();
     const desde  = document.getElementById('kxDesde').value || '';
     const hasta  = document.getElementById('kxHasta').value || '';
     const cont   = document.getElementById('kardexResultado');
@@ -7958,6 +7980,10 @@ function consultarKardex() {
     if (arrFijas) movs = movs.filter(m => arrFijas.includes(m.bodega || ''));
     if (bodega)   movs = movs.filter(m => (m.bodega || '') === bodega);
     if (tipo)     movs = movs.filter(m => m.tipo === tipo);
+    if (contra)   movs = movs.filter(m => {
+        const c = ((m.proveedor || '') + ' ' + (m.proveedorCliente || '')).toLowerCase();
+        return c.includes(contra);
+    });
     if (desde)    movs = movs.filter(m => m.fecha && m.fecha.slice(0, 10) >= desde);
     if (hasta)    movs = movs.filter(m => m.fecha && m.fecha.slice(0, 10) <= hasta);
     movs.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
