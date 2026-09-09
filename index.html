@@ -4956,25 +4956,52 @@ function _autoFillPalletsForSku() {
     _updPalletSum();
 }
 
+// Calcula el stock aprobado disponible por ubicación para un SKU+lote en la
+// bodega actual del documento, descontando lo ya cargado en el borrador
+// (movDocItems) para no doble-contar cuando se agrega el mismo lote más de
+// una vez. Devuelve arreglo ordenado por cantidad desc, ubicación asc.
+// Se usa por _computeSalidaConcAsig y por _updPalletSum para validar.
+function _stockDisponibleUbicPorLote(sku, lote, bodega) {
+    if (!sku || !lote || !bodega) return [];
+    const stock = calcStock();
+    const enDocPorUbic = {};
+    (movDocItems || []).forEach(it => {
+        if (it.sku === sku && it.lote === lote) {
+            const u = it.ubicacion || '';
+            enDocPorUbic[u] = (enDocPorUbic[u] || 0) + (parseFloat(it.qty) || 0);
+        }
+    });
+    return Object.values(stock)
+        .filter(s => s.sku === sku && s.lote === lote && (s.bodega||'') === bodega
+                  && (parseFloat(s.cantidad)||0) > 0 && getLoteStatus(s) === 'Aprobado')
+        .map(s => {
+            const base  = parseFloat(s.cantidad) || 0;
+            const enDoc = enDocPorUbic[s.ubicacion || ''] || 0;
+            return { ubicacion: s.ubicacion || '', cantidad: Math.max(0, base - enDoc), stockBruto: base, enDoc };
+        })
+        .filter(u => u.cantidad > 0)
+        .sort((a, b) => (b.cantidad - a.cantidad) || (a.ubicacion||'').localeCompare(b.ubicacion||''));
+}
+
 // Calcula la asignación por pallet para Salida de concentrado a partir del
 // stock real (cada ubicación = un pallet físico ingresado a 120/126/144 uds).
 // Ordena por cantidad desc para consumir primero los pallets completos más
 // grandes (minimiza la cantidad total de pallets movidos y evita romper
-// pallets completos cuando no es necesario).
-//   • Sin N: modo óptimo. Devuelve exactamente los pallets necesarios.
-//   • Con N: modo N fijo. Los primeros N-1 se consumen completos hasta
-//     agotar la cantidad; el último absorbe todo el saldo restante (aunque
-//     exceda su capacidad física, para que _updPalletSum destaque el faltante).
+// pallets completos cuando no es necesario). Descuenta lo ya cargado en el
+// borrador para no doble-contar el mismo lote/ubicación en el documento.
+//   • Sin N: modo óptimo. Devuelve exactamente los pallets necesarios
+//     (o menos si el stock disponible es inferior a qty).
+//   • Con N fijo: cada pallet toma como máximo lo disponible en su ubicación.
+//     Si N > ubicaciones con stock, se generan filas vacías. Si N < óptimo,
+//     el último pallet se acota al stock real de esa ubicación (sin inflar).
+// En cualquier caso: **NUNCA** se asigna más a un pallet que el stock real
+// de su ubicación — el faltante queda visible por _updPalletSum como
+// discrepancia entre suma y cantidad total.
 function _computeSalidaConcAsig(sku, qty, N) {
     const lote   = (document.getElementById('mi-lote')?.value || '').trim();
     const bodega = (document.getElementById('md-bodega')?.value || '').trim();
     if (!lote || !bodega || !(qty > 0)) return [];
-    const stock = calcStock();
-    const ubics = Object.values(stock)
-        .filter(s => s.sku === sku && s.lote === lote && (s.bodega||'') === bodega
-                  && (parseFloat(s.cantidad)||0) > 0 && getLoteStatus(s) === 'Aprobado')
-        .map(s => ({ ubicacion: s.ubicacion || '', cantidad: parseFloat(s.cantidad) || 0 }))
-        .sort((a, b) => (b.cantidad - a.cantidad) || (a.ubicacion||'').localeCompare(b.ubicacion||''));
+    const ubics = _stockDisponibleUbicPorLote(sku, lote, bodega);
     if (!ubics.length) return [];
 
     if (N === undefined || N === null) {
@@ -4986,24 +5013,17 @@ function _computeSalidaConcAsig(sku, qty, N) {
             asig.push({ ubicacion: u.ubicacion, cantidad: take });
             remaining -= take;
         }
-        // Si no alcanzó el stock, sumamos el faltante al último pallet para
-        // que el operador vea el hueco (la validación lo rechazará al guardar).
-        if (remaining > 0 && asig.length) {
-            asig[asig.length - 1].cantidad += remaining;
-        }
-        return asig;
+        return asig; // sin inflar el último: el faltante se muestra en _updPalletSum
     }
 
     const asig = [];
     let remaining = qty;
     for (let i = 0; i < N; i++) {
         const u = ubics[i];
-        if (i === N - 1) {
-            asig.push({ ubicacion: u ? u.ubicacion : '', cantidad: Math.max(0, remaining) });
-        } else if (!u) {
+        if (!u) {
             asig.push({ ubicacion: '', cantidad: 0 });
         } else {
-            const take = Math.min(u.cantidad, remaining);
+            const take = Math.min(u.cantidad, Math.max(0, remaining));
             asig.push({ ubicacion: u.ubicacion, cantidad: take });
             remaining -= take;
         }
@@ -5448,8 +5468,8 @@ function onMiPalletQtyChange() {
     }
 
     const buildSelect = (id, opts, placeholder) => opts.length
-        ? `<select class="form-select" id="${id}" style="font-size:12px"><option value="">${placeholder}</option>${opts.map(o => `<option value="${o.value}">${o.label}</option>`).join('')}</select>`
-        : `<input type="text" class="form-input" id="${id}" placeholder="${placeholder}" style="font-size:12px">`;
+        ? `<select class="form-select" id="${id}" style="font-size:12px" onchange="_updPalletSum()"><option value="">${placeholder}</option>${opts.map(o => `<option value="${o.value}">${o.label}</option>`).join('')}</select>`
+        : `<input type="text" class="form-input" id="${id}" placeholder="${placeholder}" style="font-size:12px" oninput="_updPalletSum()">`;
 
     for (let i = 1; i <= palletCount; i++) {
         if (isCambioUbic) {
@@ -5486,10 +5506,12 @@ function onMiPalletQtyChange() {
     if (ubicGroup)     ubicGroup.style.display     = 'none';
     if (ubicDestGroup) ubicDestGroup.style.display = 'none';
 
-    // Autodistribución para concentrados: los primeros pallets se llenan al
-    // máximo permitido (120/126/144) y el último absorbe el saldo. Si el
-    // usuario reduce manualmente la cantidad de pallets por debajo del
-    // mínimo teórico, el último pallet queda con el excedente acumulado.
+    // Autodistribución para concentrados:
+    //   • Entrada / CambioUbicacion: primeros pallets al máximo permitido
+    //     (120/126/144) y el último absorbe el saldo teórico.
+    //   • Salida: cada pallet toma como máximo el stock real de su ubicación.
+    //     NUNCA se infla el último pallet más allá del stock físico —
+    //     el faltante queda visible como discrepancia en _updPalletSum.
     const _esSalidaConc = (tipo === 'Salida') && CONCENTRADO_SKUS.has(sku);
     const _palletSize = _resolveConcentradoPalletMax(sku, tipo);
     const _qtyTotal   = parseFloat(document.getElementById('mi-qty')?.value) || 0;
@@ -5515,30 +5537,69 @@ function _updPalletSum() {
     if (palletCount <= 1) return;
 
     // Recalcular bultos por pallet si la grilla los muestra.
-    const tipo = document.getElementById('md-tipo')?.value || '';
-    const sku  = (document.getElementById('mi-sku')?.value  || '').trim().toUpperCase();
-    const lote = (document.getElementById('mi-lote')?.value || '').trim();
+    const tipo    = document.getElementById('md-tipo')?.value || '';
+    const sku     = (document.getElementById('mi-sku')?.value  || '').trim().toUpperCase();
+    const lote    = (document.getElementById('mi-lote')?.value || '').trim();
+    const bodega  = (document.getElementById('md-bodega')?.value || '').trim();
     const udsBulto = _distDebeMostrarBultos(tipo, sku) ? _udsPorBulto(sku, lote, data.productos[sku]) : null;
 
+    // Para Salida: mapa ubicación→disponible (bruto y neto de borrador) para
+    // validar por pallet que la cantidad no exceda el stock real de la ubicación.
+    let dispPorUbic = null;
+    if (tipo === 'Salida' && sku && lote && bodega) {
+        dispPorUbic = {};
+        _stockDisponibleUbicPorLote(sku, lote, bodega).forEach(u => {
+            dispPorUbic[u.ubicacion] = u.cantidad;
+        });
+    }
+
     let sum = 0;
+    const excesos = []; // {i, ubicacion, disponible, cantidad}
     for (let i = 1; i <= palletCount; i++) {
-        const palQty = parseFloat(document.getElementById(`mi-pal-qty-${i}`)?.value) || 0;
+        const palQty  = parseFloat(document.getElementById(`mi-pal-qty-${i}`)?.value) || 0;
+        const palUbic = (document.getElementById(`mi-pal-ubic-${i}`)?.value || '').trim();
         sum += palQty;
         const bEl = document.getElementById(`mi-pal-bultos-${i}`);
         if (bEl) bEl.value = udsBulto ? _fmtBultos(palQty, udsBulto) : '';
+        // Validación por pallet (Salida): la cantidad no puede exceder lo real de esa ubicación.
+        if (dispPorUbic && palUbic && palQty > 0) {
+            const disp = dispPorUbic[palUbic];
+            if (disp === undefined || palQty - disp > 0.0001) {
+                excesos.push({ i, ubicacion: palUbic, disponible: disp || 0, cantidad: palQty });
+            }
+        }
     }
     const totalQty = parseFloat(document.getElementById('mi-qty')?.value) || 0;
     const sumEl = document.getElementById('mi-pal-sum');
     if (sumEl) {
-        const ok = totalQty > 0 && Math.abs(sum - totalQty) < 0.0001;
-        const color = ok ? 'var(--success)' : (sum > totalQty ? 'var(--danger)' : 'var(--text3)');
+        const okSum = totalQty > 0 && Math.abs(sum - totalQty) < 0.0001;
+        const okExc = excesos.length === 0;
+        const okAll = okSum && okExc;
+        const color = okAll ? 'var(--success)' : 'var(--danger)';
         sumEl.style.color = color;
-        let extra = '';
+
+        let bultosExtra = '';
         if (udsBulto) {
             const totalBultos = _fmtBultos(sum, udsBulto);
-            if (totalBultos) extra = ` · <strong>${totalBultos}</strong> bultos (x${udsBulto})`;
+            if (totalBultos) bultosExtra = ` · <strong>${totalBultos}</strong> bultos (x${udsBulto})`;
         }
-        sumEl.innerHTML = `Suma pallets: <strong>${sum}</strong> / Cantidad total: <strong>${totalQty}</strong>${ok ? ' ✓' : ''}${extra}`;
+
+        let diffMsg = '';
+        if (!okSum) {
+            const diff = totalQty - sum;
+            if (diff > 0) diffMsg = ` — <strong>Faltan ${diff} ud.</strong> (stock aprobado insuficiente en el lote)`;
+            else          diffMsg = ` — Exceso: sobran ${-diff} ud.`;
+        }
+
+        let excMsg = '';
+        if (!okExc) {
+            const detalles = excesos.map(e =>
+                `Pallet ${e.i} (${e.ubicacion}): pide ${e.cantidad} ud., disponible ${e.disponible} ud.`
+            ).join(' · ');
+            excMsg = `<div style="color:var(--danger);font-weight:600;margin-top:2px">⚠ ${detalles}</div>`;
+        }
+
+        sumEl.innerHTML = `Suma pallets: <strong>${sum}</strong> / Cantidad total: <strong>${totalQty}</strong>${okAll ? ' ✓' : ''}${bultosExtra}${diffMsg}${excMsg}`;
     }
 }
 
@@ -5793,7 +5854,9 @@ function addItemToDoc() {
             const palQty  = parseFloat(document.getElementById(`mi-pal-qty-${i}`)?.value) || 0;
             const palUbic = (document.getElementById(`mi-pal-ubic-${i}`)?.value || '').trim();
             if (!palQty || palQty <= 0) { showFormError('mi-err', `Pallet ${i}: ingrese la cantidad de unidades.`); return; }
-            if ((tipo === 'Entrada' || tipo === 'Devolución') && !palUbic) { showFormError('mi-err', `Pallet ${i}: la ubicación es obligatoria.`); return; }
+            if ((tipo === 'Entrada' || tipo === 'Devolución' || tipo === 'Salida') && !palUbic) {
+                showFormError('mi-err', `Pallet ${i}: seleccione la ubicación${tipo === 'Salida' ? ' de origen' : ''}.`); return;
+            }
             sumPal += palQty;
             palletItems.push({ palQty, palUbic });
         }
