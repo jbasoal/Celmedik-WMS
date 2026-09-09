@@ -1,0 +1,755 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Beta · Multi-lote en Salidas · Celmedik WMS</title>
+<meta name="robots" content="noindex,nofollow">
+<style>
+:root {
+  --bg: #f5f7fa;
+  --bg2: #ffffff;
+  --bg3: #eef2f6;
+  --text: #1d2d3e;
+  --text2: #445566;
+  --text3: #778899;
+  --accent: #0854a0;
+  --accent2: #1976d2;
+  --success: #2e7d32;
+  --warn: #ed6c02;
+  --danger: #c62828;
+  --border: #d5dde5;
+  --border-strong: #b0bcc9;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 24px 20px 80px; }
+.badge-beta {
+  display: inline-block; background: var(--warn); color: white; font-size: 10px; font-weight: 700;
+  letter-spacing: 1px; padding: 3px 8px; border-radius: 3px; text-transform: uppercase; vertical-align: middle;
+}
+h1 { font-size: 22px; margin: 0 0 4px; }
+h2 { font-size: 17px; margin: 22px 0 10px; color: var(--accent); }
+h3 { font-size: 14px; margin: 14px 0 8px; text-transform: uppercase; letter-spacing: .5px; color: var(--text2); }
+.subtitle { color: var(--text2); margin-bottom: 24px; font-size: 13px; }
+.notice {
+  background: #fff8e1; border: 1px solid #ffe082; color: #6b4d00;
+  padding: 10px 14px; border-radius: 6px; font-size: 13px; margin-bottom: 24px;
+}
+.card {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 8px;
+  padding: 18px 20px; margin-bottom: 18px;
+}
+.card.rec { border-left: 4px solid var(--success); }
+.tag {
+  display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 7px;
+  border-radius: 3px; letter-spacing: .5px; text-transform: uppercase; vertical-align: middle;
+}
+.tag-success { background: #e6f4ea; color: var(--success); }
+.tag-warn    { background: #fff3e0; color: var(--warn); }
+.tag-danger  { background: #fdecea; color: var(--danger); }
+.tag-info    { background: #e3f2fd; color: var(--accent); }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+@media (max-width: 800px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+.pro-con { font-size: 13px; }
+.pro-con .pros { color: var(--success); }
+.pro-con .cons { color: var(--danger); }
+.pro-con li { margin: 4px 0; }
+.tabs {
+  display: flex; border-bottom: 2px solid var(--border); margin-bottom: 18px; gap: 4px;
+}
+.tab {
+  padding: 10px 16px; cursor: pointer; font-size: 13px; font-weight: 600;
+  border-radius: 6px 6px 0 0; color: var(--text2); background: transparent;
+  border: none; border-bottom: 2px solid transparent; margin-bottom: -2px;
+}
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); background: var(--bg2); }
+.tab:hover:not(.active) { background: var(--bg3); }
+.panel { display: none; }
+.panel.active { display: block; }
+
+/* Mockup UI */
+.mockup {
+  background: #fafbfc; border: 1px dashed var(--border-strong); border-radius: 8px;
+  padding: 18px; margin-top: 14px;
+}
+.mockup-title {
+  font-size: 11px; font-weight: 700; letter-spacing: 1px; color: var(--text3);
+  text-transform: uppercase; margin-bottom: 12px;
+}
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+.form-row.full { grid-template-columns: 1fr; }
+.form-group label { display: block; font-size: 11px; color: var(--text2); font-weight: 600; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px; }
+.form-input, .form-select {
+  width: 100%; padding: 8px 10px; font-size: 13px; border: 1px solid var(--border);
+  border-radius: 6px; background: white; color: var(--text);
+}
+.form-input:focus, .form-select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(8,84,160,.15); }
+.btn {
+  display: inline-block; padding: 8px 14px; font-size: 13px; font-weight: 600;
+  border-radius: 6px; border: 1px solid transparent; cursor: pointer; background: var(--accent2); color: white;
+}
+.btn:hover { background: var(--accent); }
+.btn-sm { padding: 5px 10px; font-size: 12px; }
+.btn-ghost { background: transparent; color: var(--accent); border-color: var(--border-strong); }
+.btn-ghost:hover { background: var(--bg3); }
+.btn-success { background: var(--success); }
+.btn-warn { background: var(--warn); }
+
+/* Lote card */
+.lote-card {
+  background: white; border: 1px solid var(--border); border-radius: 6px;
+  padding: 10px 12px; margin-bottom: 8px; cursor: pointer;
+}
+.lote-card.sel { border-color: var(--accent2); background: #f2f8ff; box-shadow: 0 0 0 2px rgba(25,118,210,.2); }
+.lote-card.insuf { border-left: 3px solid var(--warn); }
+.lote-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 5px; }
+.lote-num { font-weight: 700; font-size: 14px; }
+.lote-meta { font-size: 12px; color: var(--text2); }
+.ubic-chip {
+  display: inline-block; background: #f0f4f8; color: var(--text2); font-size: 11px;
+  padding: 2px 7px; border-radius: 3px; margin-right: 4px;
+}
+.ubic-chip.pin::before { content: "📍 "; }
+
+/* Distribución tabla */
+.dist-tbl { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+.dist-tbl th, .dist-tbl td { padding: 7px 8px; text-align: left; border-bottom: 1px solid var(--border); }
+.dist-tbl th { background: var(--bg3); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: .3px; color: var(--text2); }
+.dist-tbl input[type=number] { width: 90px; padding: 4px 6px; font-size: 12px; border: 1px solid var(--border); border-radius: 4px; text-align: right; }
+.dist-tbl .qty-bultos { font-weight: 700; color: var(--text2); text-align: center; }
+.dist-tbl tr.exceso td { background: #fdecea; }
+.dist-tbl tfoot td { font-weight: 700; background: var(--bg3); }
+
+/* Alert banner */
+.alert {
+  padding: 10px 12px; border-radius: 6px; font-size: 13px; margin: 10px 0;
+  display: flex; gap: 10px; align-items: flex-start;
+}
+.alert-warn { background: #fff8e1; border: 1px solid #ffe082; color: #6b4d00; }
+.alert-danger { background: #fdecea; border: 1px solid #f4b0a8; color: #722; }
+.alert-info { background: #e3f2fd; border: 1px solid #bbdefb; color: #0d47a1; }
+.alert-success { background: #e8f5e9; border: 1px solid #a5d6a7; color: #1b5e20; }
+.alert-icon { font-size: 16px; line-height: 1.2; }
+
+.mini-lote-tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+.mini-lote-tbl th, .mini-lote-tbl td { padding: 6px 8px; border-bottom: 1px solid var(--border); }
+.mini-lote-tbl th { text-align: left; color: var(--text2); font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: .3px; background: var(--bg3); }
+.mini-lote-tbl input[type=number] { width: 70px; padding: 3px 5px; font-size: 12px; border: 1px solid var(--border); border-radius: 4px; text-align: right; }
+.mini-lote-tbl input[type=checkbox] { transform: scale(1.15); cursor: pointer; }
+.mini-lote-tbl tr.fefo-first td:first-child::after { content: " ✓ FEFO"; font-size: 9px; color: var(--success); font-weight: 700; margin-left: 4px; }
+.mini-lote-tbl tr.disabled { opacity: .55; }
+
+.step {
+  display: inline-block; background: var(--accent); color: white; width: 22px; height: 22px;
+  border-radius: 50%; text-align: center; font-weight: 700; font-size: 12px; line-height: 22px;
+  margin-right: 8px;
+}
+.step-title { font-weight: 700; margin: 14px 0 6px; font-size: 14px; }
+
+.kbd { background: var(--bg3); border: 1px solid var(--border); border-bottom-width: 2px; padding: 1px 5px; border-radius: 3px; font-size: 11px; font-family: ui-monospace, "SF Mono", Consolas, monospace; }
+.legend { font-size: 11px; color: var(--text3); margin-top: 6px; }
+.compare-tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+.compare-tbl th, .compare-tbl td { padding: 8px 10px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
+.compare-tbl th { background: var(--bg3); font-size: 11px; text-transform: uppercase; letter-spacing: .3px; }
+.compare-tbl td.check { text-align: center; font-size: 15px; }
+.check-yes { color: var(--success); font-weight: 700; }
+.check-no { color: var(--danger); font-weight: 700; }
+.check-mid { color: var(--warn); font-weight: 700; }
+
+/* Recap fila */
+.recap {
+  display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px;
+  background: var(--bg3); border-radius: 6px; margin-top: 10px; font-size: 13px;
+}
+.recap.ok { background: #e8f5e9; color: #1b5e20; }
+.recap.fail { background: #fdecea; color: #722; }
+.recap strong { font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div>
+    <span class="badge-beta">Beta preview</span>
+    <span style="margin-left: 8px; font-size: 11px; color: var(--text3);">No modifica la app en producción · datos simulados</span>
+  </div>
+  <h1>Multi-lote en Salidas</h1>
+  <p class="subtitle">
+    Cuando un lote no alcanza para cubrir la cantidad pedida de un SKU, permitir completar el faltante con otros lotes del mismo SKU dentro de la misma línea de salida — respetando FEFO y sin fragmentar el pedido en múltiples documentos.
+  </p>
+
+  <div class="notice">
+    <strong>Escenario simulado</strong> — Reproduce tu caso real: SKU <strong>A-003</strong> (SANOPLEX A-354 CONCENTRADO ACIDO), cantidad requerida <strong>256 uds</strong>. Lotes disponibles:
+    <ul style="margin: 6px 0 0 20px; padding: 0;">
+      <li>Lote <strong>04380826</strong> — 36 uds (B-33) · vence 31-08-2028 · <em>FEFO</em></li>
+      <li>Lote <strong>04420926</strong> — 244 uds (B-45:32, B-49:144, B-51:68) · vence 01-09-2028</li>
+      <li>Lote <strong>04430826</strong> — 512 uds en 6 ubicaciones · vence 04-09-2028</li>
+    </ul>
+  </div>
+
+  <h2>3 opciones de diseño</h2>
+  <div class="grid-3">
+    <div class="card rec">
+      <div style="margin-bottom: 8px;">
+        <span class="tag tag-success">Recomendada</span>
+        <span class="tag tag-info">Opción A</span>
+      </div>
+      <h3 style="margin-top: 0;">Multi-lote manual</h3>
+      <p style="font-size: 13px; margin: 6px 0;">
+        Tabla con todos los lotes del SKU (ordenados FEFO). El usuario tilda los que quiere usar y para cada uno indica cuánto tomar. Al agregar producto, se generan varios ítems internos (uno por lote+ubicación).
+      </p>
+      <div class="pro-con">
+        <strong>Ventajas:</strong>
+        <ul class="pros" style="margin: 4px 0; padding-left: 18px;">
+          <li>Un solo flujo, transparente</li>
+          <li>Máximo control sobre qué lotes se usan</li>
+          <li>Auditoría clara del despacho fraccionado</li>
+        </ul>
+        <strong>Desventajas:</strong>
+        <ul class="cons" style="margin: 4px 0; padding-left: 18px;">
+          <li>Cambio visible del formulario (más campos)</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="margin-bottom: 8px;">
+        <span class="tag tag-info">Opción B</span>
+      </div>
+      <h3 style="margin-top: 0;">Auto-completar FEFO</h3>
+      <p style="font-size: 13px; margin: 6px 0;">
+        Se mantiene el flujo actual. Al detectar déficit, aparece un botón "Auto-completar FEFO" que reparte el faltante entre los lotes siguientes automáticamente. El usuario solo aprueba.
+      </p>
+      <div class="pro-con">
+        <strong>Ventajas:</strong>
+        <ul class="pros" style="margin: 4px 0; padding-left: 18px;">
+          <li>Cambio mínimo del UI actual</li>
+          <li>FEFO garantizado automáticamente</li>
+          <li>Cero fricción para el operador</li>
+        </ul>
+        <strong>Desventajas:</strong>
+        <ul class="cons" style="margin: 4px 0; padding-left: 18px;">
+          <li>Menos control fino sobre lotes</li>
+          <li>Si hay razones para no usar el lote FEFO (defecto, cliente pide un lote específico), requiere revertir</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="margin-bottom: 8px;">
+        <span class="tag tag-info">Opción C</span>
+      </div>
+      <h3 style="margin-top: 0;">Cascada progresiva</h3>
+      <p style="font-size: 13px; margin: 6px 0;">
+        Al detectar déficit, sistema pregunta: "¿Tomar los N faltantes del próximo lote FEFO (XYZ)?". Un click y agrega la segunda línea. Repite hasta cubrir. Un lote a la vez.
+      </p>
+      <div class="pro-con">
+        <strong>Ventajas:</strong>
+        <ul class="pros" style="margin: 4px 0; padding-left: 18px;">
+          <li>Decisión granular en cada paso</li>
+          <li>Muy poco cambio de UI</li>
+        </ul>
+        <strong>Desventajas:</strong>
+        <ul class="cons" style="margin: 4px 0; padding-left: 18px;">
+          <li>Muchos clicks si se necesitan 3+ lotes</li>
+          <li>El operador ve el faltante recién después de la primera selección</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <h2>Comparativa rápida</h2>
+  <table class="compare-tbl">
+    <thead>
+      <tr>
+        <th>Criterio</th>
+        <th>A · Multi-lote manual</th>
+        <th>B · Auto FEFO</th>
+        <th>C · Cascada</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Cumple FEFO</td>
+        <td class="check"><span class="check-yes">✓</span> Sugerido y editable</td>
+        <td class="check"><span class="check-yes">✓</span> Forzado</td>
+        <td class="check"><span class="check-yes">✓</span> Sugerido por paso</td>
+      </tr>
+      <tr>
+        <td>Control operador</td>
+        <td class="check"><span class="check-yes">Alto</span></td>
+        <td class="check"><span class="check-no">Bajo</span></td>
+        <td class="check"><span class="check-mid">Medio</span></td>
+      </tr>
+      <tr>
+        <td>Clicks para 3 lotes</td>
+        <td class="check">3 tildes + 3 cantidades</td>
+        <td class="check">1 click</td>
+        <td class="check">3 confirmaciones</td>
+      </tr>
+      <tr>
+        <td>Cambio de UI</td>
+        <td class="check"><span class="check-mid">Moderado</span></td>
+        <td class="check"><span class="check-yes">Mínimo</span></td>
+        <td class="check"><span class="check-yes">Mínimo</span></td>
+      </tr>
+      <tr>
+        <td>Genera PDF con múltiples lotes por SKU</td>
+        <td class="check"><span class="check-yes">Sí</span> — orden manual</td>
+        <td class="check"><span class="check-yes">Sí</span> — orden FEFO</td>
+        <td class="check"><span class="check-yes">Sí</span> — orden de captura</td>
+      </tr>
+      <tr>
+        <td>Complejidad de implementación</td>
+        <td class="check"><span class="check-mid">~4-6h</span></td>
+        <td class="check"><span class="check-yes">~2-3h</span></td>
+        <td class="check"><span class="check-yes">~2-3h</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Mockup interactivo</h2>
+  <div class="tabs">
+    <button class="tab active" data-tab="A">Opción A · Multi-lote manual</button>
+    <button class="tab" data-tab="B">Opción B · Auto FEFO</button>
+    <button class="tab" data-tab="C">Opción C · Cascada</button>
+  </div>
+
+  <!-- ══════════════════════════════════════════════ OPCIÓN A ══════ -->
+  <div class="panel active" id="panel-A">
+    <div class="card">
+      <div class="step-title"><span class="step">1</span> Selecciona SKU y cantidad requerida</div>
+
+      <div class="mockup">
+        <div class="mockup-title">Agregar producto al documento</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>SKU *</label>
+            <input class="form-input" value="A-003" readonly>
+          </div>
+          <div class="form-group">
+            <label>Descripción</label>
+            <input class="form-input" value="SANOPLEX A-354 CONCENTRADO ACIDO" readonly>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Cantidad total requerida *</label>
+            <input class="form-input" id="qtyReqA" type="number" value="256" oninput="renderA()">
+          </div>
+          <div class="form-group">
+            <label>Modo de asignación</label>
+            <select class="form-select" id="modoA" onchange="renderA()">
+              <option value="fefo" selected>FEFO — sugerir lote más antiguo primero</option>
+              <option value="manual">Manual — el operador elige</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="step-title" style="margin-top: 18px;"><span class="step">2</span> Selecciona uno o varios lotes hasta cubrir la cantidad</div>
+        <p class="legend">Tilda los lotes a usar. Al tildar, la cantidad sugerida FEFO se auto-completa; puedes editarla o distribuir por ubicación.</p>
+
+        <div id="loteListA"></div>
+
+        <div id="recapA" class="recap"></div>
+
+        <div class="step-title" style="margin-top: 18px;"><span class="step">3</span> Distribución por pallet (todos los lotes usados)</div>
+        <div id="distA"></div>
+
+        <div style="margin-top: 14px; display: flex; gap: 8px;">
+          <button class="btn" onclick="onAddA()">+ Agregar producto (multi-lote)</button>
+          <button class="btn btn-ghost" onclick="resetA()">Limpiar</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0">Impacto en el PDF de salida</h3>
+      <p style="font-size:13px; margin: 6px 0;">
+        En el PDF principal aparece una línea consolidada por lote (SKU repetido con lote y cantidad de cada uno). En el PDF <em>Detalle por Ubicación</em>, cada pallet/ubicación es una línea con la columna <strong>Bultos</strong> ya calculada por su presentación efectiva (3 o 4 uds por lote).
+      </p>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════ OPCIÓN B ══════ -->
+  <div class="panel" id="panel-B">
+    <div class="card">
+      <div class="step-title"><span class="step">1</span> Selecciona un lote (flujo actual)</div>
+      <div class="mockup">
+        <div class="mockup-title">Agregar producto al documento</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>SKU *</label>
+            <input class="form-input" value="A-003" readonly>
+          </div>
+          <div class="form-group">
+            <label>Cantidad *</label>
+            <input class="form-input" value="256" readonly>
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label>Lote *</label>
+          <div class="lote-card sel insuf">
+            <div class="lote-head">
+              <span class="lote-num">04420926</span>
+              <span class="lote-meta">Vence 01-09-2028 · 244 ud. disponibles</span>
+            </div>
+            <div>
+              <span class="ubic-chip pin">B-45: 32</span>
+              <span class="ubic-chip pin">B-49: 144</span>
+              <span class="ubic-chip pin">B-51: 68</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="alert alert-warn">
+          <span class="alert-icon">⚠</span>
+          <div>
+            <strong>Faltan 12 uds.</strong> El lote 04420926 tiene 244 uds. y se necesitan 256.
+            <div style="margin-top: 6px;">
+              <button class="btn btn-sm btn-success" onclick="fefoAutoB()">✨ Auto-completar FEFO</button>
+              <button class="btn btn-sm btn-ghost" onclick="revertB()">Revertir</button>
+              <span style="font-size: 11px; color: var(--text3); margin-left: 8px;">Tomará 12 uds. del lote más antiguo siguiente: <strong>04380826</strong> (B-33)</span>
+            </div>
+          </div>
+        </div>
+
+        <div id="distB"></div>
+
+        <div style="margin-top: 14px;">
+          <button class="btn">+ Agregar producto</button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">Detalle</h3>
+      <p style="font-size:13px; margin: 6px 0;">
+        Al presionar <strong>Auto-completar FEFO</strong> el sistema añade un renglón adicional al mismo ítem con el lote 04380826, 12 uds, ubicación B-33. Se conserva la agrupación del documento y el pallet respectivo. El operador puede eliminar la sugerencia si prefiere manual.
+      </p>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════ OPCIÓN C ══════ -->
+  <div class="panel" id="panel-C">
+    <div class="card">
+      <div class="step-title"><span class="step">1</span> Selecciona lote y cantidad (flujo actual)</div>
+      <div class="mockup">
+        <div class="mockup-title">Agregar producto al documento</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>SKU *</label>
+            <input class="form-input" value="A-003" readonly>
+          </div>
+          <div class="form-group">
+            <label>Cantidad *</label>
+            <input class="form-input" value="256" readonly>
+          </div>
+        </div>
+
+        <div class="alert alert-info">
+          <span class="alert-icon">ℹ</span>
+          <div>
+            Se seleccionó lote <strong>04420926</strong> — 244 uds. disponibles.
+            <div style="margin-top: 8px; padding: 10px; background: white; border-radius: 5px; border: 1px solid #bbdefb;">
+              <strong>Faltan 12 uds.</strong> ¿Tomar del próximo lote FEFO?
+              <div style="margin-top: 6px; font-size: 12px; color: var(--text2);">
+                Sugerido: <strong>04380826</strong> · B-33 · 36 uds disponibles · vence 31-08-2028
+              </div>
+              <div style="margin-top: 8px; display: flex; gap: 6px;">
+                <button class="btn btn-sm btn-success" onclick="alert('Simulación: se agrega renglón con 12 uds del lote 04380826.')">✓ Sí, tomar 12 uds</button>
+                <button class="btn btn-sm btn-ghost">Cambiar lote</button>
+                <button class="btn btn-sm btn-ghost">Cancelar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <p style="font-size: 12px; color: var(--text3); font-style: italic;">
+          Si un lote no basta para cubrir el faltante, se pregunta por el siguiente. Se puede repetir hasta cubrir el total.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <h2>Aspectos técnicos comunes a las 3 opciones</h2>
+  <div class="grid-2">
+    <div class="card">
+      <h3 style="margin-top: 0;">Estructura interna</h3>
+      <p style="font-size: 13px;">
+        Al agregar un producto, se generan múltiples entradas en <code>movDocItems</code> (una por lote+ubicación). El descuento de stock, la trazabilidad y el registro en <code>movimientos</code> ya soportan esto — no hay cambio de esquema en Firestore.
+      </p>
+    </div>
+    <div class="card">
+      <h3 style="margin-top: 0;">Bultos y presentación efectiva</h3>
+      <p style="font-size: 13px;">
+        Cada renglón usa <code>_presentacionEfectiva(sku, lote, prod)</code> ya existente (3 o 4 uds por bulto según lote). Lotes anteriores a 04270826 quedan como <strong>CAJA X 3 UDS</strong> y desde ese lote como <strong>Paquete x 4 uds</strong>, incluso mezclados en el mismo despacho.
+      </p>
+    </div>
+    <div class="card">
+      <h3 style="margin-top: 0;">Alerta FEFO</h3>
+      <p style="font-size: 13px;">
+        Si el operador salta un lote más antiguo (ej. usa 04420926 antes que 04380826), el aviso FEFO existente sigue funcionando: <em>"El lote 04380826 vence antes y debería despacharse primero según BPA NT147"</em>. En Opción A, además, el checkbox del lote FEFO viene pre-tildado.
+      </p>
+    </div>
+    <div class="card">
+      <h3 style="margin-top: 0;">Migración</h3>
+      <p style="font-size: 13px;">
+        Ninguna. Los movimientos históricos ya soportan varios ítems del mismo SKU con lotes distintos (Kardex los agrupa por SKU y también por lote). El único ajuste es en la UI de <em>captura</em> del nuevo movimiento y en la validación al submit.
+      </p>
+    </div>
+  </div>
+
+  <div class="card" style="border-left: 4px solid var(--accent); margin-top: 20px;">
+    <h3 style="margin-top:0">Recomendación</h3>
+    <p style="font-size: 13px; margin: 6px 0;">
+      <strong>Opción A (Multi-lote manual)</strong> — es la más limpia normativa y auditablemente, y el sobrecosto de UI se paga solo (el operador ve todo el reparto en una vista, sin sorpresas). El pre-tildado FEFO reduce a un click el caso normal, y deja al operador libre para intervenir cuando hay razones válidas (cliente pide lote, un lote está reservado, etc.).
+    </p>
+    <p style="font-size: 13px; margin: 6px 0;">
+      Si prefieres un impacto de UI aún menor: <strong>Opción B</strong> (botón Auto-completar) es el mejor segundo lugar y se puede evolucionar a A más adelante.
+    </p>
+  </div>
+
+  <p style="text-align: center; font-size: 11px; color: var(--text3); margin-top: 30px;">
+    Preview generado para revisión. Datos simulados. La app en producción no ha sido modificada.
+  </p>
+
+</div>
+
+<script>
+// ═══════════════ DATOS SIMULADOS ═══════════════
+const LOTES = [
+  { lote: '04380826', vence: '2028-08-31', total: 36,  ubics: [ {u:'B-33', c:36} ],  presentacion: 'CAJA X 3 UDS',   udsBulto: 3 },
+  { lote: '04420926', vence: '2028-09-01', total: 244, ubics: [ {u:'B-45', c:32}, {u:'B-49', c:144}, {u:'B-51', c:68} ], presentacion: 'Paquete x 4 uds', udsBulto: 4 },
+  { lote: '04430826', vence: '2028-09-04', total: 512, ubics: [
+      {u:'C-01', c:120}, {u:'C-02', c:120}, {u:'C-03', c:120}, {u:'C-04', c:80}, {u:'C-05', c:60}, {u:'C-06', c:12}
+    ], presentacion: 'Paquete x 4 uds', udsBulto: 4 }
+];
+
+// Estado UI opción A: { [lote]: { checked, qty, distByUbic: {ubic: qty} } }
+const stateA = {};
+LOTES.forEach(l => stateA[l.lote] = { checked: false, qty: 0, distByUbic: {} });
+
+// ═══════════════ TABS ═══════════════
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+  document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(x => x.classList.remove('active'));
+  t.classList.add('active');
+  document.getElementById('panel-' + t.dataset.tab).classList.add('active');
+}));
+
+// ═══════════════ OPCIÓN A ═══════════════
+function fmtDate(iso) {
+  const d = new Date(iso + 'T00:00');
+  return d.toLocaleDateString('es-CL');
+}
+function fmtBultos(qty, uds) {
+  if (!uds || !qty) return '';
+  const b = qty / uds;
+  return (Math.abs(b - Math.round(b)) < 1e-9) ? String(Math.round(b)) : b.toFixed(2);
+}
+// Distribuye qty entre ubicaciones (FEFO ya prefija orden, aquí solo distribuye por ubic más grande primero).
+function distribuirEnUbics(qty, ubics) {
+  const sorted = ubics.slice().sort((a,b) => b.c - a.c);
+  const out = {};
+  let rem = qty;
+  for (const u of sorted) {
+    if (rem <= 0) break;
+    const take = Math.min(u.c, rem);
+    out[u.u] = take;
+    rem -= take;
+  }
+  return out;
+}
+function autoFillFEFOA() {
+  const qtyReq = parseInt(document.getElementById('qtyReqA').value) || 0;
+  let rem = qtyReq;
+  LOTES.forEach(l => { stateA[l.lote].checked = false; stateA[l.lote].qty = 0; stateA[l.lote].distByUbic = {}; });
+  for (const l of LOTES) {
+    if (rem <= 0) break;
+    const take = Math.min(l.total, rem);
+    stateA[l.lote].checked = true;
+    stateA[l.lote].qty = take;
+    stateA[l.lote].distByUbic = distribuirEnUbics(take, l.ubics);
+    rem -= take;
+  }
+}
+function renderA() {
+  const modo = document.getElementById('modoA').value;
+  if (modo === 'fefo') autoFillFEFOA();
+
+  const listEl = document.getElementById('loteListA');
+  listEl.innerHTML = LOTES.map((l, idx) => {
+    const s = stateA[l.lote];
+    const first = idx === 0;
+    const ubicChips = l.ubics.map(u => `<span class="ubic-chip pin">${u.u}: ${u.c}</span>`).join(' ');
+    return `
+      <div class="lote-card${s.checked ? ' sel' : ''}${first ? ' fefo' : ''}" style="margin-bottom:6px">
+        <div class="lote-head">
+          <label style="display:flex;gap:8px;align-items:center;cursor:pointer;flex:1">
+            <input type="checkbox" ${s.checked ? 'checked' : ''} onchange="toggleLoteA('${l.lote}')">
+            <span class="lote-num">${l.lote}</span>
+            ${first ? '<span class="tag tag-success" style="margin-left:6px">FEFO</span>' : ''}
+            <span class="tag tag-info">${l.presentacion}</span>
+          </label>
+          <div style="display:flex;gap:8px;align-items:center">
+            <span class="lote-meta">Vence ${fmtDate(l.vence)} · ${l.total} ud.</span>
+            <input type="number" placeholder="Cantidad" min="0" max="${l.total}" value="${s.qty || ''}"
+              ${s.checked ? '' : 'disabled'} style="width:80px;padding:5px 7px;font-size:12px;border:1px solid var(--border);border-radius:4px;text-align:right"
+              oninput="setLoteQtyA('${l.lote}', this.value)">
+          </div>
+        </div>
+        <div style="font-size:11px">${ubicChips}</div>
+      </div>`;
+  }).join('');
+
+  // Recap
+  let sumUsado = 0;
+  LOTES.forEach(l => { if (stateA[l.lote].checked) sumUsado += (parseInt(stateA[l.lote].qty) || 0); });
+  const qtyReq = parseInt(document.getElementById('qtyReqA').value) || 0;
+  const diff = qtyReq - sumUsado;
+  const recap = document.getElementById('recapA');
+  if (diff === 0 && qtyReq > 0) {
+    recap.className = 'recap ok';
+    recap.innerHTML = `<div>Cubierto: <strong>${sumUsado}</strong> / ${qtyReq} ud. ✓</div><div>${LOTES.filter(l=>stateA[l.lote].checked).length} lote(s) usados</div>`;
+  } else if (diff > 0) {
+    recap.className = 'recap fail';
+    recap.innerHTML = `<div>Cubierto: <strong>${sumUsado}</strong> / ${qtyReq} ud.</div><div><strong>Faltan ${diff} ud.</strong></div>`;
+  } else {
+    recap.className = 'recap fail';
+    recap.innerHTML = `<div>Cubierto: <strong>${sumUsado}</strong> / ${qtyReq} ud.</div><div><strong>Sobran ${-diff} ud.</strong></div>`;
+  }
+
+  // Distribución consolidada por pallet
+  const distEl = document.getElementById('distA');
+  const rows = [];
+  LOTES.forEach(l => {
+    if (!stateA[l.lote].checked) return;
+    const dist = stateA[l.lote].distByUbic;
+    Object.keys(dist).sort().forEach(u => {
+      const q = dist[u] || 0;
+      if (q > 0) rows.push({ lote: l.lote, ubic: u, qty: q, uds: l.udsBulto, presentacion: l.presentacion });
+    });
+  });
+  if (!rows.length) {
+    distEl.innerHTML = '<p class="legend">Ningún lote seleccionado todavía.</p>';
+  } else {
+    distEl.innerHTML = `
+      <table class="dist-tbl">
+        <thead><tr><th>#</th><th>Lote</th><th>Cantidad</th><th>Bultos</th><th>Ubicación</th><th>Presentación</th></tr></thead>
+        <tbody>
+          ${rows.map((r, i) => `
+            <tr>
+              <td>${i+1}</td>
+              <td><strong>${r.lote}</strong></td>
+              <td style="text-align:right">${r.qty}</td>
+              <td class="qty-bultos">${fmtBultos(r.qty, r.uds)} <span style="color:var(--text3);font-weight:400">(×${r.uds})</span></td>
+              <td>${r.ubic}</td>
+              <td style="font-size:11px;color:var(--text2)">${r.presentacion}</td>
+            </tr>`).join('')}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="2">Total</td>
+            <td style="text-align:right">${rows.reduce((a,r)=>a+r.qty,0)}</td>
+            <td class="qty-bultos">— bultos</td>
+            <td colspan="2">${rows.length} pallet(s) físicos</td>
+          </tr>
+        </tfoot>
+      </table>`;
+  }
+}
+function toggleLoteA(lote) {
+  const s = stateA[lote];
+  s.checked = !s.checked;
+  if (s.checked) {
+    // Al tildar manual, si no hay qty asignada aún, sugerir el faltante hasta cubrir qtyReq.
+    const qtyReq = parseInt(document.getElementById('qtyReqA').value) || 0;
+    let usadoSinEste = 0;
+    LOTES.forEach(l => { if (l.lote !== lote && stateA[l.lote].checked) usadoSinEste += parseInt(stateA[l.lote].qty) || 0; });
+    const faltante = Math.max(0, qtyReq - usadoSinEste);
+    const l = LOTES.find(x => x.lote === lote);
+    const take = Math.min(l.total, faltante);
+    s.qty = take;
+    s.distByUbic = distribuirEnUbics(take, l.ubics);
+  } else {
+    s.qty = 0;
+    s.distByUbic = {};
+  }
+  renderA();
+}
+function setLoteQtyA(lote, val) {
+  const s = stateA[lote];
+  const l = LOTES.find(x => x.lote === lote);
+  const n = Math.max(0, Math.min(l.total, parseInt(val) || 0));
+  s.qty = n;
+  s.distByUbic = distribuirEnUbics(n, l.ubics);
+  renderA();
+}
+function resetA() {
+  LOTES.forEach(l => stateA[l.lote] = { checked: false, qty: 0, distByUbic: {} });
+  document.getElementById('modoA').value = 'manual';
+  renderA();
+}
+function onAddA() {
+  const qtyReq = parseInt(document.getElementById('qtyReqA').value) || 0;
+  let sum = 0;
+  const items = [];
+  LOTES.forEach(l => {
+    if (!stateA[l.lote].checked) return;
+    sum += parseInt(stateA[l.lote].qty) || 0;
+    Object.entries(stateA[l.lote].distByUbic).forEach(([u, q]) => {
+      if (q > 0) items.push(`${l.lote} · ${u} · ${q} ud. (${fmtBultos(q, l.udsBulto)} × ${l.udsBulto})`);
+    });
+  });
+  if (sum !== qtyReq) {
+    alert(`No se puede agregar: cubierto ${sum} / ${qtyReq} ud. Diferencia: ${qtyReq - sum}`);
+    return;
+  }
+  alert(`Simulación: agregando ${items.length} renglón(es) al documento:\n\n${items.join('\n')}`);
+}
+
+// ═══════════════ OPCIÓN B ═══════════════
+function renderDistB(fefoAplicado) {
+  const distB = document.getElementById('distB');
+  const rows = [
+    { lote: '04420926', qty: 144, ubic: 'B-49', uds: 4 },
+    { lote: '04420926', qty: 68,  ubic: 'B-51', uds: 4 },
+    { lote: '04420926', qty: 32,  ubic: 'B-45', uds: 4 },
+  ];
+  if (fefoAplicado) rows.push({ lote: '04380826', qty: 12, ubic: 'B-33', uds: 3, added: true });
+  distB.innerHTML = `
+    <h3>Distribución por pallet</h3>
+    <table class="dist-tbl">
+      <thead><tr><th>#</th><th>Lote</th><th>Cantidad</th><th>Bultos</th><th>Ubicación</th></tr></thead>
+      <tbody>
+        ${rows.map((r,i) => `
+          <tr${r.added ? ' style="background:#e8f5e9"' : ''}>
+            <td>${i+1}</td>
+            <td><strong>${r.lote}</strong>${r.added ? ' <span class="tag tag-success">FEFO auto</span>' : ''}</td>
+            <td style="text-align:right">${r.qty}</td>
+            <td class="qty-bultos">${fmtBultos(r.qty, r.uds)} <span style="color:var(--text3);font-weight:400">(×${r.uds})</span></td>
+            <td>${r.ubic}</td>
+          </tr>`).join('')}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="2">Total</td>
+          <td style="text-align:right">${rows.reduce((a,r)=>a+r.qty,0)}</td>
+          <td colspan="2">${fefoAplicado ? '<span style="color:var(--success)">✓ Cubre 256 ud.</span>' : '<span style="color:var(--danger)">Faltan 12 ud.</span>'}</td>
+        </tr>
+      </tfoot>
+    </table>`;
+}
+function fefoAutoB() { renderDistB(true); }
+function revertB() { renderDistB(false); }
+
+// ═══════════════ INIT ═══════════════
+document.addEventListener('DOMContentLoaded', () => {
+  renderA();
+  renderDistB(false);
+});
+</script>
+</body>
+</html>
