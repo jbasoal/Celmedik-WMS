@@ -5693,6 +5693,11 @@ function addItemToDoc() {
     // Ubicación del ítem (para Salida la tomamos del stock para mantener consistencia de clave)
     let itemUbic = miUbic;
 
+    // Palletización: si la grilla multi-pallet está activa (>1 pallet), la
+    // validación de ubicación/estado/stock se hace por-pallet más abajo. Aquí
+    // sólo evaluamos el estado del lote (Cuarentena/Rechazado/etc.) porque
+    // aplica a toda la salida sin importar el reparto por ubicación.
+    const _palletCountPreSal = parseInt(document.getElementById('mi-pallet-qty')?.value) || 1;
     if (tipo === 'Salida') {
         const stock = calcStock();
         // Filtramos por la bodega del documento — sin este filtro, un lote presente
@@ -5701,55 +5706,76 @@ function addItemToDoc() {
         // aunque la bodega correcta tuviera stock.
         const bodegaSelSal = (document.getElementById('md-bodega')?.value || '').trim();
 
-        // Bug histórico (incidente B-001 lote 04100826 SAL-2026-01004): cuando el
-        // operador no seleccionaba ubicación (select en "Seleccionar ubicación..."),
-        // el sistema hacía un find sin filtrar por cantidad > 0 y podía tomar una
-        // entrada residual de calcStock (ubicación con stock 0 tras un TRF previo),
-        // dejándola de origen y grabando la salida contra esa ubicación aunque no
-        // tuviera stock. Además validaba contra el TOTAL del lote, no contra esa
-        // ubicación puntual. Resultado: stock virtual en negativo en la ubicación
-        // vieja y stock real no descontado en las ubicaciones donde estaba el pallet.
-        // Ahora: (1) el fallback filtra por stock aprobado > 0, (2) si hay más de
-        // una candidata y el operador no eligió, se rechaza con error claro,
-        // (3) la validación de disponibilidad SIEMPRE es contra la ubicación puntual.
-        let loteStock = miUbic
-            ? Object.values(stock).find(s => s.sku === sku && s.lote === lote && (s.bodega||'') === bodegaSelSal && s.ubicacion === miUbic)
-            : null;
-        const candidatas = Object.values(stock).filter(s =>
-            s.sku === sku && s.lote === lote && (s.bodega||'') === bodegaSelSal
-            && (parseFloat(s.cantidad)||0) > 0 && getLoteStatus(s) === 'Aprobado');
-        if (!loteStock) {
-            if (candidatas.length === 0) {
-                showFormError('mi-err', `Lote ${lote} sin stock aprobado en la bodega ${bodegaSelSal || '(sin bodega)'}.`); return;
+        if (_palletCountPreSal > 1) {
+            // Multi-pallet: sólo bloqueamos por estado del lote. Cada pallet tendrá
+            // su propia ubicación validada en la rama de distribución por pallets.
+            const anyCandidato = Object.values(stock).find(s =>
+                s.sku === sku && s.lote === lote && (s.bodega||'') === bodegaSelSal
+                && (parseFloat(s.cantidad)||0) > 0);
+            if (!anyCandidato) {
+                showFormError('mi-err', `Lote ${lote} sin stock en la bodega ${bodegaSelSal || '(sin bodega)'}.`); return;
             }
-            if (candidatas.length > 1) {
-                showFormError('mi-err', 'Seleccione la ubicación de origen — el lote está en varias ubicaciones.'); return;
+            const stMulti = getLoteStatus(anyCandidato);
+            if (stMulti === 'Cuarentena') {
+                showFormError('mi-err', '🔒 Producto en CUARENTENA — No se puede despachar. Debe ser liberado o rechazado por el responsable QA antes de continuar.');
+                return;
             }
-            loteStock = candidatas[0];
-        }
+            if (stMulti === 'Rechazado' || stMulti === 'Vencido' || stMulti === 'Retiro de mercado' || stMulti === 'Falsificado') {
+                showFormError('mi-err', `⚠ Lote en estado "${stMulti}" — Solo permite salida por destrucción. Seleccione el lote en la lista para abrir el Acta de Destrucción.`);
+                return;
+            }
+            // itemUbic queda vacío; la rama multi-pallet setea la ubicación por fila.
+        } else {
+            // Bug histórico (incidente B-001 lote 04100826 SAL-2026-01004): cuando el
+            // operador no seleccionaba ubicación (select en "Seleccionar ubicación..."),
+            // el sistema hacía un find sin filtrar por cantidad > 0 y podía tomar una
+            // entrada residual de calcStock (ubicación con stock 0 tras un TRF previo),
+            // dejándola de origen y grabando la salida contra esa ubicación aunque no
+            // tuviera stock. Además validaba contra el TOTAL del lote, no contra esa
+            // ubicación puntual. Resultado: stock virtual en negativo en la ubicación
+            // vieja y stock real no descontado en las ubicaciones donde estaba el pallet.
+            // Ahora: (1) el fallback filtra por stock aprobado > 0, (2) si hay más de
+            // una candidata y el operador no eligió, se rechaza con error claro,
+            // (3) la validación de disponibilidad SIEMPRE es contra la ubicación puntual.
+            let loteStock = miUbic
+                ? Object.values(stock).find(s => s.sku === sku && s.lote === lote && (s.bodega||'') === bodegaSelSal && s.ubicacion === miUbic)
+                : null;
+            const candidatas = Object.values(stock).filter(s =>
+                s.sku === sku && s.lote === lote && (s.bodega||'') === bodegaSelSal
+                && (parseFloat(s.cantidad)||0) > 0 && getLoteStatus(s) === 'Aprobado');
+            if (!loteStock) {
+                if (candidatas.length === 0) {
+                    showFormError('mi-err', `Lote ${lote} sin stock aprobado en la bodega ${bodegaSelSal || '(sin bodega)'}.`); return;
+                }
+                if (candidatas.length > 1) {
+                    showFormError('mi-err', 'Seleccione la ubicación de origen — el lote está en varias ubicaciones.'); return;
+                }
+                loteStock = candidatas[0];
+            }
 
-        const st = getLoteStatus(loteStock);
-        itemUbic = miUbic || loteStock.ubicacion || '';
+            const st = getLoteStatus(loteStock);
+            itemUbic = miUbic || loteStock.ubicacion || '';
 
-        if (st === 'Cuarentena') {
-            showFormError('mi-err', '🔒 Producto en CUARENTENA — No se puede despachar. Debe ser liberado o rechazado por el responsable QA antes de continuar.');
-            return;
-        }
-        if (st === 'Rechazado' || st === 'Vencido' || st === 'Retiro de mercado' || st === 'Falsificado') {
-            showFormError('mi-err', `⚠ Lote en estado "${st}" — Solo permite salida por destrucción. Seleccione el lote en la lista para abrir el Acta de Destrucción.`);
-            return;
-        }
+            if (st === 'Cuarentena') {
+                showFormError('mi-err', '🔒 Producto en CUARENTENA — No se puede despachar. Debe ser liberado o rechazado por el responsable QA antes de continuar.');
+                return;
+            }
+            if (st === 'Rechazado' || st === 'Vencido' || st === 'Retiro de mercado' || st === 'Falsificado') {
+                showFormError('mi-err', `⚠ Lote en estado "${st}" — Solo permite salida por destrucción. Seleccione el lote en la lista para abrir el Acta de Destrucción.`);
+                return;
+            }
 
-        // Validación de disponibilidad contra la ubicación específica del ítem
-        // (nunca contra el total del lote — ver comentario del bug histórico arriba).
-        const enDoc = movDocItems.filter(i => i.sku === sku && i.lote === lote && i.ubicacion === itemUbic).reduce((a, i) => a + i.qty, 0);
-        const locEntry = Object.values(stock).find(s =>
-            s.sku === sku && s.lote === lote && (s.bodega||'') === bodegaSelSal
-            && s.ubicacion === itemUbic && getLoteStatus(s) === 'Aprobado');
-        const disponible = locEntry ? locEntry.cantidad : 0;
-        if (qty + enDoc > disponible) {
-            showFormError('mi-err', `Stock insuficiente en ubicación ${itemUbic || '(sin ubicación)'}: disponible aprobado ${disponible} ud., ya en documento ${enDoc}, requerido ${qty}.`);
-            return;
+            // Validación de disponibilidad contra la ubicación específica del ítem
+            // (nunca contra el total del lote — ver comentario del bug histórico arriba).
+            const enDoc = movDocItems.filter(i => i.sku === sku && i.lote === lote && i.ubicacion === itemUbic).reduce((a, i) => a + i.qty, 0);
+            const locEntry = Object.values(stock).find(s =>
+                s.sku === sku && s.lote === lote && (s.bodega||'') === bodegaSelSal
+                && s.ubicacion === itemUbic && getLoteStatus(s) === 'Aprobado');
+            const disponible = locEntry ? locEntry.cantidad : 0;
+            if (qty + enDoc > disponible) {
+                showFormError('mi-err', `Stock insuficiente en ubicación ${itemUbic || '(sin ubicación)'}: disponible aprobado ${disponible} ud., ya en documento ${enDoc}, requerido ${qty}.`);
+                return;
+            }
         }
     }
 
