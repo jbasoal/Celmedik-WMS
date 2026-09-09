@@ -5431,11 +5431,20 @@ function onMiPalletQtyChange() {
     // salvo en Salida (donde funciona como origen porque restamos stock).
     const singleOptions = (tipo === 'Salida') ? ubicOrigenOptions : ubicDestOptions;
 
+    // Columna Bultos: sólo Salida de concentrado/medicamento (presentación parseable).
+    const mostrarBultos = _distDebeMostrarBultos(tipo, sku);
+    const udsBulto = mostrarBultos ? _udsPorBulto(sku, lote, data.productos[sku]) : null;
+    const gridColsSalidaBultos = '60px 1fr 90px 2fr';
+    const gridColsSalidaSimple = '60px 1fr 2fr';
+
     let html = '<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text2);margin-bottom:8px">Distribución por pallet</div>';
     if (isCambioUbic) {
         html += '<div style="display:grid;grid-template-columns:50px 1fr 1.6fr 1.6fr;gap:8px;font-size:11px;color:var(--text3);margin-bottom:4px;font-weight:600"><span>Pallet</span><span>Cantidad</span><span>Ubicación origen</span><span>Nueva ubicación</span></div>';
+    } else if (mostrarBultos) {
+        const bultosLbl = udsBulto ? `Bultos<span style="font-weight:400;color:var(--text3)"> (x${udsBulto})</span>` : 'Bultos';
+        html += `<div style="display:grid;grid-template-columns:${gridColsSalidaBultos};gap:8px;font-size:11px;color:var(--text3);margin-bottom:4px;font-weight:600"><span>Pallet</span><span>Cantidad</span><span>${bultosLbl}</span><span>Ubicación</span></div>`;
     } else {
-        html += '<div style="display:grid;grid-template-columns:60px 1fr 2fr;gap:8px;font-size:11px;color:var(--text3);margin-bottom:4px;font-weight:600"><span>Pallet</span><span>Cantidad</span><span>Ubicación</span></div>';
+        html += `<div style="display:grid;grid-template-columns:${gridColsSalidaSimple};gap:8px;font-size:11px;color:var(--text3);margin-bottom:4px;font-weight:600"><span>Pallet</span><span>Cantidad</span><span>Ubicación</span></div>`;
     }
 
     const buildSelect = (id, opts, placeholder) => opts.length
@@ -5452,9 +5461,17 @@ function onMiPalletQtyChange() {
                 ${orig}
                 ${dest}
             </div>`;
+        } else if (mostrarBultos) {
+            const ubicCtrl = buildSelect(`mi-pal-ubic-${i}`, singleOptions, `Ubicación pallet ${i}`);
+            html += `<div style="display:grid;grid-template-columns:${gridColsSalidaBultos};gap:8px;align-items:center;margin-bottom:6px">
+                <span style="font-weight:600;color:var(--text2);text-align:center">${i}</span>
+                <input type="number" class="form-input" id="mi-pal-qty-${i}" min="0.001" step="any" placeholder="0" style="font-size:12px" oninput="_updPalletSum()">
+                <input type="text" class="form-input" id="mi-pal-bultos-${i}" readonly tabindex="-1" style="font-size:12px;background:var(--bg2);color:var(--text2);text-align:center" placeholder="—">
+                ${ubicCtrl}
+            </div>`;
         } else {
             const ubicCtrl = buildSelect(`mi-pal-ubic-${i}`, singleOptions, `Ubicación pallet ${i}`);
-            html += `<div style="display:grid;grid-template-columns:60px 1fr 2fr;gap:8px;align-items:center;margin-bottom:6px">
+            html += `<div style="display:grid;grid-template-columns:${gridColsSalidaSimple};gap:8px;align-items:center;margin-bottom:6px">
                 <span style="font-weight:600;color:var(--text2);text-align:center">${i}</span>
                 <input type="number" class="form-input" id="mi-pal-qty-${i}" min="0.001" step="any" placeholder="0" style="font-size:12px" oninput="_updPalletSum()">
                 ${ubicCtrl}
@@ -5496,9 +5513,19 @@ function onMiPalletQtyChange() {
 function _updPalletSum() {
     const palletCount = parseInt(document.getElementById('mi-pallet-qty')?.value) || 1;
     if (palletCount <= 1) return;
+
+    // Recalcular bultos por pallet si la grilla los muestra.
+    const tipo = document.getElementById('md-tipo')?.value || '';
+    const sku  = (document.getElementById('mi-sku')?.value  || '').trim().toUpperCase();
+    const lote = (document.getElementById('mi-lote')?.value || '').trim();
+    const udsBulto = _distDebeMostrarBultos(tipo, sku) ? _udsPorBulto(sku, lote, data.productos[sku]) : null;
+
     let sum = 0;
     for (let i = 1; i <= palletCount; i++) {
-        sum += parseFloat(document.getElementById(`mi-pal-qty-${i}`)?.value) || 0;
+        const palQty = parseFloat(document.getElementById(`mi-pal-qty-${i}`)?.value) || 0;
+        sum += palQty;
+        const bEl = document.getElementById(`mi-pal-bultos-${i}`);
+        if (bEl) bEl.value = udsBulto ? _fmtBultos(palQty, udsBulto) : '';
     }
     const totalQty = parseFloat(document.getElementById('mi-qty')?.value) || 0;
     const sumEl = document.getElementById('mi-pal-sum');
@@ -5506,7 +5533,12 @@ function _updPalletSum() {
         const ok = totalQty > 0 && Math.abs(sum - totalQty) < 0.0001;
         const color = ok ? 'var(--success)' : (sum > totalQty ? 'var(--danger)' : 'var(--text3)');
         sumEl.style.color = color;
-        sumEl.innerHTML = `Suma pallets: <strong>${sum}</strong> / Cantidad total: <strong>${totalQty}</strong>${ok ? ' ✓' : ''}`;
+        let extra = '';
+        if (udsBulto) {
+            const totalBultos = _fmtBultos(sum, udsBulto);
+            if (totalBultos) extra = ` · <strong>${totalBultos}</strong> bultos (x${udsBulto})`;
+        }
+        sumEl.innerHTML = `Suma pallets: <strong>${sum}</strong> / Cantidad total: <strong>${totalQty}</strong>${ok ? ' ✓' : ''}${extra}`;
     }
 }
 
@@ -6453,12 +6485,15 @@ function generatePDF(docData, opts) {
         });
         const itemsUbic = Object.values(agg).sort((a, b) =>
             a.sku.localeCompare(b.sku) || (a.lote||'').localeCompare(b.lote||'') || (a.ubicacion||'').localeCompare(b.ubicacion||''));
-        const headUbic = ['SKU', 'Descripción', 'Lote', 'Vencimiento', 'Ubicación', 'Cant.', 'U. Venta'];
+        const headUbic = ['SKU', 'Descripción', 'Lote', 'Vencimiento', 'Ubicación', 'Cant.', 'Bultos', 'U. Venta'];
         doc.autoTable({
             startY: y,
             head: [headUbic],
             body: itemsUbic.map(item => {
-                const uVenta = (data.productos && data.productos[item.sku] && data.productos[item.sku].unidadVenta) || '—';
+                const prod = data.productos && data.productos[item.sku];
+                const uVenta = (prod && prod.unidadVenta) || '—';
+                const uds = _udsPorBulto(item.sku, item.lote, prod);
+                const bultosTxt = uds ? (_fmtBultos(item.qty, uds) + ' × ' + uds) : '—';
                 return [
                     item.sku,
                     item.descripcion || '—',
@@ -6466,6 +6501,7 @@ function generatePDF(docData, opts) {
                     item.vence ? fmtDate(item.vence) : '—',
                     item.ubicacion || '—',
                     String(item.qty),
+                    bultosTxt,
                     uVenta
                 ];
             }),
@@ -6475,12 +6511,13 @@ function generatePDF(docData, opts) {
             alternateRowStyles: { fillColor: [245, 245, 245] },
             columnStyles: {
                 0: { cellWidth: 20, fontStyle: 'bold' },
-                1: { cellWidth: 50 },
-                2: { cellWidth: 24 },
-                3: { cellWidth: 22 },
-                4: { cellWidth: 34, fontStyle: 'bold' },
-                5: { cellWidth: 16, halign: 'center' },
-                6: { cellWidth: 18, halign: 'center' }
+                1: { cellWidth: 46 },
+                2: { cellWidth: 22 },
+                3: { cellWidth: 20 },
+                4: { cellWidth: 30, fontStyle: 'bold' },
+                5: { cellWidth: 14, halign: 'center' },
+                6: { cellWidth: 18, halign: 'center', fontStyle: 'bold' },
+                7: { cellWidth: 14, halign: 'center' }
             },
             margin: { left: margin, right: margin }
         });
@@ -8437,6 +8474,58 @@ function _presentacionEfectiva(sku, lote, prod) {
     const skuU = (sku || '').trim().toUpperCase();
     if (!CONCENTRADO_SKUS.has(skuU)) return prod?.presentacion || '';
     return _loteConcEsNuevaPresentacion(lote) ? CONC_PRES_NUEVA : CONC_PRES_VIEJA;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// UNIDADES POR BULTO — cálculo automático para Salidas
+// ------------------------------------------------------------------
+// Bulto = caja/paquete físico según la presentación registrada. Usado
+// para calcular cuántos bultos representan las N unidades solicitadas
+// en cada pallet de la distribución por ubicación (Salidas).
+//
+// Reglas:
+//   • Concentrado → 3 (lotes < 04270826) o 4 (lotes ≥ 04270826)
+//   • Medicamento → parsea la presentación buscando "x N" (última
+//     coincidencia). Ej: "Comprimidos 500mg x 20" → 20.
+//   • Otros → null (no aplica columna Bultos)
+function _udsPorBultoDePresentacion(presentacion) {
+    if (!presentacion) return null;
+    const matches = [...String(presentacion).matchAll(/x\s*(\d+)/gi)];
+    if (!matches.length) return null;
+    const n = parseInt(matches[matches.length - 1][1], 10);
+    return (n > 0) ? n : null;
+}
+function _udsPorBulto(sku, lote, prod) {
+    const skuU = (sku || '').trim().toUpperCase();
+    if (CONCENTRADO_SKUS.has(skuU)) {
+        return _loteConcEsNuevaPresentacion(lote) ? 4 : 3;
+    }
+    const p = prod || (data && data.productos && data.productos[skuU]);
+    if (p && p.tipo === 'Medicamento') {
+        return _udsPorBultoDePresentacion(p.presentacion);
+    }
+    return null;
+}
+// Formatea bultos: entero si divide exacto, con 2 decimales si no.
+function _fmtBultos(qty, udsBulto) {
+    const q = parseFloat(qty) || 0;
+    if (!udsBulto || udsBulto <= 0 || q <= 0) return '';
+    const b = q / udsBulto;
+    if (Math.abs(b - Math.round(b)) < 1e-9) return String(Math.round(b));
+    return b.toFixed(2);
+}
+// ¿La distribución por pallet debe mostrar la columna Bultos?
+// Sólo Salida de concentrado o de medicamento (con presentación parseable).
+function _distDebeMostrarBultos(tipo, sku) {
+    if (tipo !== 'Salida') return false;
+    const skuU = (sku || '').trim().toUpperCase();
+    if (!skuU) return false;
+    if (CONCENTRADO_SKUS.has(skuU)) return true;
+    const prod = data && data.productos && data.productos[skuU];
+    if (prod && prod.tipo === 'Medicamento') {
+        return _udsPorBultoDePresentacion(prod.presentacion) != null;
+    }
+    return false;
 }
 
 let stockCatFilters = { medicamento: false, concentrado: false, dispmed: false };
