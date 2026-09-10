@@ -9329,7 +9329,15 @@ function renderCuarentena() {
         groups[k].ubicaciones.push({ ubic: s.ubicacion||'—', qty: parseFloat(s.cantidad)||0 });
     });
     const rows = Object.values(groups).sort((a, b) => a.sku.localeCompare(b.sku));
-    if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="9">No hay lotes en cuarentena</td></tr>'; return; }
+    if (!rows.length) {
+        tb.innerHTML = '<tr class="empty-row"><td colspan="9">No hay lotes en cuarentena</td></tr>';
+        // Bug: al liberarse el ÚLTIMO lote de cuarentena, hacía return sin
+        // volver a renderizar el historial — al re-entrar a la página éste
+        // aparecía con el placeholder original ("Sin ingresos..."). Ahora
+        // el historial se refresca siempre, exista o no stock activo.
+        renderCuarentenaHistorial();
+        return;
+    }
     tb.innerHTML = rows.map(g => {
         const ubicCell = g.ubicaciones.slice().sort((a, b) => a.ubic.localeCompare(b.ubic)).map(u => `${u.ubic} (${u.qty})`).join(', ');
         const accion = _puedeCambiarCuarentena(g.sku, g.bodega)
@@ -9490,7 +9498,7 @@ function renderCuarentenaHistorial() {
     const countEl = document.getElementById('fCuarHistCount');
     if (countEl) countEl.textContent = `${rows.length} registro${rows.length === 1 ? '' : 's'}`;
 
-    if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="13">Sin ingresos a cuarentena en el período/filtro seleccionado</td></tr>'; return; }
+    if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="14">Sin ingresos a cuarentena en el período/filtro seleccionado</td></tr>'; return; }
 
     const badgeStatus = (st) => {
         const map = {
