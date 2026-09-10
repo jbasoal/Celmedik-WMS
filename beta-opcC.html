@@ -234,59 +234,66 @@ function fmtDate(iso) {
     if (!iso) return '—';
     try { return new Date(iso + 'T00:00').toLocaleDateString('es-CL'); } catch(_) { return iso; }
 }
-function statusOf(entry) {
-    // Réplica simplificada de getLoteStatus del index:
-    //   • si el lote está en cuarentena → 'Cuarentena'
-    //   • si el status del stock es Rechazado/Vencido/Falsificado/Retiro → ese estado
-    //   • por defecto 'Aprobado'
-    if (!entry) return 'Aprobado';
-    const s = (entry.status || '').trim();
-    if (['Rechazado','Vencido','Falsificado','Retiro de mercado'].includes(s)) return s;
-    // Cuarentena por clave sku|lote|bodega|ubicacion
-    const key = `${entry.sku}|${entry.lote}|${entry.bodega||''}|${entry.ubicacion||''}`;
-    if (data.cuarentena && data.cuarentena[key]) return 'Cuarentena';
-    return s || 'Aprobado';
+// Réplica exacta de getLoteStatus del index: si venció → 'Vencido';
+// sino el status persistido (o 'Aprobado' por defecto).
+function statusOf(s) {
+    if (!s) return 'Aprobado';
+    if (s.vence) {
+        const hoy = new Date(); hoy.setHours(0,0,0,0);
+        if (new Date(s.vence + 'T00:00:00') < hoy) return 'Vencido';
+    }
+    return s.status || 'Aprobado';
 }
 
-// ═══════════════ Cálculo de stock (versión FIFO por movimientos) ═══════════════
-// Reconstruye stock por sku+lote+bodega+ubicacion sumando entradas/devoluciones
-// y restando salidas/destrucciones. Basado en la lógica de calcStock del index
-// simplificada — para simulación es suficiente.
+// Réplica de calcStock del index (index.html:3901). Los movimientos son
+// filas planas con sku/lote/cantidad/bodega/ubicacion/tipo/status/vence
+// — NO tienen array items[]. Reproducimos exactamente cada tipo.
 function calcStock() {
-    const map = {};
-    const mset = data.movimientos || {};
-    // Ordenamos por fecha ascendente (algunos movs no tienen fecha, van al final)
-    const list = Object.values(mset).sort((a,b) => new Date(a.fecha||0) - new Date(b.fecha||0));
-    for (const m of list) {
-        if (!Array.isArray(m.items)) continue;
-        for (const it of m.items) {
-            const bodega = it.bodega || m.bodega || '';
-            const ubic   = it.ubicacion || '';
-            const key = `${it.sku}|${it.lote}|${bodega}|${ubic}`;
-            if (!map[key]) map[key] = {
-                sku: it.sku, lote: it.lote, bodega, ubicacion: ubic,
-                cantidad: 0, vence: it.vence || '', status: it.status || 'Aprobado'
-            };
-            const q = parseFloat(it.qty) || 0;
-            if (m.tipo === 'Entrada' || m.tipo === 'Devolución') map[key].cantidad += q;
-            else if (m.tipo === 'Salida' || m.tipo === 'Destruccion' || m.tipo === 'Destrucción') map[key].cantidad -= q;
-            else if (m.tipo === 'CambioUbicacion') {
-                // Este flujo se maneja diferente en el index; para la simulación,
-                // los CambioUbicacion se toman como ajustes ya reflejados en el stock actual.
-                // Por simplicidad: restamos del origen (ubicacionOrigen) y sumamos al destino (ubicacion).
-                const origen = it.ubicacionOrigen || '';
-                const keyOr = `${it.sku}|${it.lote}|${bodega}|${origen}`;
-                if (!map[keyOr]) map[keyOr] = { sku: it.sku, lote: it.lote, bodega, ubicacion: origen, cantidad: 0, vence: it.vence||'', status: 'Aprobado' };
-                map[keyOr].cantidad -= q;
-                map[key].cantidad += q;
-            } else if (m.tipo === 'Ajuste') {
-                // Ajuste cambia estado del stock — no altera cantidades
-                if (it.status) map[key].status = it.status;
+    const stock = {};
+    const movsList = Object.values(data.movimientos||{}).sort((a,b) => new Date(a.fecha)-new Date(b.fecha));
+    movsList.forEach(m => {
+        const key = `${m.sku}|${m.lote}|${m.bodega||''}|${m.ubicacion||''}`;
+        if (m.tipo === 'Entrada') {
+            if (!stock[key]) stock[key] = { sku:m.sku, lote:m.lote, cantidad:0, vence:m.vence, bodega:m.bodega||'', ubicacion:m.ubicacion||'', status:'Aprobado' };
+            stock[key].cantidad += parseFloat(m.cantidad)||0;
+            stock[key].status = m.status || 'Aprobado';
+        } else if (m.tipo === 'Salida' || m.tipo === 'Destrucción') {
+            if (stock[key]) stock[key].cantidad -= parseFloat(m.cantidad)||0;
+        } else if (m.tipo === 'Ajuste') {
+            if (stock[key] && stock[key].status !== 'Retiro de mercado') {
+                stock[key].status = m.status || stock[key].status;
             }
-            if (it.vence && !map[key].vence) map[key].vence = it.vence;
+        } else if (m.tipo === 'AjusteInventario') {
+            if (!stock[key]) stock[key] = { sku:m.sku, lote:m.lote, cantidad:0, vence:m.vence, bodega:m.bodega||'', ubicacion:m.ubicacion||'', status:'Aprobado' };
+            stock[key].cantidad += parseFloat(m.cantidad)||0;
+        } else if (m.tipo === 'CambioEstado') {
+            if (stock[key] && stock[key].status !== 'Retiro de mercado') {
+                stock[key].status = m.status || stock[key].status;
+            }
+        } else if (m.tipo === 'Devolución') {
+            if (!stock[key]) stock[key] = { sku:m.sku, lote:m.lote, cantidad:0, vence:m.vence||'', bodega:m.bodega||'', ubicacion:m.ubicacion||'', status: m.status || 'Aprobado' };
+            stock[key].cantidad += parseFloat(m.cantidad)||0;
+            if (m.vence && !stock[key].vence) stock[key].vence = m.vence;
+        } else if (m.tipo === 'CambioUbicacion') {
+            const qty = parseFloat(m.cantidad) || 0;
+            const keyOri = `${m.sku}|${m.lote}|${m.bodega||''}|${m.ubicacionOrigen||''}`;
+            const keyDst = `${m.sku}|${m.lote}|${m.bodega||''}|${m.ubicacion||''}`;
+            const baseStatus = (stock[keyOri] && stock[keyOri].status) || m.status || 'Aprobado';
+            const baseVence  = (stock[keyOri] && stock[keyOri].vence)  || m.vence || '';
+            if (stock[keyOri]) stock[keyOri].cantidad -= qty;
+            if (!stock[keyDst]) stock[keyDst] = { sku:m.sku, lote:m.lote, cantidad:0, vence:baseVence, bodega:m.bodega||'', ubicacion:m.ubicacion||'', status: baseStatus };
+            stock[keyDst].cantidad += qty;
         }
-    }
-    return map;
+    });
+    // Integrar devoluciones Aprobadas (del nodo devoluciones aparte)
+    Object.values(data.devoluciones||{}).forEach(d => {
+        if (d.status !== 'Aprobado') return;
+        const matchKey = Object.keys(stock).find(k => { const [s,l] = k.split('|'); return s === d.sku && l === d.lote; });
+        const key = matchKey || `${d.sku}|${d.lote}||`;
+        if (!stock[key]) stock[key] = { sku:d.sku, lote:d.lote, cantidad:0, vence:'', bodega:'', ubicacion:'', status:'Aprobado' };
+        stock[key].cantidad += parseFloat(d.cantidad)||0;
+    });
+    return stock;
 }
 
 // ═══════════════ Login / carga ═══════════════
@@ -324,14 +331,38 @@ auth.onAuthStateChanged(async (user) => {
 
 async function loadData() {
     const status = document.getElementById('loadStatus');
-    status.textContent = 'Cargando datos...';
-    const paths = ['productos', 'bodegas', 'movimientos', 'cuarentena'];
-    const results = await Promise.all(paths.map(p => db.ref(p).once('value').then(s => s.val() || {}).catch(() => ({}))));
-    data.productos   = results[0];
-    data.bodegas     = results[1];
-    data.movimientos = results[2];
-    data.cuarentena  = results[3];
-    status.textContent = `Datos cargados: ${Object.keys(data.productos).length} productos · ${Object.keys(data.bodegas).length} bodegas · ${Object.keys(data.movimientos).length} movimientos`;
+    status.textContent = 'Resolviendo perfil...';
+    const uid = auth.currentUser?.uid;
+    if (!uid) { status.textContent = 'Sin usuario autenticado.'; return; }
+
+    // Resolver rootUid como en index.html: Maestro usa su propio uid; los
+    // demás perfiles usan info.maestroUid (fallback a su propio uid).
+    let rootUid = uid;
+    let perfil  = '';
+    try {
+        const infoSnap = await db.ref(`usuarios/${uid}`).once('value');
+        const info = infoSnap.val() || {};
+        perfil  = info.perfil || '';
+        rootUid = (perfil === 'Maestro') ? uid : (info.maestroUid || uid);
+    } catch (e) {
+        status.textContent = 'No se pudo leer el perfil: ' + (e.message || e.code || e);
+        return;
+    }
+
+    status.textContent = `Cargando datos de usuarios/${rootUid.slice(0,8)}...`;
+    const paths = ['productos', 'bodegas', 'movimientos', 'cuarentena', 'devoluciones', 'ajustesMovimiento'];
+    const results = await Promise.all(paths.map(p =>
+        db.ref(`usuarios/${rootUid}/${p}`).once('value')
+          .then(s => s.val() || {})
+          .catch((err) => { console.warn('No pude leer', p, err); return {}; })
+    ));
+    data.productos        = results[0];
+    data.bodegas          = results[1];
+    data.movimientos      = results[2];
+    data.cuarentena       = results[3];
+    data.devoluciones     = results[4];
+    data.ajustesMovimiento = results[5];
+    status.textContent = `Perfil: ${perfil || '—'} · ${Object.keys(data.productos).length} productos · ${Object.keys(data.bodegas).length} bodegas · ${Object.keys(data.movimientos).length} movimientos`;
     populateBodegas();
     populateSkus();
 }
@@ -343,8 +374,8 @@ function populateBodegas() {
 }
 function populateSkus() {
     const dl = document.getElementById('skuList');
-    const arr = Object.values(data.productos)
-        .map(p => ({ sku: p.sku || '', desc: p.descripcion || '' }))
+    const arr = Object.entries(data.productos || {})
+        .map(([k, p]) => ({ sku: (p && p.sku) || k || '', desc: (p && p.descripcion) || '' }))
         .filter(p => p.sku)
         .sort((a,b) => a.sku.localeCompare(b.sku));
     dl.innerHTML = arr.map(p => `<option value="${p.sku}">${p.desc}</option>`).join('');
