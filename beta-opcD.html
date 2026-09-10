@@ -595,15 +595,15 @@ function _agregarAlPool(g, take){
 
 function _renderFaltanteDialog(g, faltante){
     const dlg=document.getElementById('faltanteDialog');
-    const gap = faltante - g.total;
+    const gap = faltante - g.total;   // seguirán faltando tras tomar todo este lote
     dlg.innerHTML=`
-        <div class="fd-title">⚠ Faltan ${gap} unidades para completar pedido</div>
+        <div class="fd-title">⚠ Faltan ${faltante} unidades para completar pedido</div>
         <div class="fd-desc">
-            El lote <strong>${g.lote}</strong> tiene <strong>${g.total}</strong> ud. disponibles, pero se necesitan <strong>${faltante}</strong> para cubrir el pedido restante.
-            <br>Puede completar el pedido con otro lote o cancelar esta selección.
+            El lote <strong>${g.lote}</strong> tiene <strong>${g.total}</strong> ud. disponibles, insuficientes para las <strong>${faltante}</strong> uds. que aún faltan del pedido.
+            <br>Si toma este lote, quedarán <strong>${gap}</strong> uds. por completar con otro lote.
         </div>
         <div class="fd-actions">
-            <button class="btn btn-success" onclick="onFaltanteContinuar()">✓ Tomar ${g.total} ud. de ${g.lote} y elegir otro lote</button>
+            <button class="btn btn-success" onclick="onFaltanteContinuar()">Seleccionar otro lote para completar (tomar ${g.total} ud. de ${g.lote})</button>
             <button class="btn btn-ghost" onclick="onFaltanteCancelar()">Cancelar selección</button>
         </div>`;
     dlg.classList.remove('hidden');
@@ -630,7 +630,7 @@ function renderPool(){
     let rowsHtml='';
     itemState.pool.forEach((p,i)=>{
         const uds=_udsPorBulto(itemState.sku,p.lote,prod);
-        const bultos=uds?`${fmtBultos(p.take,uds)} × ${uds} bultos`:'';
+        const bultos=uds?`${fmtBultos(p.take,uds)} bultos`:'';
         const ubicsTxt=p.ubics.map(u=>`${u.ubic||'(sin ubic.)'}: ${u.qty}`).join(' · ');
         rowsHtml+=`<div class="pool-row">
             <div class="lote-code">${p.lote}</div>
@@ -672,7 +672,7 @@ function renderDist(){
         html+=`<div class="dist-cell">
             <span class="pal-num">${i+1}</span>
             <input class="form-input" value="${r.qty}" readonly>
-            <input class="form-input" value="${b}${b&&uds?' × '+uds:''}" readonly>
+            <input class="form-input" value="${b}" readonly>
             <input class="form-input" value="${r.lote} · ${r.ubic||'(sin ubic.)'}" readonly>
         </div>`;
     });
@@ -700,7 +700,7 @@ function onAdd(){
         <thead><tr style="background:var(--bg3)"><th style="padding:6px;text-align:left">#</th><th style="padding:6px;text-align:left">SKU</th><th style="padding:6px;text-align:left">Lote</th><th style="padding:6px;text-align:left">Ubicación</th><th style="padding:6px;text-align:right">Cant.</th><th style="padding:6px;text-align:center">Bultos</th><th style="padding:6px;text-align:left">Vence</th></tr></thead>
         <tbody>${filas.map((f,i)=>{
             const uds=_udsPorBulto(itemState.sku,f.lote,prod);
-            const b=uds?`${fmtBultos(f.qty,uds)} × ${uds}`:'—';
+            const b=uds?fmtBultos(f.qty,uds):'—';
             return `<tr style="border-bottom:1px solid var(--border)"><td style="padding:6px">${i+1}</td><td style="padding:6px;font-weight:700">${f.sku}</td><td style="padding:6px;font-family:var(--mono)">${f.lote}</td><td style="padding:6px">${f.ubic||'—'}</td><td style="padding:6px;text-align:right">${f.qty}</td><td style="padding:6px;text-align:center;font-weight:700">${b}</td><td style="padding:6px">${fmtDate(f.vence)}</td></tr>`;
         }).join('')}</tbody>
         <tfoot><tr style="background:var(--bg3);font-weight:700"><td colspan="4" style="padding:6px">Total (${filas.length} renglones)</td><td style="padding:6px;text-align:right">${filas.reduce((a,f)=>a+f.qty,0)}</td><td colspan="2"></td></tr></tfoot>
