@@ -6878,17 +6878,26 @@ function generatePDF(docData, opts) {
     doc.setFontSize(9); doc.setFont('helvetica', 'normal');
     // Encabezado derecho: N° movimiento interno (identificador único de la
     // operación). Si no existe (movimientos históricos), se muestra el
-    // documentoId como fallback.
+    // documentoId como fallback. Cuando es la hoja "por ubicación" el número
+    // y el subtítulo "DETALLE POR UBICACIÓN" se apilan en dos líneas para
+    // evitar solaparse con el subtítulo largo del lado izquierdo.
     const encabezadoRight = docData.numeroMovimiento || docData.documentoId;
-    doc.text(porUbicacion ? `${encabezadoRight} · DETALLE POR UBICACIÓN` : encabezadoRight, pageW - margin, 17, { align: 'right' });
+    doc.text(encabezadoRight, pageW - margin, 17, { align: 'right' });
+    let _headerBottomY = 24;
+    if (porUbicacion) {
+        doc.setFontSize(8); doc.setFont('helvetica', 'bold');
+        doc.text('DETALLE POR UBICACIÓN', pageW - margin, 22, { align: 'right' });
+        doc.setFont('helvetica', 'normal');
+        _headerBottomY = 26;
+    }
 
     // Línea divisoria bajo el encabezado.
     doc.setDrawColor(180, 180, 180);
-    doc.line(margin, 24, pageW - margin, 24);
+    doc.line(margin, _headerBottomY, pageW - margin, _headerBottomY);
 
     // Info del documento
     doc.setTextColor(29, 45, 62);
-    let y = 34;
+    let y = _headerBottomY + 10;
     const col2 = pageW / 2;
     const addInfo = (label, value, x, yPos, lw) => {
         doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.text(label, x, yPos);
@@ -7145,12 +7154,14 @@ function generatePDF(docData, opts) {
 // (A-001..A-010 o B-001 — los que usan distribución por pallet/ubicación).
 function _requiereDetalleUbicacion(docData) {
     if (!docData || docData.tipo !== 'Salida') return false;
-    const bodega = (docData.bodega || '').toLowerCase();
-    if (!bodega.includes('biodial')) return false;
-    // Sólo se considera SKU "objetivo" si además tiene cantidad > 0 (evita
-    // generar la hoja adicional cuando la línea fue anulada vía Ajuste de
-    // Movimiento cantidad = 0).
-    return (docData.items || []).some(it => _palletSizeForSku(it.sku) && (parseFloat(it.qty) || 0) > 0);
+    // Se genera para Salidas de concentrado desde CUALQUIER bodega (antes
+    // sólo se generaba para Biodial). Sólo se considera SKU objetivo cuando
+    // el ítem es un concentrado y tiene cantidad > 0 (evita generar la hoja
+    // cuando la línea fue anulada vía Ajuste de Movimiento a cantidad = 0).
+    return (docData.items || []).some(it =>
+        CONCENTRADO_SKUS.has((it.sku || '').trim().toUpperCase())
+        && (parseFloat(it.qty) || 0) > 0
+    );
 }
 
 // Regenera el PDF de una operación. Se identifica por el N° de movimiento
