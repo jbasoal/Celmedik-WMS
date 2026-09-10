@@ -1,0 +1,604 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Beta · Opción C — Cascada progresiva · Celmedik WMS</title>
+<meta name="robots" content="noindex,nofollow">
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+<style>
+:root {
+  --bg: #f5f7fa; --bg2: #ffffff; --bg3: #eef2f6;
+  --text: #1d2d3e; --text2: #445566; --text3: #778899;
+  --accent: #0854a0; --accent2: #1976d2;
+  --success: #2e7d32; --warn: #ed6c02; --danger: #c62828;
+  --border: #d5dde5; --border-strong: #b0bcc9;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif; }
+.simbanner {
+  position: sticky; top: 0; z-index: 100; background: repeating-linear-gradient(45deg, #ed6c02, #ed6c02 12px, #d16000 12px, #d16000 24px);
+  color: white; text-align: center; padding: 6px 14px; font-weight: 700; font-size: 13px; letter-spacing: .5px;
+  box-shadow: 0 2px 6px rgba(0,0,0,.15);
+}
+.wrap { max-width: 980px; margin: 0 auto; padding: 22px 20px 80px; }
+h1 { font-size: 22px; margin: 0 0 4px; }
+h2 { font-size: 15px; margin: 22px 0 8px; color: var(--accent); text-transform: uppercase; letter-spacing: .5px; }
+h3 { font-size: 13px; margin: 12px 0 6px; text-transform: uppercase; letter-spacing: .4px; color: var(--text2); font-weight: 700; }
+.subtitle { color: var(--text2); font-size: 13px; margin: 4px 0 18px; }
+.card { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 18px 20px; margin-bottom: 16px; }
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+.row.full { grid-template-columns: 1fr; }
+@media (max-width: 600px) { .row { grid-template-columns: 1fr; } }
+.field label { display: block; font-size: 11px; color: var(--text2); font-weight: 700; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 4px; }
+.input, .select { width: 100%; padding: 8px 10px; font-size: 13px; border: 1px solid var(--border); border-radius: 6px; background: white; color: var(--text); }
+.input:focus, .select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(8,84,160,.15); }
+.btn { display: inline-block; padding: 8px 14px; font-size: 13px; font-weight: 600; border-radius: 6px; border: 1px solid transparent; cursor: pointer; background: var(--accent2); color: white; text-decoration: none; }
+.btn:hover { background: var(--accent); }
+.btn:disabled { background: var(--border-strong); cursor: not-allowed; }
+.btn-sm { padding: 5px 11px; font-size: 12px; }
+.btn-ghost { background: transparent; color: var(--accent); border-color: var(--border-strong); }
+.btn-ghost:hover { background: var(--bg3); }
+.btn-success { background: var(--success); }
+.btn-success:hover { background: #1b5e20; }
+.btn-warn { background: var(--warn); }
+.btn-danger { background: var(--danger); }
+.tag { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 3px; letter-spacing: .5px; text-transform: uppercase; }
+.tag-fefo { background: var(--success); color: white; }
+.tag-info { background: rgba(8,84,160,.1); color: var(--accent); }
+.tag-warn { background: #fff3e0; color: var(--warn); }
+.alert { padding: 10px 12px; border-radius: 6px; font-size: 13px; margin: 10px 0; display: flex; gap: 10px; align-items: flex-start; }
+.alert-warn { background: #fff8e1; border: 1px solid #ffe082; color: #6b4d00; }
+.alert-info { background: #e3f2fd; border: 1px solid #bbdefb; color: #0d47a1; }
+.alert-success { background: #e8f5e9; border: 1px solid #a5d6a7; color: #1b5e20; }
+.alert-danger { background: #fdecea; border: 1px solid #f4b0a8; color: #722; }
+.alert-icon { font-size: 16px; line-height: 1; }
+.step { display: inline-block; background: var(--accent); color: white; width: 22px; height: 22px; border-radius: 50%; text-align: center; font-weight: 700; font-size: 12px; line-height: 22px; margin-right: 8px; }
+.tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+.tbl th, .tbl td { padding: 7px 8px; text-align: left; border-bottom: 1px solid var(--border); }
+.tbl th { background: var(--bg3); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: .3px; color: var(--text2); }
+.tbl tfoot td { font-weight: 700; background: var(--bg3); }
+.tbl tr.added { background: #e8f5e9; }
+.ubic-chip { display: inline-block; padding: 2px 8px; background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; font-size: 11px; color: var(--text2); font-family: ui-monospace, Consolas, monospace; margin: 2px 3px 0 0; }
+.hidden { display: none !important; }
+.status { font-size: 12px; color: var(--text3); margin-top: 4px; }
+.login-wrap { max-width: 420px; margin: 60px auto; background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 24px 28px; }
+.msg { min-height: 20px; font-size: 12px; margin-top: 6px; }
+.msg.err { color: var(--danger); }
+.msg.ok  { color: var(--success); }
+.plan-json { background: #f8f9fb; border: 1px solid var(--border); border-radius: 6px; padding: 12px; font: 11px/1.5 ui-monospace, Consolas, monospace; color: var(--text2); max-height: 300px; overflow: auto; white-space: pre-wrap; }
+.stack {
+  border-left: 3px solid var(--accent); padding: 8px 12px; background: #f2f8ff;
+  border-radius: 0 6px 6px 0; margin-bottom: 8px;
+}
+.stack .stack-title { font-weight: 700; font-size: 12px; color: var(--accent); }
+.stack .stack-meta  { font-size: 11px; color: var(--text2); margin-top: 3px; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.summary-row { display: flex; justify-content: space-between; gap: 12px; padding: 8px 10px; background: var(--bg3); border-radius: 5px; font-size: 12px; margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<div class="simbanner">🧪 MODO SIMULACIÓN · Datos reales de lectura · NO persiste movimientos · Beta Opción C</div>
+
+<div class="wrap">
+  <h1>Cascada progresiva (Opción C)</h1>
+  <p class="subtitle">Simulador con stock real de tu Firebase para probar el flujo antes de decidir implementarlo. Nada de lo que hagas acá se guarda en la app.</p>
+
+  <!-- LOGIN -->
+  <div id="loginPanel" class="login-wrap">
+    <h2 style="margin-top:0;color:var(--accent)">Ingreso</h2>
+    <p style="font-size:12px;color:var(--text2)">Usa tu mismo correo y contraseña de Celmedik WMS. Sólo se usan para leer el stock.</p>
+    <div class="field" style="margin-bottom:10px">
+      <label>Correo</label>
+      <input class="input" id="li-email" type="email" autocomplete="email">
+    </div>
+    <div class="field" style="margin-bottom:10px">
+      <label>Contraseña</label>
+      <input class="input" id="li-pass" type="password" autocomplete="current-password">
+    </div>
+    <button class="btn" id="li-btn" onclick="doLogin()">Ingresar</button>
+    <div class="msg" id="li-msg"></div>
+  </div>
+
+  <!-- APP -->
+  <div id="appPanel" class="hidden">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div style="font-size:12px;color:var(--text2)">
+        Sesión: <strong id="userEmail"></strong>
+        <span id="loadStatus" style="margin-left:10px;color:var(--text3)"></span>
+      </div>
+      <button class="btn btn-sm btn-ghost" onclick="doLogout()">Cerrar sesión</button>
+    </div>
+
+    <!-- Setup -->
+    <div class="card" id="setupCard">
+      <h2 style="margin-top:0"><span class="step">1</span>Setup del despacho</h2>
+      <div class="row">
+        <div class="field">
+          <label>Bodega origen</label>
+          <select class="select" id="setBodega" onchange="resetSim()">
+            <option value="">Cargando bodegas...</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>SKU</label>
+          <input class="input" id="setSku" placeholder="Escribe el SKU" list="skuList" oninput="onSkuChange()">
+          <datalist id="skuList"></datalist>
+          <div class="status" id="setSkuDesc"></div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Cantidad requerida</label>
+          <input class="input" id="setQty" type="number" min="1" placeholder="0" oninput="resetSim()">
+          <div class="status" id="setQtyInfo"></div>
+        </div>
+        <div class="field" style="display:flex;align-items:flex-end">
+          <button class="btn" onclick="startCascade()">Iniciar cascada FEFO →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cascada -->
+    <div class="card hidden" id="cascadeCard">
+      <h2 style="margin-top:0"><span class="step">2</span>Cascada progresiva</h2>
+      <div id="cascadeStack"></div>
+      <div id="cascadePrompt"></div>
+    </div>
+
+    <!-- Plan final -->
+    <div class="card hidden" id="planCard">
+      <h2 style="margin-top:0"><span class="step">3</span>Plan de despacho generado (simulación)</h2>
+      <div id="planDetail"></div>
+      <div class="actions">
+        <button class="btn btn-success" onclick="copyPlan()">📋 Copiar plan al portapapeles</button>
+        <button class="btn btn-ghost" onclick="downloadPlanCSV()">⬇ Descargar CSV</button>
+        <button class="btn btn-ghost" onclick="resetSim(); document.getElementById('cascadeCard').classList.add('hidden'); document.getElementById('planCard').classList.add('hidden');">Simular otro</button>
+      </div>
+      <h3 style="margin-top:16px">JSON del plan (auditoría)</h3>
+      <div class="plan-json" id="planJson"></div>
+      <div class="alert alert-info" style="margin-top:12px">
+        <span class="alert-icon">ℹ</span>
+        <div>Este plan NO fue persistido en Firebase. Para grabarlo real, tendrás que confirmar la implementación en la app.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════ Firebase config (mismo proyecto) ═══════════════
+const firebaseConfig = {
+    apiKey: "AIzaSyCJ73iFZQaqCGVMZEnUA45HmSpXD_Z0oiE",
+    authDomain: "celmedik-inventario.firebaseapp.com",
+    projectId: "celmedik-inventario",
+    storageBucket: "celmedik-inventario.firebasestorage.app",
+    messagingSenderId: "1069071656431",
+    appId: "1:1069071656431:web:5ef4c84416c016a934821a",
+    databaseURL: "https://celmedik-inventario-default-rtdb.firebaseio.com"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db   = firebase.database();
+
+// ═══════════════ Datos cargados (solo lectura) ═══════════════
+let data = { productos: {}, bodegas: {}, movimientos: {}, cuarentena: {} };
+let simState = { plan: [], remaining: 0, sku: '', bodega: '', qtyReq: 0, exhausted: [] };
+
+// ═══════════════ Helpers replicados del index (versión mínima) ═══════════════
+// Concentrados
+const CONCENTRADO_SKUS_STATIC = new Set(['A-001','A-002','A-003','A-004','A-005','A-006','A-007','A-008','A-009','A-010','B-001']);
+const CONC_PRES_VIEJA = 'CAJA X 3 UDS';
+const CONC_PRES_NUEVA = 'Paquete x 4 uds';
+const CONC_PRES_CORTE = { aa: 26, mm: 8, cc: 427 };
+
+function _loteConcParse(lote) {
+    const m = /^(\d{4})(\d{2})(\d{2})$/.exec((lote || '').trim());
+    if (!m) return null;
+    return { cc: +m[1], mm: +m[2], aa: +m[3] };
+}
+function _loteConcEsNuevaPresentacion(lote) {
+    const t = _loteConcParse(lote);
+    if (!t) return false;
+    if (t.aa !== CONC_PRES_CORTE.aa) return t.aa > CONC_PRES_CORTE.aa;
+    if (t.mm !== CONC_PRES_CORTE.mm) return t.mm > CONC_PRES_CORTE.mm;
+    return t.cc >= CONC_PRES_CORTE.cc;
+}
+function _presentacionEfectiva(sku, lote, prod) {
+    const skuU = (sku || '').trim().toUpperCase();
+    if (!CONCENTRADO_SKUS_STATIC.has(skuU)) return prod?.presentacion || '';
+    return _loteConcEsNuevaPresentacion(lote) ? CONC_PRES_NUEVA : CONC_PRES_VIEJA;
+}
+function _udsPorBultoDePresentacion(presentacion) {
+    if (!presentacion) return null;
+    const matches = [...String(presentacion).matchAll(/x\s*(\d+)/gi)];
+    if (!matches.length) return null;
+    const n = parseInt(matches[matches.length - 1][1], 10);
+    return (n > 0) ? n : null;
+}
+function _udsPorBulto(sku, lote, prod) {
+    const skuU = (sku || '').trim().toUpperCase();
+    if (CONCENTRADO_SKUS_STATIC.has(skuU)) return _loteConcEsNuevaPresentacion(lote) ? 4 : 3;
+    if (prod && prod.tipo === 'Medicamento') return _udsPorBultoDePresentacion(prod.presentacion);
+    return null;
+}
+function fmtBultos(qty, uds) {
+    const q = parseFloat(qty) || 0;
+    if (!uds || uds <= 0 || q <= 0) return '';
+    const b = q / uds;
+    return (Math.abs(b - Math.round(b)) < 1e-9) ? String(Math.round(b)) : b.toFixed(2);
+}
+function fmtDate(iso) {
+    if (!iso) return '—';
+    try { return new Date(iso + 'T00:00').toLocaleDateString('es-CL'); } catch(_) { return iso; }
+}
+function statusOf(entry) {
+    // Réplica simplificada de getLoteStatus del index:
+    //   • si el lote está en cuarentena → 'Cuarentena'
+    //   • si el status del stock es Rechazado/Vencido/Falsificado/Retiro → ese estado
+    //   • por defecto 'Aprobado'
+    if (!entry) return 'Aprobado';
+    const s = (entry.status || '').trim();
+    if (['Rechazado','Vencido','Falsificado','Retiro de mercado'].includes(s)) return s;
+    // Cuarentena por clave sku|lote|bodega|ubicacion
+    const key = `${entry.sku}|${entry.lote}|${entry.bodega||''}|${entry.ubicacion||''}`;
+    if (data.cuarentena && data.cuarentena[key]) return 'Cuarentena';
+    return s || 'Aprobado';
+}
+
+// ═══════════════ Cálculo de stock (versión FIFO por movimientos) ═══════════════
+// Reconstruye stock por sku+lote+bodega+ubicacion sumando entradas/devoluciones
+// y restando salidas/destrucciones. Basado en la lógica de calcStock del index
+// simplificada — para simulación es suficiente.
+function calcStock() {
+    const map = {};
+    const mset = data.movimientos || {};
+    // Ordenamos por fecha ascendente (algunos movs no tienen fecha, van al final)
+    const list = Object.values(mset).sort((a,b) => new Date(a.fecha||0) - new Date(b.fecha||0));
+    for (const m of list) {
+        if (!Array.isArray(m.items)) continue;
+        for (const it of m.items) {
+            const bodega = it.bodega || m.bodega || '';
+            const ubic   = it.ubicacion || '';
+            const key = `${it.sku}|${it.lote}|${bodega}|${ubic}`;
+            if (!map[key]) map[key] = {
+                sku: it.sku, lote: it.lote, bodega, ubicacion: ubic,
+                cantidad: 0, vence: it.vence || '', status: it.status || 'Aprobado'
+            };
+            const q = parseFloat(it.qty) || 0;
+            if (m.tipo === 'Entrada' || m.tipo === 'Devolución') map[key].cantidad += q;
+            else if (m.tipo === 'Salida' || m.tipo === 'Destruccion' || m.tipo === 'Destrucción') map[key].cantidad -= q;
+            else if (m.tipo === 'CambioUbicacion') {
+                // Este flujo se maneja diferente en el index; para la simulación,
+                // los CambioUbicacion se toman como ajustes ya reflejados en el stock actual.
+                // Por simplicidad: restamos del origen (ubicacionOrigen) y sumamos al destino (ubicacion).
+                const origen = it.ubicacionOrigen || '';
+                const keyOr = `${it.sku}|${it.lote}|${bodega}|${origen}`;
+                if (!map[keyOr]) map[keyOr] = { sku: it.sku, lote: it.lote, bodega, ubicacion: origen, cantidad: 0, vence: it.vence||'', status: 'Aprobado' };
+                map[keyOr].cantidad -= q;
+                map[key].cantidad += q;
+            } else if (m.tipo === 'Ajuste') {
+                // Ajuste cambia estado del stock — no altera cantidades
+                if (it.status) map[key].status = it.status;
+            }
+            if (it.vence && !map[key].vence) map[key].vence = it.vence;
+        }
+    }
+    return map;
+}
+
+// ═══════════════ Login / carga ═══════════════
+async function doLogin() {
+    const email = document.getElementById('li-email').value.trim();
+    const pass  = document.getElementById('li-pass').value;
+    const msg   = document.getElementById('li-msg');
+    msg.className = 'msg'; msg.textContent = '';
+    if (!email || !pass) { msg.className='msg err'; msg.textContent='Ingresa correo y contraseña'; return; }
+    const btn = document.getElementById('li-btn'); btn.disabled = true; btn.textContent = 'Ingresando...';
+    try {
+        await auth.signInWithEmailAndPassword(email, pass);
+    } catch (e) {
+        msg.className = 'msg err';
+        msg.textContent = 'No se pudo ingresar: ' + (e.message || e.code);
+        btn.disabled = false; btn.textContent = 'Ingresar';
+    }
+}
+async function doLogout() {
+    await auth.signOut();
+    location.reload();
+}
+
+auth.onAuthStateChanged(async (user) => {
+    if (!user) {
+        document.getElementById('loginPanel').classList.remove('hidden');
+        document.getElementById('appPanel').classList.add('hidden');
+        return;
+    }
+    document.getElementById('loginPanel').classList.add('hidden');
+    document.getElementById('appPanel').classList.remove('hidden');
+    document.getElementById('userEmail').textContent = user.email;
+    await loadData();
+});
+
+async function loadData() {
+    const status = document.getElementById('loadStatus');
+    status.textContent = 'Cargando datos...';
+    const paths = ['productos', 'bodegas', 'movimientos', 'cuarentena'];
+    const results = await Promise.all(paths.map(p => db.ref(p).once('value').then(s => s.val() || {}).catch(() => ({}))));
+    data.productos   = results[0];
+    data.bodegas     = results[1];
+    data.movimientos = results[2];
+    data.cuarentena  = results[3];
+    status.textContent = `Datos cargados: ${Object.keys(data.productos).length} productos · ${Object.keys(data.bodegas).length} bodegas · ${Object.keys(data.movimientos).length} movimientos`;
+    populateBodegas();
+    populateSkus();
+}
+
+function populateBodegas() {
+    const sel = document.getElementById('setBodega');
+    const arr = Object.values(data.bodegas).map(b => b.nombre || '').filter(Boolean).sort();
+    sel.innerHTML = '<option value="">Seleccionar bodega...</option>' + arr.map(n => `<option value="${n}">${n}</option>`).join('');
+}
+function populateSkus() {
+    const dl = document.getElementById('skuList');
+    const arr = Object.values(data.productos)
+        .map(p => ({ sku: p.sku || '', desc: p.descripcion || '' }))
+        .filter(p => p.sku)
+        .sort((a,b) => a.sku.localeCompare(b.sku));
+    dl.innerHTML = arr.map(p => `<option value="${p.sku}">${p.desc}</option>`).join('');
+}
+
+// ═══════════════ Cambios en el setup ═══════════════
+function onSkuChange() {
+    const sku = document.getElementById('setSku').value.trim().toUpperCase();
+    const info = document.getElementById('setSkuDesc');
+    const infoQty = document.getElementById('setQtyInfo');
+    const p = data.productos[sku];
+    if (!p) { info.textContent = sku ? '⚠ SKU no encontrado' : ''; infoQty.textContent = ''; return; }
+    info.textContent = `${p.descripcion || ''} · ${p.tipo || ''} · Presentación: ${p.presentacion || '—'}`;
+    updateStockInfo();
+    resetSim();
+}
+function updateStockInfo() {
+    const sku = document.getElementById('setSku').value.trim().toUpperCase();
+    const bodega = document.getElementById('setBodega').value;
+    if (!sku || !bodega) { document.getElementById('setQtyInfo').textContent = ''; return; }
+    const stock = calcStock();
+    const totales = Object.values(stock)
+        .filter(s => s.sku === sku && (s.bodega||'') === bodega && s.cantidad > 0 && statusOf(s) === 'Aprobado')
+        .reduce((acc, s) => {
+            const key = s.lote;
+            if (!acc[key]) acc[key] = 0;
+            acc[key] += s.cantidad; return acc;
+        }, {});
+    const total = Object.values(totales).reduce((a,n) => a+n, 0);
+    const nLotes = Object.keys(totales).length;
+    document.getElementById('setQtyInfo').textContent = `Stock aprobado disponible: ${total} ud. en ${nLotes} lote(s).`;
+}
+
+// ═══════════════ Cascada progresiva ═══════════════
+function resetSim() {
+    simState = { plan: [], remaining: 0, sku: '', bodega: '', qtyReq: 0, exhausted: [] };
+    document.getElementById('cascadeStack').innerHTML = '';
+    document.getElementById('cascadePrompt').innerHTML = '';
+    updateStockInfo();
+}
+
+function _grupoLote(sku, bodega, excludeLotes) {
+    const stock = calcStock();
+    const grupos = {};
+    Object.values(stock).forEach(s => {
+        if (s.sku !== sku || (s.bodega||'') !== bodega) return;
+        if ((s.cantidad || 0) <= 0) return;
+        if (statusOf(s) !== 'Aprobado') return;
+        if (excludeLotes && excludeLotes.includes(s.lote)) return;
+        const g = grupos[s.lote] || (grupos[s.lote] = { lote: s.lote, vence: s.vence || '', ubics: [], total: 0 });
+        g.ubics.push({ ubic: s.ubicacion || '', cantidad: s.cantidad });
+        g.total += s.cantidad;
+        if (!g.vence && s.vence) g.vence = s.vence;
+    });
+    // Descontamos lo que ya está en el plan simulado (por lote y ubicación).
+    (simState.plan || []).forEach(p => {
+        const g = grupos[p.lote];
+        if (!g) return;
+        const u = g.ubics.find(x => x.ubic === p.ubic);
+        if (u) { u.cantidad -= p.qty; g.total -= p.qty; }
+    });
+    Object.values(grupos).forEach(g => {
+        g.ubics = g.ubics.filter(u => u.cantidad > 0)
+                         .sort((a,b) => (b.cantidad - a.cantidad) || (a.ubic||'').localeCompare(b.ubic||''));
+    });
+    return Object.values(grupos)
+        .filter(g => g.total > 0)
+        .sort((a,b) => new Date(a.vence||'9999') - new Date(b.vence||'9999') || a.lote.localeCompare(b.lote));
+}
+
+function startCascade() {
+    const sku = document.getElementById('setSku').value.trim().toUpperCase();
+    const bodega = document.getElementById('setBodega').value;
+    const qty = parseInt(document.getElementById('setQty').value) || 0;
+    if (!sku || !data.productos[sku]) { alert('SKU no válido.'); return; }
+    if (!bodega) { alert('Seleccione una bodega.'); return; }
+    if (qty <= 0) { alert('Ingrese una cantidad mayor a cero.'); return; }
+    simState = { plan: [], remaining: qty, sku, bodega, qtyReq: qty, exhausted: [] };
+    document.getElementById('cascadeCard').classList.remove('hidden');
+    document.getElementById('planCard').classList.add('hidden');
+    stepCascade();
+}
+
+// Cada paso ofrece el próximo lote FEFO disponible (excluyendo los ya
+// agotados/rechazados por el usuario). El operador puede: (a) tomar la
+// cantidad sugerida (hasta lo disponible o hasta el remaining), (b) cambiar
+// de lote, (c) cancelar la simulación.
+function stepCascade() {
+    renderStack();
+    const grupos = _grupoLote(simState.sku, simState.bodega, simState.exhausted);
+    const promptEl = document.getElementById('cascadePrompt');
+    if (simState.remaining <= 0) {
+        promptEl.innerHTML = `<div class="alert alert-success"><span class="alert-icon">✓</span><div><strong>Pedido cubierto.</strong> Se seleccionaron ${simState.plan.length} renglón(es) sumando ${simState.qtyReq} uds.</div></div>
+            <button class="btn btn-success" onclick="finishPlan()">Generar plan de despacho →</button>`;
+        return;
+    }
+    if (!grupos.length) {
+        promptEl.innerHTML = `<div class="alert alert-danger"><span class="alert-icon">⚠</span><div><strong>Sin más lotes con stock aprobado.</strong> Faltan <strong>${simState.remaining}</strong> ud. para cubrir el pedido.</div></div>
+            <div class="actions">
+                <button class="btn btn-warn" onclick="finishPlan()">Generar plan parcial (${simState.qtyReq - simState.remaining}/${simState.qtyReq} ud.)</button>
+                <button class="btn btn-ghost" onclick="resetSim()">Cancelar y reiniciar</button>
+            </div>`;
+        return;
+    }
+    const g = grupos[0];
+    const take = Math.min(g.total, simState.remaining);
+    const dias = g.vence ? Math.ceil((new Date(g.vence+'T00:00') - new Date()) / 86400000) : null;
+    const diasLbl = dias !== null ? (dias < 0 ? '<span style="color:var(--danger);font-weight:700">VENCIDO</span>' : `${dias}d`) : '—';
+    const ubicChips = g.ubics.map(u => `<span class="ubic-chip">📍 ${u.ubic || '(sin ubic.)'}: ${u.cantidad}</span>`).join(' ');
+    const prod = data.productos[simState.sku];
+    const pres = _presentacionEfectiva(simState.sku, g.lote, prod);
+    const uds  = _udsPorBulto(simState.sku, g.lote, prod);
+    const bultosLbl = uds ? `${fmtBultos(take, uds)} bultos × ${uds}` : '';
+    promptEl.innerHTML = `
+      <div class="alert alert-info">
+        <span class="alert-icon">ℹ</span>
+        <div style="flex:1">
+            <div><strong>Faltan ${simState.remaining} ud.</strong> El siguiente lote FEFO es:</div>
+            <div style="margin-top:8px;padding:10px;background:white;border:1px solid #bbdefb;border-radius:5px">
+                <div style="display:flex;gap:8px;align-items:baseline;flex-wrap:wrap">
+                    <span style="font-family:ui-monospace,Consolas,monospace;font-weight:700;font-size:14px">${g.lote}</span>
+                    <span class="tag tag-fefo">FEFO</span>
+                    ${pres ? `<span class="tag tag-info">${pres}</span>` : ''}
+                    <span style="font-size:12px;color:var(--text2);margin-left:auto">Vence ${fmtDate(g.vence)} (${diasLbl}) · <strong>${g.total}</strong> ud. disponibles</span>
+                </div>
+                <div style="margin-top:6px">${ubicChips}</div>
+                <div style="margin-top:8px;font-size:13px">
+                    Se propone tomar <strong>${take}</strong> ud. de este lote${bultosLbl ? ` (${bultosLbl})` : ''}.
+                </div>
+            </div>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-success" onclick="acceptLote()">✓ Sí, tomar ${take} ud. del lote ${g.lote}</button>
+        <button class="btn btn-ghost" onclick="skipLote()">Saltar este lote (usar el siguiente FEFO)</button>
+        <button class="btn btn-danger" onclick="resetSim()">Cancelar simulación</button>
+      </div>`;
+}
+
+function acceptLote() {
+    const grupos = _grupoLote(simState.sku, simState.bodega, simState.exhausted);
+    if (!grupos.length) return;
+    const g = grupos[0];
+    let rem = Math.min(g.total, simState.remaining);
+    // Distribuir por ubicación consumiendo primero las de mayor cantidad.
+    const ubics = g.ubics.slice().sort((a,b) => b.cantidad - a.cantidad);
+    for (const u of ubics) {
+        if (rem <= 0) break;
+        const take = Math.min(u.cantidad, rem);
+        simState.plan.push({ sku: simState.sku, lote: g.lote, ubic: u.ubic, qty: take, vence: g.vence });
+        rem -= take;
+        simState.remaining -= take;
+    }
+    stepCascade();
+}
+function skipLote() {
+    const grupos = _grupoLote(simState.sku, simState.bodega, simState.exhausted);
+    if (!grupos.length) return;
+    if (!confirm(`⚠ FEFO: estás saltando el lote más antiguo (${grupos[0].lote}). ¿Confirmar?`)) return;
+    simState.exhausted.push(grupos[0].lote);
+    stepCascade();
+}
+
+function renderStack() {
+    const el = document.getElementById('cascadeStack');
+    if (!simState.plan.length && !simState.exhausted.length) { el.innerHTML = ''; return; }
+    const items = simState.plan.map(p => {
+        const prod = data.productos[p.sku];
+        const uds = _udsPorBulto(p.sku, p.lote, prod);
+        const bultos = uds ? ` · ${fmtBultos(p.qty, uds)}×${uds} bultos` : '';
+        return `<div class="stack">
+            <div class="stack-title">✓ Lote ${p.lote} · ubicación ${p.ubic || '(sin ubic.)'}</div>
+            <div class="stack-meta">${p.qty} ud.${bultos} · vence ${fmtDate(p.vence)}</div>
+        </div>`;
+    }).join('');
+    const skipped = simState.exhausted.map(l => `<div class="stack" style="border-left-color:var(--warn);background:#fff8e1">
+        <div class="stack-title" style="color:var(--warn)">⤼ Lote ${l} — saltado por el operador</div>
+    </div>`).join('');
+    el.innerHTML = items + skipped;
+}
+
+function finishPlan() {
+    const prod = data.productos[simState.sku] || {};
+    document.getElementById('planCard').classList.remove('hidden');
+    const rows = simState.plan.map((p, i) => {
+        const uds = _udsPorBulto(p.sku, p.lote, prod);
+        const pres = _presentacionEfectiva(p.sku, p.lote, prod);
+        return { i: i+1, ...p, uds, pres, bultos: uds ? fmtBultos(p.qty, uds) : '—' };
+    });
+    const total = rows.reduce((a,r) => a + r.qty, 0);
+    let html = `<table class="tbl">
+        <thead><tr><th>#</th><th>SKU</th><th>Lote</th><th>Ubicación</th><th>Cant.</th><th>Bultos</th><th>Presentación</th><th>Vence</th></tr></thead>
+        <tbody>
+            ${rows.map(r => `<tr>
+                <td>${r.i}</td>
+                <td><strong>${r.sku}</strong></td>
+                <td>${r.lote}</td>
+                <td>${r.ubic || '—'}</td>
+                <td style="text-align:right">${r.qty}</td>
+                <td style="text-align:center;font-weight:700">${r.bultos}${r.uds ? ` <span style="color:var(--text3);font-weight:400">×${r.uds}</span>` : ''}</td>
+                <td style="font-size:11px;color:var(--text2)">${r.pres}</td>
+                <td>${fmtDate(r.vence)}</td>
+            </tr>`).join('')}
+        </tbody>
+        <tfoot><tr><td colspan="4">Total (${simState.plan.length} renglones)</td><td style="text-align:right"><strong>${total}</strong> / ${simState.qtyReq}</td><td colspan="3">${total === simState.qtyReq ? '<span style="color:var(--success)">✓ cubre el pedido</span>' : `<span style="color:var(--danger)">faltan ${simState.qtyReq - total} ud.</span>`}</td></tr></tfoot>
+      </table>
+      <div class="summary-row"><div>Descripción: <strong>${prod.descripcion || '—'}</strong></div><div>Bodega: <strong>${simState.bodega}</strong></div></div>`;
+    document.getElementById('planDetail').innerHTML = html;
+    document.getElementById('planJson').textContent = JSON.stringify({
+        modo: 'SIMULACION',
+        sku: simState.sku,
+        descripcion: prod.descripcion || '',
+        bodega: simState.bodega,
+        cantidadRequerida: simState.qtyReq,
+        cantidadCubierta: total,
+        lotesSaltados: simState.exhausted,
+        renglones: rows.map(r => ({
+            lote: r.lote, ubicacion: r.ubic, cantidad: r.qty,
+            presentacion: r.pres, bultos: r.uds ? `${r.bultos} × ${r.uds}` : null,
+            vence: r.vence
+        }))
+    }, null, 2);
+}
+
+function copyPlan() {
+    const text = document.getElementById('planJson').textContent;
+    navigator.clipboard.writeText(text).then(
+        () => alert('Plan copiado al portapapeles.'),
+        () => { const el = document.createElement('textarea'); el.value = text; document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el); alert('Plan copiado (fallback).'); }
+    );
+}
+function downloadPlanCSV() {
+    const prod = data.productos[simState.sku] || {};
+    const header = 'SKU,Descripcion,Bodega,Lote,Ubicacion,Cantidad,Bultos,Presentacion,Vence\n';
+    const csv = simState.plan.map(p => {
+        const uds = _udsPorBulto(p.sku, p.lote, prod);
+        const bultos = uds ? `${fmtBultos(p.qty, uds)} x ${uds}` : '';
+        const pres = _presentacionEfectiva(p.sku, p.lote, prod);
+        const desc = (prod.descripcion || '').replace(/,/g, ' ');
+        return [p.sku, desc, simState.bodega, p.lote, p.ubic || '', p.qty, bultos, pres, p.vence || ''].join(',');
+    }).join('\n');
+    const blob = new Blob([header + csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `plan-simulacion-${simState.sku}-${new Date().toISOString().slice(0,10)}.csv`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+// Al cambiar bodega, refresca info de stock
+document.addEventListener('DOMContentLoaded', () => {
+    const bod = document.getElementById('setBodega');
+    if (bod) bod.addEventListener('change', updateStockInfo);
+});
+</script>
+</body>
+</html>
