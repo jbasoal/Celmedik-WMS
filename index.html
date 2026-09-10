@@ -552,6 +552,23 @@
         .lote-sel-meta { font-size:11px; color:var(--text3); line-height:1.5; }
         .lote-warn-msg { font-size:11px; margin-top:3px; font-weight:500; }
         .badge-gray { background:rgba(100,100,100,0.12); color:#555; }
+        /* Multi-lote pool (Salida de concentrado) */
+        .ml-pool-card { background:#f2f8ff; border:1px solid #bbdefb; border-radius:8px; padding:10px 12px; }
+        .ml-pool-title { font-size:11px; font-weight:700; color:var(--accent); letter-spacing:.4px; text-transform:uppercase; margin-bottom:6px; }
+        .ml-pool-row { display:grid; grid-template-columns:110px 110px 1fr auto; gap:8px; align-items:center; padding:6px 0; border-bottom:1px dashed rgba(8,84,160,.15); font-size:12px; }
+        .ml-pool-row:last-of-type { border-bottom:0; }
+        .ml-pool-row .lote-code { font-family:var(--mono); font-weight:700; }
+        .ml-pool-row .rm { color:var(--danger); cursor:pointer; font-size:15px; background:none; border:0; padding:2px 6px; }
+        .ml-pool-total { padding-top:8px; border-top:1px solid rgba(8,84,160,.2); margin-top:4px; font-weight:700; display:flex; justify-content:space-between; font-size:12px; }
+        .ml-pool-total.ok { color:var(--success); }
+        .ml-pool-total.miss { color:var(--danger); }
+        /* Diálogo de faltante inline */
+        .ml-faltante-dialog { background:#fff8e1; border:1.5px solid #ffe082; border-radius:8px; padding:14px 16px; }
+        .ml-faltante-dialog .fd-title { font-weight:700; font-size:14px; color:#6b4d00; margin-bottom:6px; }
+        .ml-faltante-dialog .fd-desc { font-size:13px; color:#6b4d00; margin-bottom:10px; }
+        .ml-faltante-dialog .fd-actions { display:flex; gap:8px; flex-wrap:wrap; }
+        /* Badge insuficiente sobre tarjeta de lote */
+        .lote-insuficiente { border-left:3px solid var(--warning) !important; }
         /* Banner de nueva versión disponible */
         .app-update-banner {
             position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
@@ -2007,7 +2024,7 @@
         <div class="form-row">
             <div class="form-group">
                 <label class="form-label">Tipo <span style="color:var(--danger)">*</span></label>
-                <select class="form-select" id="md-tipo" required onchange="_refreshMiStatusField(this.value); _refreshNumMovPreview()">
+                <select class="form-select" id="md-tipo" required onchange="_refreshMiStatusField(this.value); _refreshNumMovPreview(); if (typeof _mlSync==='function') _mlSync()">
                     <option value="">Seleccionar...</option>
                     <option value="Entrada">Entrada</option>
                     <option value="Salida">Salida</option>
@@ -2066,7 +2083,7 @@
         <!-- ── AGREGAR PRODUCTO ── -->
         <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin:16px 0">
             <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">Agregar producto al documento</div>
-            <div class="form-row">
+            <div class="form-row" style="grid-template-columns:1fr 2fr 140px">
                 <div class="form-group">
                     <label class="form-label">SKU <span style="color:var(--danger)">*</span></label>
                     <div class="sku-ac-wrap">
@@ -2077,6 +2094,10 @@
                 <div class="form-group">
                     <label class="form-label">Descripción</label>
                     <input type="text" class="form-input" id="mi-desc" readonly placeholder="—" style="background:var(--bg3);color:var(--text2)">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Cantidad <span style="color:var(--danger)">*</span></label>
+                    <input type="number" class="form-input no-spinner" id="mi-qty" min="0.001" step="any" placeholder="0" onwheel="this.blur()" oninput="_autoFillPalletsForSku(); _updPalletSum(); _mlOnQtyChange()">
                 </div>
             </div>
             <div class="form-row">
@@ -2089,11 +2110,11 @@
                     <input type="date" class="form-input" id="mi-vence">
                 </div>
             </div>
+            <!-- Pool multi-lote (aparece solo en Salida de concentrado cuando el user tildó ≥1 lote) -->
+            <div id="mi-ml-pool" style="display:none;margin:8px 0"></div>
+            <!-- Diálogo de faltante (aparece cuando el lote elegido no cubre el faltante) -->
+            <div id="mi-ml-faltante" style="display:none;margin:8px 0"></div>
             <div class="form-row">
-                <div class="form-group">
-                    <label class="form-label">Cantidad <span style="color:var(--danger)">*</span></label>
-                    <input type="number" class="form-input no-spinner" id="mi-qty" min="0.001" step="any" placeholder="0" onwheel="this.blur()" oninput="_autoFillPalletsForSku(); _updPalletSum()">
-                </div>
                 <div class="form-group" id="mi-pallet-max-group" style="display:none">
                     <label class="form-label">Máx. unid. por pallet <span style="color:var(--danger)">*</span></label>
                     <select class="form-select" id="mi-pallet-max" onchange="_autoFillPalletsForSku()">
@@ -2969,6 +2990,7 @@ function _resetAppMemoryState() {
     try {
         data = { productos:{}, bodegas:{}, clientes:{}, movimientos:{}, cuarentena:{}, devoluciones:{}, auditoria:{}, ajustesMovimiento:{}, facturasPorDespachar:{} };
         movDocItems = [];
+        _mlPool = { activo: false, sku: '', bodega: '', qtyReq: 0, items: [], pendingLote: null };
         userPerfil = null; rootUid = null; userClienteOwner = null;
         _stockCache = null;
         _ajMovItems = []; _ajMovHeader = null;
@@ -4899,6 +4921,17 @@ function _resolveConcentradoPalletMax(sku, tipo) {
 function _autoFillPalletsForSku() {
     const sku = (document.getElementById('mi-sku')?.value || '').trim().toUpperCase();
     const tipo = document.getElementById('md-tipo')?.value || '';
+    // Modo multi-lote (Opción D): la distribución vive dentro del pool, no en
+    // la grilla clásica de pallets. Ocultamos y salimos para no interferir.
+    if (typeof _mlPool !== 'undefined' && _mlPool.activo && _mlPool.sku === sku) {
+        const palQtyGroup = document.getElementById('mi-pallet-qty-group');
+        const palQtyEl    = document.getElementById('mi-pallet-qty');
+        const dist        = document.getElementById('mi-pallet-dist');
+        if (palQtyGroup) palQtyGroup.style.display = 'none';
+        if (palQtyEl)    palQtyEl.value = '';
+        if (dist) { dist.style.display = 'none'; dist.innerHTML = ''; }
+        return;
+    }
     if (tipo !== 'Entrada' && tipo !== 'Salida' && tipo !== 'CambioUbicacion') return;
     const qty = parseFloat(document.getElementById('mi-qty')?.value) || 0;
     // Para CambioUbicacion controlamos aquí la visibilidad del grupo "Cantidad
@@ -4954,6 +4987,249 @@ function _autoFillPalletsForSku() {
         }
     }
     _updPalletSum();
+}
+
+// ══════════════════════════════════════════════════════════════════
+// MULTI-LOTE (Opción D) — Salida de concentrado
+// ------------------------------------------------------------------
+// Cuando el operador elige un lote cuyo stock no alcanza para cubrir
+// la Cantidad requerida, se muestra un diálogo inline con dos opciones:
+//   (1) Tomar lo disponible de ese lote y elegir otro para completar
+//   (2) Cancelar la selección
+// Los lotes aceptados se acumulan en un "pool" con reparto por
+// ubicación (mayor cantidad primero). Cuando la suma cubre exactamente
+// la cantidad requerida, "Agregar producto" está habilitado y genera
+// un renglón por (lote, ubicación) en movDocItems.
+// Solo se activa para Salida de concentrado (donde el caso es frecuente
+// por la presentación por lote).
+let _mlPool = { activo: false, sku: '', bodega: '', qtyReq: 0, items: [], pendingLote: null };
+
+function _mlDebeActivar(tipo, sku) {
+    if (tipo !== 'Salida') return false;
+    return CONCENTRADO_SKUS.has((sku || '').trim().toUpperCase());
+}
+
+// Grupos por lote descontando el pool actual — se usa para renderizar
+// las tarjetas de lote y para saber cuánto queda disponible por lote.
+function _mlGruposDisponibles() {
+    const sku = _mlPool.sku, bodega = _mlPool.bodega;
+    if (!sku || !bodega) return [];
+    const stock = calcStock();
+    const grupos = {};
+    Object.values(stock).forEach(s => {
+        if (s.sku !== sku || (s.bodega || '') !== bodega) return;
+        if ((s.cantidad || 0) <= 0) return;
+        if (getLoteStatus(s) !== 'Aprobado') return;
+        const g = grupos[s.lote] || (grupos[s.lote] = { lote: s.lote, vence: s.vence || '', ubics: [], total: 0 });
+        g.ubics.push({ ubicacion: s.ubicacion || '', cantidad: parseFloat(s.cantidad) || 0 });
+        g.total += parseFloat(s.cantidad) || 0;
+        if (!g.vence && s.vence) g.vence = s.vence;
+    });
+    // Descontar pool y movDocItems (mismo sku+lote ya cargado en el documento)
+    const enDoc = {};
+    (movDocItems || []).forEach(it => {
+        if (it.sku === sku && (it.bodega || bodega) === bodega) {
+            const k = `${it.lote}|${it.ubicacion || ''}`;
+            enDoc[k] = (enDoc[k] || 0) + (parseFloat(it.qty) || 0);
+        }
+    });
+    (_mlPool.items || []).forEach(p => {
+        (p.ubics || []).forEach(pu => {
+            const k = `${p.lote}|${pu.ubic || ''}`;
+            enDoc[k] = (enDoc[k] || 0) + (parseFloat(pu.qty) || 0);
+        });
+    });
+    Object.values(grupos).forEach(g => {
+        g.ubics.forEach(u => {
+            const dec = enDoc[`${g.lote}|${u.ubicacion || ''}`] || 0;
+            u.cantidad = Math.max(0, u.cantidad - dec);
+        });
+        g.ubics = g.ubics.filter(u => u.cantidad > 0)
+                         .sort((a, b) => (b.cantidad - a.cantidad) || (a.ubicacion || '').localeCompare(b.ubicacion || ''));
+        g.total = g.ubics.reduce((a, u) => a + u.cantidad, 0);
+    });
+    return Object.values(grupos)
+        .filter(g => g.total > 0)
+        .sort((a, b) => new Date(a.vence || '9999') - new Date(b.vence || '9999') || a.lote.localeCompare(b.lote));
+}
+
+function _mlDistribuirEnUbics(qty, ubics) {
+    const sorted = ubics.slice().sort((a, b) => (b.cantidad - a.cantidad) || (a.ubicacion || '').localeCompare(b.ubicacion || ''));
+    const out = []; let rem = qty;
+    for (const u of sorted) {
+        if (rem <= 0) break;
+        const t = Math.min(u.cantidad, rem);
+        if (t > 0) out.push({ ubic: u.ubicacion, qty: t });
+        rem -= t;
+    }
+    return out;
+}
+
+function _mlSumado() { return (_mlPool.items || []).reduce((a, p) => a + (parseFloat(p.take) || 0), 0); }
+function _mlFaltante() { return Math.max(0, (_mlPool.qtyReq || 0) - _mlSumado()); }
+
+// Punto de entrada al elegir un lote (llamado desde selectLoteNormal).
+// Devuelve true si el multi-lote consumió el evento (para que
+// selectLoteNormal no siga con su flujo original).
+function _mlOnLoteClick(lote) {
+    const tipo = document.getElementById('md-tipo')?.value || '';
+    const sku  = (document.getElementById('mi-sku')?.value || '').trim().toUpperCase();
+    if (!_mlDebeActivar(tipo, sku)) return false;
+    // Asegurar estado sincronizado
+    _mlSync();
+    if (!_mlPool.qtyReq || _mlPool.qtyReq <= 0) {
+        showFormError('mi-err', 'Ingrese primero la cantidad requerida antes de seleccionar un lote.');
+        return true;
+    }
+    const grupos = _mlGruposDisponibles();
+    const g = grupos.find(x => x.lote === lote);
+    if (!g) { showFormError('mi-err', `Lote ${lote} sin stock aprobado disponible.`); return true; }
+    const faltante = _mlFaltante();
+    if (faltante <= 0) {
+        showFormError('mi-err', 'El pedido ya está cubierto por los lotes seleccionados.');
+        return true;
+    }
+    if (g.total >= faltante) {
+        _mlAgregarAlPool(g, faltante);
+        _mlHideFaltante();
+        return true;
+    }
+    // Insuficiente — mostrar diálogo con opciones
+    _mlPool.pendingLote = { lote: g.lote, vence: g.vence, take: g.total, ubicsSnapshot: g.ubics.map(u => ({ ...u })) };
+    _mlRenderFaltanteDialog(g, faltante);
+    return true;
+}
+
+function _mlAgregarAlPool(g, take) {
+    const ubics = _mlDistribuirEnUbics(take, g.ubics);
+    _mlPool.items.push({ lote: g.lote, vence: g.vence, take, ubics });
+    _mlPool.pendingLote = null;
+    _mlRenderPool();
+    // Re-renderiza la lista de lotes descontando lo ya elegido
+    const sku = _mlPool.sku;
+    if (sku) loadMiLotesDisponibles(sku);
+    _mlSyncHiddenLote();
+}
+
+function _mlRenderFaltanteDialog(g, faltante) {
+    const dlg = document.getElementById('mi-ml-faltante');
+    if (!dlg) return;
+    const gap = faltante - g.total;
+    dlg.innerHTML = `<div class="ml-faltante-dialog">
+        <div class="fd-title">⚠ Faltan ${faltante} unidades para completar pedido</div>
+        <div class="fd-desc">
+            El lote <strong>${g.lote}</strong> tiene <strong>${g.total}</strong> ud. disponibles, insuficientes para las <strong>${faltante}</strong> uds. que aún faltan del pedido.
+            <br>Si toma este lote, quedarán <strong>${gap}</strong> uds. por completar con otro lote.
+        </div>
+        <div class="fd-actions">
+            <button type="button" class="btn btn-sm" style="background:var(--success)" onclick="_mlOnFaltanteContinuar()">Seleccionar otro lote para completar (tomar ${g.total} ud. de ${g.lote})</button>
+            <button type="button" class="btn btn-sm btn-ghost" onclick="_mlOnFaltanteCancelar()">Cancelar selección</button>
+        </div>
+    </div>`;
+    dlg.style.display = '';
+    try { dlg.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch(_) {}
+}
+function _mlOnFaltanteContinuar() {
+    const p = _mlPool.pendingLote; if (!p) return;
+    // Reconstruir "g" tomando el snapshot en el momento de mostrar el diálogo.
+    const g = { lote: p.lote, vence: p.vence, total: p.take, ubics: p.ubicsSnapshot };
+    _mlAgregarAlPool(g, p.take);
+    _mlHideFaltante();
+}
+function _mlOnFaltanteCancelar() {
+    _mlPool.pendingLote = null;
+    _mlHideFaltante();
+}
+function _mlHideFaltante() {
+    const dlg = document.getElementById('mi-ml-faltante');
+    if (dlg) { dlg.style.display = 'none'; dlg.innerHTML = ''; }
+}
+
+function _mlRenderPool() {
+    const el = document.getElementById('mi-ml-pool');
+    if (!el) return;
+    if (!_mlPool.activo || !_mlPool.items.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+    const prod = data.productos[_mlPool.sku];
+    const rowsHtml = _mlPool.items.map((p, i) => {
+        const uds = _udsPorBulto(_mlPool.sku, p.lote, prod);
+        const bultos = uds ? `${_fmtBultos(p.take, uds)} bultos` : '';
+        const ubicsTxt = p.ubics.map(u => `${u.ubic || '(sin ubic.)'}: ${u.qty}`).join(' · ');
+        return `<div class="ml-pool-row">
+            <div class="lote-code">${p.lote}</div>
+            <div>${p.take} ud.<div style="font-size:10px;color:var(--text3)">${bultos}</div></div>
+            <div style="font-size:11px;color:var(--text2)">${ubicsTxt}</div>
+            <button type="button" class="rm" title="Quitar lote" onclick="_mlPoolRemove(${i})">✕</button>
+        </div>`;
+    }).join('');
+    const sum = _mlSumado();
+    const diff = _mlPool.qtyReq - sum;
+    const cls = diff === 0 ? 'ok' : 'miss';
+    const msg = diff === 0 ? '✓ Cubre el pedido' : (diff > 0 ? `Faltan ${diff} ud.` : `Sobran ${-diff} ud.`);
+    el.innerHTML = `<div class="ml-pool-card">
+        <div class="ml-pool-title">Selección acumulada (${_mlPool.items.length} lote${_mlPool.items.length > 1 ? 's' : ''})</div>
+        ${rowsHtml}
+        <div class="ml-pool-total ${cls}"><span>Total: ${sum} / ${_mlPool.qtyReq} ud.</span><span>${msg}</span></div>
+    </div>`;
+    el.style.display = '';
+}
+
+function _mlPoolRemove(idx) {
+    _mlPool.items.splice(idx, 1);
+    _mlRenderPool();
+    if (_mlPool.sku) loadMiLotesDisponibles(_mlPool.sku);
+    _mlSyncHiddenLote();
+}
+
+// Sincroniza _mlPool con el estado del formulario (tipo, sku, bodega, qty).
+// Se llama al cambiar tipo/sku/qty/bodega. Si algo cambió → resetea pool.
+function _mlSync() {
+    const tipo   = document.getElementById('md-tipo')?.value || '';
+    const sku    = (document.getElementById('mi-sku')?.value || '').trim().toUpperCase();
+    const bodega = (document.getElementById('md-bodega')?.value || '').trim();
+    const qty    = parseFloat(document.getElementById('mi-qty')?.value) || 0;
+    const debe   = _mlDebeActivar(tipo, sku);
+    if (!debe) {
+        _mlReset();
+        return;
+    }
+    if (_mlPool.activo && (_mlPool.sku !== sku || _mlPool.bodega !== bodega)) {
+        // Cambió sku o bodega → limpiar pool
+        _mlPool.items = [];
+        _mlPool.pendingLote = null;
+        _mlHideFaltante();
+    }
+    _mlPool.activo = true;
+    _mlPool.sku    = sku;
+    _mlPool.bodega = bodega;
+    _mlPool.qtyReq = qty;
+    _mlRenderPool();
+    _mlSyncHiddenLote();
+}
+// Handler que se llama al cambiar la cantidad requerida.
+function _mlOnQtyChange() {
+    const tipo = document.getElementById('md-tipo')?.value || '';
+    const sku  = (document.getElementById('mi-sku')?.value || '').trim().toUpperCase();
+    if (!_mlDebeActivar(tipo, sku)) return;
+    _mlSync();
+    // Si el pool ya superó la nueva qty, no forzamos ajuste — el operador
+    // debe quitar entradas explícitamente. Solo re-renderizamos el recap.
+    _mlRenderPool();
+    if (sku) loadMiLotesDisponibles(sku);
+}
+function _mlReset() {
+    _mlPool = { activo: false, sku: '', bodega: '', qtyReq: 0, items: [], pendingLote: null };
+    _mlRenderPool();
+    _mlHideFaltante();
+    _mlSyncHiddenLote();
+}
+function _mlSyncHiddenLote() {
+    // Mantiene #mi-lote como el primer lote del pool para compatibilidad con
+    // validaciones existentes (auditoría, FEFO advisory).
+    const el = document.getElementById('mi-lote');
+    if (!el) return;
+    el.value = _mlPool.items[0] ? _mlPool.items[0].lote : '';
+    const stEl = document.getElementById('mi-lote-status');
+    if (stEl) stEl.value = 'Aprobado';
 }
 
 // Calcula el stock aprobado disponible por ubicación para un SKU+lote en la
@@ -5117,6 +5393,9 @@ function loadMiLotesDisponibles(sku) {
     if (miUbicGroup) miUbicGroup.style.display = 'none';
     if (miUbicWrap)  miUbicWrap.innerHTML = '<input type="text" class="form-input" id="mi-ubic" placeholder="Ej: Estante A-1">';
 
+    // Sincronizar estado multi-lote (Salida de concentrado)
+    _mlSync();
+
     const wrap = document.getElementById('mi-lote-wrap');
     const bodegaSel = (document.getElementById('md-bodega')?.value || '').trim();
 
@@ -5158,13 +5437,37 @@ function loadMiLotesDisponibles(sku) {
             groups[gkey].ubicaciones.push({ ubicacion:l.ubicacion || '', cantidad: parseFloat(l.cantidad) || 0 });
             if (!groups[gkey].vence && l.vence) groups[gkey].vence = l.vence;
         });
+        // Descontar pool multi-lote actual y movDocItems ya cargados para el
+        // mismo SKU/lote/bodega, para que no aparezca stock ya "reservado".
+        const enUsoPorLote = {};
+        (_mlPool.items || []).forEach(p => {
+            enUsoPorLote[p.lote] = (enUsoPorLote[p.lote] || 0) + (parseFloat(p.take) || 0);
+        });
+        (movDocItems || []).forEach(it => {
+            if (it.sku !== sku) return;
+            if ((it.bodega || bodegaSel) !== bodegaSel) return;
+            enUsoPorLote[it.lote] = (enUsoPorLote[it.lote] || 0) + (parseFloat(it.qty) || 0);
+        });
         Object.values(groups).forEach(g => {
+            // Descontar por lote (proporcional a ubicaciones — tomamos las más grandes primero)
+            let restar = enUsoPorLote[g.lote] || 0;
+            if (restar > 0) {
+                g.ubicaciones.sort((a,b) => b.cantidad - a.cantidad);
+                for (const u of g.ubicaciones) {
+                    if (restar <= 0) break;
+                    const t = Math.min(u.cantidad, restar);
+                    u.cantidad -= t;
+                    restar -= t;
+                }
+                g.ubicaciones = g.ubicaciones.filter(u => u.cantidad > 0);
+                g.cantidad = g.ubicaciones.reduce((a,u) => a + u.cantidad, 0);
+            }
             g.ubicaciones.sort((a,b) => (a.ubicacion||'').localeCompare(b.ubicacion||''));
-            // Para selectLoteDestruccion se usa la primera ubicación del grupo
-            // como referencia (destrucción se abre desde ese origen).
             g.ubicacion = g.ubicaciones[0] ? g.ubicaciones[0].ubicacion : '';
         });
-        lotes = Object.values(groups).sort((a,b) => new Date(a.vence||'9999') - new Date(b.vence||'9999'));
+        lotes = Object.values(groups)
+            .filter(g => g.cantidad > 0)
+            .sort((a,b) => new Date(a.vence||'9999') - new Date(b.vence||'9999'));
     }
     let html = '<input type="hidden" id="mi-lote" value=""><input type="hidden" id="mi-lote-status" value=""><div class="lote-selector-list">';
     lotes.forEach(l => {
@@ -5211,10 +5514,21 @@ function loadMiLotesDisponibles(sku) {
         const cardId = isAjuste
             ? 'lotecard-' + (l.lote + '_' + (l.ubicacion||'')).replace(/[^a-zA-Z0-9]/g,'_')
             : 'lotecard-' + l.lote.replace(/[^a-zA-Z0-9]/g,'_');
-        html += `<div class="lote-selector-item ${cls} ${disabledCls}" ${onclick} id="${cardId}">
+        // Badge Insuf. cuando en modo multi-lote el lote no cubre el faltante
+        let insufBadge = '';
+        let insufCls = '';
+        if (isConcSalida && _mlPool.activo && _mlPool.qtyReq > 0) {
+            const falt = _mlFaltante();
+            if (falt > 0 && (parseFloat(l.cantidad) || 0) < falt) {
+                insufBadge = `<span style="font-size:10px;font-weight:700;padding:2px 6px;border-radius:3px;background:rgba(237,108,2,.14);color:var(--warning);letter-spacing:.3px">Insuf. (${l.cantidad}/${falt})</span>`;
+                insufCls = 'lote-insuficiente';
+            }
+        }
+        html += `<div class="lote-selector-item ${cls} ${disabledCls} ${insufCls}" ${onclick} id="${cardId}">
             <div class="lote-sel-top">
                 <span class="text-mono" style="font-weight:600;font-size:13px">${l.lote}</span>
                 ${statusBadgeHTML(st)}
+                ${insufBadge}
                 ${ubicLabel}
             </div>
             <div class="lote-sel-meta">
@@ -5230,6 +5544,20 @@ function loadMiLotesDisponibles(sku) {
 }
 
 function selectLoteNormal(lote, vence, status, stock) {
+    // ── Rama MULTI-LOTE (Opción D) — Salida de concentrado
+    // Si el ítem cumple los criterios (Salida + SKU concentrado), el click
+    // sobre una tarjeta de lote se desvía al pool. _mlOnLoteClick devuelve
+    // true si consumió el evento (agregó al pool o abrió el diálogo de
+    // faltante); en ese caso el flujo tradicional no continúa.
+    if (_mlOnLoteClick(lote)) {
+        // Actualiza el vence del formulario aunque el flujo tradicional no siga
+        if (vence) document.getElementById('mi-vence').value = vence;
+        // Highlight de la tarjeta seleccionada
+        document.querySelectorAll('.lote-selector-item').forEach(el => el.classList.remove('lote-sel-active'));
+        const cardEl = document.getElementById('lotecard-' + lote.replace(/[^a-zA-Z0-9]/g,'_'));
+        if (cardEl) cardEl.classList.add('lote-sel-active');
+        return;
+    }
     document.getElementById('mi-lote').value = lote;
     document.getElementById('mi-lote-status').value = status;
     if (vence) document.getElementById('mi-vence').value = vence;
@@ -5461,7 +5789,7 @@ function onMiPalletQtyChange() {
     if (isCambioUbic) {
         html += '<div style="display:grid;grid-template-columns:50px 1fr 1.6fr 1.6fr;gap:8px;font-size:11px;color:var(--text3);margin-bottom:4px;font-weight:600"><span>Pallet</span><span>Cantidad</span><span>Ubicación origen</span><span>Nueva ubicación</span></div>';
     } else if (mostrarBultos) {
-        const bultosLbl = udsBulto ? `Bultos<span style="font-weight:400;color:var(--text3)"> (x${udsBulto})</span>` : 'Bultos';
+        const bultosLbl = 'Bultos';
         html += `<div style="display:grid;grid-template-columns:${gridColsSalidaBultos};gap:8px;font-size:11px;color:var(--text3);margin-bottom:4px;font-weight:600"><span>Pallet</span><span>Cantidad</span><span>${bultosLbl}</span><span>Ubicación</span></div>`;
     } else {
         html += `<div style="display:grid;grid-template-columns:${gridColsSalidaSimple};gap:8px;font-size:11px;color:var(--text3);margin-bottom:4px;font-weight:600"><span>Pallet</span><span>Cantidad</span><span>Ubicación</span></div>`;
@@ -5581,7 +5909,7 @@ function _updPalletSum() {
         let bultosExtra = '';
         if (udsBulto) {
             const totalBultos = _fmtBultos(sum, udsBulto);
-            if (totalBultos) bultosExtra = ` · <strong>${totalBultos}</strong> bultos (x${udsBulto})`;
+            if (totalBultos) bultosExtra = ` · <strong>${totalBultos}</strong> bultos`;
         }
 
         let diffMsg = '';
@@ -5616,8 +5944,64 @@ function addItemToDoc() {
     if (!tipo)  { showFormError('movModal-err', 'Seleccione el tipo de movimiento primero.'); return; }
     if (!sku)   { showFormError('mi-err', 'Ingrese el SKU del producto.'); return; }
     if (!data.productos[sku]) { showFormError('mi-err', `SKU "${sku}" no existe en el maestro de productos.`); return; }
-    if (!lote)  { showFormError('mi-err', (tipo === 'Salida' || tipo === 'CambioUbicacion') ? 'Seleccione un lote de la lista.' : 'Ingrese el número de lote.'); return; }
     if (!qty || qty <= 0) { showFormError('mi-err', 'La cantidad debe ser mayor a cero.'); return; }
+
+    // ── MULTI-LOTE (Opción D) — Salida de concentrado con pool activo
+    if (_mlPool && _mlPool.activo && _mlPool.sku === sku && _mlPool.items.length) {
+        const bodegaSelML = (document.getElementById('md-bodega')?.value || '').trim();
+        if (!bodegaSelML) { showFormError('mi-err', 'Seleccione primero la bodega.'); return; }
+        const sumMl = _mlSumado();
+        if (Math.abs(sumMl - qty) > 0.0001) {
+            showFormError('mi-err', `La selección de lotes (${sumMl} ud.) no coincide con la cantidad requerida (${qty} ud.). Complete o ajuste la selección.`);
+            return;
+        }
+        // Validar stock por (lote, ubic) vs disponible - lo ya en documento
+        const stockML = calcStock();
+        const prodML  = data.productos[sku];
+        for (const it of _mlPool.items) {
+            for (const d of (it.ubics || [])) {
+                if (!(d.qty > 0)) continue;
+                const loc = Object.values(stockML).find(s =>
+                    s.sku === sku && s.lote === it.lote && (s.bodega || '') === bodegaSelML
+                    && (s.ubicacion || '') === (d.ubic || '') && getLoteStatus(s) === 'Aprobado');
+                const disp = loc ? loc.cantidad : 0;
+                const enDoc = movDocItems
+                    .filter(x => x.sku === sku && x.lote === it.lote && (x.ubicacion || '') === (d.ubic || ''))
+                    .reduce((a, x) => a + x.qty, 0);
+                if (d.qty + enDoc > disp) {
+                    showFormError('mi-err', `Stock insuficiente en lote ${it.lote} / ubicación ${d.ubic || '(sin ubic.)'}: disponible ${disp} ud., ya en documento ${enDoc}, requerido ${d.qty}.`);
+                    return;
+                }
+            }
+        }
+        const multiLoteGroupId = `ML-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+        _mlPool.items.forEach(it => {
+            const dist = (it.ubics || []).filter(u => (parseFloat(u.qty) || 0) > 0);
+            const palletGroupId = `PG-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+            dist.forEach((u, idx) => {
+                movDocItems.push({
+                    sku,
+                    descripcion: prodML?.descripcion || '',
+                    tipo: prodML?.tipo || '',
+                    lote: it.lote,
+                    vence: it.vence || '',
+                    qty: u.qty,
+                    precio,
+                    status: 'Aprobado',
+                    ubicacion: u.ubic || '',
+                    palletNum: idx + 1,
+                    palletTotal: dist.length,
+                    palletGroupId,
+                    multiLoteGroupId
+                });
+            });
+        });
+        renderDocItems();
+        resetItemForm();
+        return;
+    }
+
+    if (!lote)  { showFormError('mi-err', (tipo === 'Salida' || tipo === 'CambioUbicacion') ? 'Seleccione un lote de la lista.' : 'Ingrese el número de lote.'); return; }
 
     // ── CAMBIO DE UBICACIÓN ── Validaciones y armado de ítem(s)
     if (tipo === 'CambioUbicacion') {
@@ -5956,6 +6340,8 @@ function resetItemForm() {
     _clearFields('mi-sku','mi-desc','mi-vence','mi-qty','mi-precio','mi-ubic','mi-pallet-qty','mi-ubic-dest');
     // Reset del guard idempotente para que el próximo SKU vuelva a cargar lotes.
     const skuEl = document.getElementById('mi-sku'); if (skuEl) delete skuEl.dataset.lastProcessedSku;
+    // Reset del pool multi-lote (Opción D)
+    if (typeof _mlReset === 'function') _mlReset();
     document.getElementById('mi-lote-wrap').innerHTML = '<input type="text" class="form-input" id="mi-lote" placeholder="Número de lote">';
     const dist = document.getElementById('mi-pallet-dist'); if (dist) { dist.style.display = 'none'; dist.innerHTML = ''; }
     // Limpieza del selector 120/126/144 uds/pallet (Entrada de concentrados)
@@ -6582,7 +6968,7 @@ function generatePDF(docData, opts) {
                 const prod = data.productos && data.productos[item.sku];
                 const uVenta = (prod && prod.unidadVenta) || '—';
                 const uds = _udsPorBulto(item.sku, item.lote, prod);
-                const bultosTxt = uds ? (_fmtBultos(item.qty, uds) + ' × ' + uds) : '—';
+                const bultosTxt = uds ? _fmtBultos(item.qty, uds) : '—';
                 return [
                     item.sku,
                     item.descripcion || '—',
