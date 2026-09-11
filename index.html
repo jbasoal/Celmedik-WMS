@@ -13034,6 +13034,97 @@ window.diagLote = function(sku, lote) {
     return { timeline, stock, total };
 };
 
+// Versión visual de diagLote — abre un modal con el reporte completo
+// dentro de la app, sin depender de la consola del navegador. Uso:
+//     verDiagLote('A-008', '04550926')
+// Muestra timeline con ubicaciones, stock por ubicación y botones para
+// copiar el reporte al portapapeles.
+window.verDiagLote = function(sku, lote) {
+    if (!sku || !lote) { alert('Uso: verDiagLote(sku, lote)\nEj: verDiagLote("A-008","04550926")'); return; }
+    const r = window.diagLote(sku, lote);
+    if (!r) { alert(`Sin movimientos para SKU ${sku} · Lote ${lote}`); return; }
+    // Reconstruir el texto plano para el botón "Copiar reporte"
+    const txtLineas = [`==== DIAGNÓSTICO DE LOTE ${sku} · ${lote} ====`, '', '-- MOVIMIENTOS CRONOLÓGICOS --'];
+    r.timeline.forEach(t => {
+        txtLineas.push(`  ${t.fecha ? t.fecha.slice(0, 19) : '(sin fecha)'} · ${t.num} · ${t.tipo}${t.status ? ` [${t.status}]` : ''} · ${t.dst} · ${t.delta >= 0 ? '+' : ''}${t.delta}${t.flag || ''}`);
+    });
+    txtLineas.push('', '-- STOCK RESULTANTE POR UBICACIÓN --');
+    Object.entries(r.stock).sort().forEach(([k, v]) => {
+        const mark = v < 0 ? '  ⚠ NEGATIVO' : (v === 0 ? '  (agotado)' : '');
+        txtLineas.push(`  ${k}: ${v}${mark}`);
+    });
+    txtLineas.push('', `-- TOTAL LOTE (sumando ubicaciones): ${r.total} --`);
+    window.__lastDiagLoteText = txtLineas.join('\n');
+    const rows = r.timeline.map((t, i) => {
+        const cls = (t.flag && t.flag.includes('SOBRECONSUMO')) ? 'style="background:#fdecea"' : '';
+        return `<tr ${cls}>
+            <td style="padding:5px 6px;font-size:11px">${i}</td>
+            <td style="padding:5px 6px;font-size:11px;white-space:nowrap">${t.fecha ? t.fecha.slice(0,19).replace('T',' ') : '—'}</td>
+            <td style="padding:5px 6px;font-family:ui-monospace,Consolas,monospace;font-size:11px;font-weight:600">${t.num || '—'}</td>
+            <td style="padding:5px 6px;font-size:11px">${t.tipo}${t.status ? ` <span style="color:var(--text3)">[${t.status}]</span>` : ''}</td>
+            <td style="padding:5px 6px;font-family:ui-monospace,Consolas,monospace;font-size:11px">${t.dst || '—'}</td>
+            <td style="padding:5px 6px;font-size:11px;text-align:right;font-weight:600;color:${t.delta >= 0 ? 'var(--success)' : 'var(--danger)'}">${t.delta >= 0 ? '+' : ''}${t.delta}</td>
+            <td style="padding:5px 6px;font-size:11px;text-align:right">${t.prev}</td>
+            <td style="padding:5px 6px;font-size:11px;color:var(--danger);font-weight:600">${t.flag || ''}</td>
+        </tr>`;
+    }).join('');
+    const stockRows = Object.entries(r.stock).sort().map(([k, v]) => {
+        const mark = v < 0 ? ' <span style="color:var(--danger);font-weight:700">⚠ NEGATIVO</span>' : (v === 0 ? ' <span style="color:var(--text3)">(agotado)</span>' : '');
+        return `<tr>
+            <td style="padding:5px 8px;font-family:ui-monospace,Consolas,monospace;font-size:12px">${k}</td>
+            <td style="padding:5px 8px;text-align:right;font-weight:700">${v}${mark}</td>
+        </tr>`;
+    }).join('');
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100000;display:flex;align-items:center;justify-content:center;padding:20px';
+    overlay.innerHTML = `
+        <div style="background:white;border-radius:10px;max-width:1100px;width:100%;max-height:92vh;overflow:auto;padding:22px;box-shadow:0 10px 40px rgba(0,0,0,.3)">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+                <h2 style="margin:0;font-size:18px;color:var(--accent)">Diagnóstico de Lote — SKU ${sku} · Lote ${lote}</h2>
+                <button type="button" onclick="this.closest('div[style*=fixed]').remove()" style="background:none;border:0;font-size:22px;cursor:pointer;color:var(--text3);padding:4px 10px">✕</button>
+            </div>
+            <h3 style="margin:12px 0 6px;font-size:13px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Movimientos cronológicos (${r.timeline.length})</h3>
+            <div style="overflow:auto;border:1px solid var(--border);border-radius:6px">
+                <table style="width:100%;border-collapse:collapse;font-size:12px">
+                    <thead style="background:var(--bg3)">
+                        <tr>
+                            <th style="padding:6px 6px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.3px">#</th>
+                            <th style="padding:6px 6px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.3px">Fecha</th>
+                            <th style="padding:6px 6px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.3px">N° Movimiento</th>
+                            <th style="padding:6px 6px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.3px">Tipo</th>
+                            <th style="padding:6px 6px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.3px">Bodega | Ubicación</th>
+                            <th style="padding:6px 6px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:.3px">Delta</th>
+                            <th style="padding:6px 6px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:.3px">Antes</th>
+                            <th style="padding:6px 6px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.3px">Alerta</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>
+            <h3 style="margin:16px 0 6px;font-size:13px;text-transform:uppercase;letter-spacing:.5px;color:var(--text2)">Stock resultante por ubicación</h3>
+            <table style="width:100%;border-collapse:collapse;font-size:12px;border:1px solid var(--border);border-radius:6px;overflow:hidden">
+                <thead style="background:var(--bg3)">
+                    <tr>
+                        <th style="padding:6px 8px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.3px">Bodega | Ubicación</th>
+                        <th style="padding:6px 8px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:.3px">Cantidad</th>
+                    </tr>
+                </thead>
+                <tbody>${stockRows}
+                    <tr style="background:var(--bg3);border-top:2px solid var(--border-strong)">
+                        <td style="padding:6px 8px;font-weight:700">TOTAL LOTE</td>
+                        <td style="padding:6px 8px;text-align:right;font-weight:700">${r.total}</td>
+                    </tr>
+                </tbody>
+            </table>
+            <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end">
+                <button type="button" class="btn btn-ghost btn-sm" onclick="try{copy(window.__lastDiagLoteText||'');this.textContent='✓ Copiado';}catch(e){alert('No se pudo copiar')}">Copiar reporte</button>
+                <button type="button" class="btn btn-sm" onclick="this.closest('div[style*=fixed]').remove()">Cerrar</button>
+            </div>
+        </div>`;
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+};
+
 function _appReloadForUpdate() {
     try {
         // Fuerza obtener la nueva versión evitando el back/forward cache
