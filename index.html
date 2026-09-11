@@ -13039,6 +13039,47 @@ window.diagLote = function(sku, lote) {
 //     verDiagLote('A-008', '04550926')
 // Muestra timeline con ubicaciones, stock por ubicación y botones para
 // copiar el reporte al portapapeles.
+// Helper: copia el reporte al portapapeles. Intenta primero
+// navigator.clipboard.writeText y cae a execCommand('copy') sobre un
+// textarea temporal (funciona sin permiso especial cuando falla el API
+// moderno por permisos o contexto no seguro).
+window._copiarDiagLote = function(btn) {
+    const txt = window.__lastDiagLoteText || '';
+    if (!txt) { alert('No hay reporte cargado.'); return; }
+    const onOk = () => {
+        if (btn) { const prev = btn.textContent; btn.textContent = '✓ Copiado'; setTimeout(() => { btn.textContent = prev; }, 1500); }
+    };
+    const onFail = (err) => {
+        console.warn('Copiar falló:', err);
+        // Mostrar el reporte en un textarea seleccionado para copiar manualmente
+        const box = document.createElement('div');
+        box.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100001;display:flex;align-items:center;justify-content:center;padding:20px';
+        box.innerHTML = `<div style="background:white;border-radius:8px;padding:16px;max-width:900px;width:100%;max-height:80vh;display:flex;flex-direction:column;gap:8px">
+            <div style="font-size:12px;color:var(--text2)">Su navegador bloqueó la copia automática. Seleccione el texto de abajo y copie con Ctrl+C:</div>
+            <textarea readonly style="width:100%;flex:1;min-height:300px;font-family:ui-monospace,Consolas,monospace;font-size:11px;border:1px solid var(--border);border-radius:6px;padding:8px" onclick="this.select()"></textarea>
+            <div style="text-align:right"><button type="button" class="btn btn-sm" onclick="this.closest('div[style*=fixed]').remove()">Cerrar</button></div>
+        </div>`;
+        box.addEventListener('click', e => { if (e.target === box) box.remove(); });
+        document.body.appendChild(box);
+        const ta = box.querySelector('textarea');
+        ta.value = txt; ta.focus(); ta.select();
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(txt).then(onOk).catch(onFail);
+    } else {
+        try {
+            const ta = document.createElement('textarea');
+            ta.value = txt;
+            ta.style.position = 'fixed'; ta.style.left = '-9999px';
+            document.body.appendChild(ta);
+            ta.select();
+            const ok = document.execCommand('copy');
+            document.body.removeChild(ta);
+            if (ok) onOk(); else onFail('execCommand returned false');
+        } catch (e) { onFail(e); }
+    }
+};
+
 window.verDiagLote = function(sku, lote) {
     if (!sku || !lote) { alert('Uso: verDiagLote(sku, lote)\nEj: verDiagLote("A-008","04550926")'); return; }
     const r = window.diagLote(sku, lote);
@@ -13117,7 +13158,7 @@ window.verDiagLote = function(sku, lote) {
                 </tbody>
             </table>
             <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end">
-                <button type="button" class="btn btn-ghost btn-sm" onclick="try{copy(window.__lastDiagLoteText||'');this.textContent='✓ Copiado';}catch(e){alert('No se pudo copiar')}">Copiar reporte</button>
+                <button type="button" class="btn btn-ghost btn-sm" onclick="_copiarDiagLote(this)">Copiar reporte</button>
                 <button type="button" class="btn btn-sm" onclick="this.closest('div[style*=fixed]').remove()">Cerrar</button>
             </div>
         </div>`;
