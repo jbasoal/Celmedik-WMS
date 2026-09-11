@@ -6003,6 +6003,72 @@ function addItemToDoc() {
 
     if (!lote)  { showFormError('mi-err', (tipo === 'Salida' || tipo === 'CambioUbicacion') ? 'Seleccione un lote de la lista.' : 'Ingrese el número de lote.'); return; }
 
+    // ── Restricción de ubicaciones ocupadas — Entrada de CONCENTRADO ──
+    // Validación temprana al agregar la línea al documento. Bloquea si la
+    // ubicación destino ya tiene stock previo (de cualquier SKU/lote) o si
+    // ya fue asignada en otra línea del mismo documento. Excepción: "Piso".
+    if (tipo === 'Entrada' && CONCENTRADO_SKUS.has(sku)) {
+        const bodegaEnt = (document.getElementById('md-bodega')?.value || '').trim();
+        const _esPisoAdd = (u) => (u || '').trim().toUpperCase() === 'PISO';
+        // Recolectar ubicaciones destino candidatas del formulario:
+        //   • single-pallet: el input mi-ubic
+        //   • multi-pallet:  los mi-pal-ubic-${i}
+        const palletCountEnt = parseInt(document.getElementById('mi-pallet-qty')?.value) || 1;
+        const ubicsCandidatas = [];
+        if (palletCountEnt > 1) {
+            for (let i = 1; i <= palletCountEnt; i++) {
+                const u = (document.getElementById(`mi-pal-ubic-${i}`)?.value || '').trim();
+                if (u) ubicsCandidatas.push({ idx: i, ubic: u });
+            }
+        } else {
+            const u = (document.getElementById('mi-ubic')?.value || '').trim();
+            if (u) ubicsCandidatas.push({ idx: 0, ubic: u });
+        }
+        if (ubicsCandidatas.length) {
+            const stockEntrada = calcStock();
+            const ocupadas = {}; // `ubic` → cantidad total en esa ubic para la bodega
+            Object.values(stockEntrada).forEach(s => {
+                if ((s.bodega || '') !== bodegaEnt) return;
+                if ((parseFloat(s.cantidad) || 0) <= 0) return;
+                const k = s.ubicacion || '';
+                if (!k) return;
+                ocupadas[k] = (ocupadas[k] || 0) + (parseFloat(s.cantidad) || 0);
+            });
+            // Ubicaciones ya asignadas en el borrador (movDocItems) para esta bodega
+            const enBorradorAdd = {};
+            movDocItems.forEach(it => {
+                const uu = (it.ubicacion || '').trim();
+                if (!uu) return;
+                enBorradorAdd[uu] = (enBorradorAdd[uu] || 0) + (parseFloat(it.qty) || 0);
+            });
+            const chocan = [];
+            const propioBorrador = {};
+            for (const c of ubicsCandidatas) {
+                if (_esPisoAdd(c.ubic)) continue;
+                const stockPrev = ocupadas[c.ubic] || 0;
+                const enDoc     = enBorradorAdd[c.ubic] || 0;
+                const propio    = propioBorrador[c.ubic] || 0;
+                if (stockPrev > 0 || enDoc > 0 || propio > 0) {
+                    chocan.push({ ubic: c.ubic, stockPrev, enDoc: enDoc + propio, palletNum: c.idx });
+                } else {
+                    propioBorrador[c.ubic] = 1;
+                }
+            }
+            if (chocan.length) {
+                const detalle = chocan.map(c => {
+                    const partes = [];
+                    if (c.stockPrev > 0) partes.push(`stock previo ${c.stockPrev} ud.`);
+                    if (c.enDoc > 0) partes.push(`ya asignada en este documento`);
+                    const palletTxt = c.palletNum ? `Pallet ${c.palletNum}: ` : '';
+                    return `${palletTxt}${c.ubic} (${partes.join(', ')})`;
+                }).join(' · ');
+                showFormError('mi-err',
+                    `No se puede recibir concentrado en una ubicación ocupada. Cada ubicación aloja un solo pallet (excepto «Piso»). Conflicto en: ${detalle}. Asigne otra ubicación libre o use «Piso».`);
+                return;
+            }
+        }
+    }
+
     // ── CAMBIO DE UBICACIÓN ── Validaciones y armado de ítem(s)
     if (tipo === 'CambioUbicacion') {
         const bodegaSel = (document.getElementById('md-bodega')?.value || '').trim();
@@ -6657,6 +6723,67 @@ function saveDocumento() {
         const medicamentos = movDocItems.filter(i => (data.productos[i.sku]?.tipo || '').trim() === 'Medicamento').map(i => i.sku);
         if (medicamentos.length) {
             showFormError('movModal-err', `❌ La bodega «CELMEDIK BIODIAL» no está habilitada para recibir Medicamentos. Retire los siguientes SKU del documento o cambie la bodega: ${medicamentos.join(', ')}.`);
+            return;
+        }
+    }
+
+    // ── Restricción de ubicaciones en Entradas de CONCENTRADO ──
+    // Los concentrados se palletizan (120/126/144 uds por pallet). Cada
+    // ubicación física debe alojar un solo pallet, así que una Entrada
+    // no puede caer en una ubicación que ya tiene stock previo (de
+    // cualquier SKU/lote). Se exceptúa la ubicación "Piso" — que se usa
+    // como buffer temporal donde pueden convivir varios pallets.
+    if (tipo === 'Entrada') {
+        const stockActualEntrada = calcStock();
+        const ocupacionPorUbic = {}; // `bodega|ubic` → cantidad total
+        Object.values(stockActualEntrada).forEach(s => {
+            if ((s.bodega || '') !== bodega) return;
+            if ((parseFloat(s.cantidad) || 0) <= 0) return;
+            const k = s.ubicacion || '';
+            if (!k) return;
+            ocupacionPorUbic[k] = (ocupacionPorUbic[k] || 0) + (parseFloat(s.cantidad) || 0);
+        });
+        const _esPiso = (u) => (u || '').trim().toUpperCase() === 'PISO';
+        // Además considerar lo que ya está en el borrador actual del documento
+        // (evita que dos líneas del mismo documento apunten a la misma ubic
+        // no-Piso cuando la ubic estaba libre inicialmente).
+        const enBorrador = {}; // `ubic` → suma
+        const conflictos = []; // [{sku, lote, ubic, disponible}]
+        for (const it of movDocItems) {
+            const skuU = (it.sku || '').trim().toUpperCase();
+            if (!CONCENTRADO_SKUS.has(skuU)) {
+                // No concentrado: no aplica la restricción — solo lo contamos
+                // en el borrador por si otra línea concentrado apunta acá.
+                const u = it.ubicacion || '';
+                if (u) enBorrador[u] = (enBorrador[u] || 0) + (parseFloat(it.qty) || 0);
+                continue;
+            }
+            const ubicIt = (it.ubicacion || '').trim();
+            if (!ubicIt) continue;
+            if (_esPiso(ubicIt)) {
+                enBorrador[ubicIt] = (enBorrador[ubicIt] || 0) + (parseFloat(it.qty) || 0);
+                continue;
+            }
+            const dispStock    = ocupacionPorUbic[ubicIt] || 0;
+            const dispBorrador = enBorrador[ubicIt] || 0;
+            if (dispStock > 0 || dispBorrador > 0) {
+                conflictos.push({
+                    sku: it.sku, lote: it.lote, ubic: ubicIt,
+                    stockPrevio: dispStock, enBorrador: dispBorrador
+                });
+            } else {
+                enBorrador[ubicIt] = (enBorrador[ubicIt] || 0) + (parseFloat(it.qty) || 0);
+            }
+        }
+        if (conflictos.length) {
+            const detalle = conflictos.map(c => {
+                const partes = [];
+                if (c.stockPrevio > 0) partes.push(`stock previo ${c.stockPrevio} ud.`);
+                if (c.enBorrador > 0) partes.push(`ya asignada en este documento (${c.enBorrador} ud.)`);
+                return `SKU ${c.sku} · Lote ${c.lote || '—'} · Ubicación ${c.ubic} — ${partes.join(', ')}`;
+            }).join('\n');
+            showFormError('movModal-err',
+                `❌ No se puede recibir concentrado en una ubicación que ya tiene stock. Cada ubicación debe alojar un solo pallet (excepto «Piso», que se usa como buffer).\n\n${detalle}\n\nAsigne otra ubicación libre o use «Piso».`);
             return;
         }
     }
