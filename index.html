@@ -7342,6 +7342,10 @@ function cargarMovAjuste(identificador, isDocFallback) {
     _ajMovItems = entries.map(([key, m]) => ({ key, original: { ...m }, editado: { ...m } }));
     const ref0 = _ajMovItems[0].original;
     _ajMovHeader = {
+        // N° Movimiento único de la operación cargada — identifica de forma
+        // inequívoca esta operación aunque comparta N° documento/factura con
+        // otras operaciones. Es la fuente autoritativa para trazabilidad.
+        numeroMovimiento: ref0.numeroMovimiento || '',
         documentoId: ref0.documentoId,
         tipo: ref0.tipo,
         fecha: ref0.fecha,
@@ -7367,9 +7371,15 @@ function renderAjusteMovUI() {
     const isCambioUbic = h.tipo === 'CambioUbicacion';
     const isSalida     = h.tipo === 'Salida';
 
+    const numMovLabel = h.numeroMovimiento
+        ? `N° Movimiento <span class="text-mono" style="color:var(--accent2)">${_ajmEsc(h.numeroMovimiento)}</span>`
+        : `Documento <span class="text-mono">${_ajmEsc(h.documentoId||'—')}</span> <span style="color:var(--warning);font-size:11px">(sin N° Movimiento — registro histórico)</span>`;
+    const docSubtitleLabel = h.numeroMovimiento && h.documentoId
+        ? `Documento/Factura ${_ajmEsc(h.documentoId)} · `
+        : '';
     const headerHtml = `
         <div class="card" style="margin-top:12px;background:var(--bg2)">
-            <div class="card-header"><div><div class="card-title" style="font-size:15px">Documento ${_ajmEsc(h.documentoId||'—')}</div><div class="card-subtitle">${_ajmEsc(tipoLabel||'—')} · Registrado por ${_ajmEsc(h.usuario||'—')} · ${_ajmEsc(fmtDateTime(h.fecha||''))}</div></div></div>
+            <div class="card-header"><div><div class="card-title" style="font-size:15px">${numMovLabel}</div><div class="card-subtitle">${docSubtitleLabel}${_ajmEsc(tipoLabel||'—')} · Registrado por ${_ajmEsc(h.usuario||'—')} · ${_ajmEsc(fmtDateTime(h.fecha||''))}</div></div></div>
             <div class="form-row">
                 <div class="form-group"><label class="form-label">N° Referencia / Factura</label><input type="text" class="form-input" id="ajm-h-ref" value="${_ajmEsc(h.referencia||'')}"></div>
                 <div class="form-group"><label class="form-label">Fecha del documento</label><input type="date" class="form-input" id="ajm-h-fechaDoc" value="${_ajmEsc((h.fechaDocumento||'').slice(0,10))}"></div>
@@ -7863,14 +7873,26 @@ function abrirAnularSalida() {
         alert('Cargue primero una salida válida en el buscador.');
         return;
     }
-    const docId = _ajMovHeader.documentoId || '';
-    const yaAnul = Object.values(data.movimientos || {}).some(m => m.tipo === 'AjusteInventario' && (m.anulacionDe || '') === docId);
+    const docId  = _ajMovHeader.documentoId || '';
+    const numMov = _ajMovHeader.numeroMovimiento || '';
+    // Verificar si ESTA operación (identificada por su N° Movimiento único) ya
+    // fue anulada. Antes se comparaba por documentoId, lo cual daba falso
+    // positivo cuando varias operaciones compartían el mismo N° factura.
+    // Se cae al documentoId solo cuando la operación no tiene N° Movimiento
+    // (registros históricos).
+    const yaAnul = Object.values(data.movimientos || {}).some(m => {
+        if (m.tipo !== 'AjusteInventario') return false;
+        if (numMov && m.anulacionDeNumMov) return m.anulacionDeNumMov === numMov;
+        if (!numMov) return (m.anulacionDe || '') === docId;
+        return false;
+    });
     const totalLineas = _ajMovItems.length;
     const totalQty = _ajMovItems.reduce((a, it) => a + (parseFloat(it.original.cantidad) || 0), 0);
     const warn = yaAnul
-        ? `<br><span style="color:var(--warning);font-weight:600">⚠ Este documento ya tiene una anulación previa registrada. Si confirmas, se generarán ajustes adicionales (riesgo de duplicación de stock).</span>`
+        ? `<br><span style="color:var(--warning);font-weight:600">⚠ Este N° Movimiento ya tiene una anulación previa registrada. Si confirmas, se generarán ajustes adicionales (riesgo de duplicación de stock).</span>`
         : '';
-    document.getElementById('anular-info').innerHTML = `Documento <strong>${docId}</strong> · <strong>${totalLineas}</strong> línea(s) · Total <strong>${totalQty}</strong> ud.${warn}`;
+    const idLabel = numMov ? `N° Movimiento <strong>${numMov}</strong>` : `Documento <strong>${docId}</strong>`;
+    document.getElementById('anular-info').innerHTML = `${idLabel} · <strong>${totalLineas}</strong> línea(s) · Total <strong>${totalQty}</strong> ud.${warn}`;
     document.getElementById('anular-motivo').value = '';
     const err = document.getElementById('anular-err'); if (err) err.style.display = 'none';
     openModal('anularSalidaModal');
@@ -7959,7 +7981,8 @@ async function confirmarAnularSalida() {
     }
     const motivo = (document.getElementById('anular-motivo')?.value || '').trim();
     if (!motivo) { showFormError('anular-err', 'Ingrese el motivo de la anulación.'); return; }
-    const docId = _ajMovHeader.documentoId || '';
+    const docId  = _ajMovHeader.documentoId || '';
+    const numMovAnulado = _ajMovHeader.numeroMovimiento || '';
     const uid = rootUid || currentUser.uid;
     const ahora = new Date().toISOString();
     // Un N° interno compartido por todas las líneas del ajuste de anulación.
@@ -7970,6 +7993,9 @@ async function confirmarAnularSalida() {
     const ts0 = Date.now();
     let n = 0;
     const resumenLineas = [];
+    // Identificador de la operación anulada — priorizar N° Movimiento sobre
+    // el documentoId (que puede compartirse entre varias operaciones).
+    const anulRefLabel = numMovAnulado || docId;
     _ajMovItems.forEach((it) => {
         const o = it.original; // usar valores originales de la salida, no los editados
         const qty = parseFloat(o.cantidad) || 0;
@@ -7981,9 +8007,12 @@ async function confirmarAnularSalida() {
             descripcion: o.descripcion || (data.productos[o.sku]?.descripcion || ''),
             cantidad: qty,
             bodega: o.bodega || '', ubicacion: o.ubicacion || '',
-            observaciones: `Anulación salida N° ${docId} — ${motivo}`,
+            observaciones: `Anulación de ${numMovAnulado ? 'N° Movimiento ' + numMovAnulado : 'salida'}${docId ? ` (doc ${docId})` : ''} — ${motivo}`,
             fecha: ahora, usuario: currentUser.email,
             status: 'Aprobado',
+            // Fuente autoritativa: N° Movimiento único de la operación anulada.
+            anulacionDeNumMov: numMovAnulado,
+            // Compat.: documentoId, para históricos y para el recálculo de factura.
             anulacionDe: docId,
             anulacionLineaKey: it.key
         };
@@ -8020,7 +8049,7 @@ async function confirmarAnularSalida() {
             _actualizarEstatusFacturaTrasAnulacion(docId, itemsSnapshot, ahora, uid);
             closeModal('anularSalidaModal');
             const c = document.getElementById('ajMovResults');
-            if (c) c.insertAdjacentHTML('afterbegin', `<div class="alert-banner success" style="margin:8px 0"><div class="alert-banner-icon">✓</div><div><div class="alert-banner-title">Salida ${docId} anulada</div><div class="alert-banner-text">Se generaron ${n} ajuste(s) positivo(s) en Ajuste de Inventario. La salida original permanece en Movimientos para trazabilidad. Si el N° coincide con una Factura por Despachar, su estatus se actualizó automáticamente.</div></div></div>`);
+            if (c) c.insertAdjacentHTML('afterbegin', `<div class="alert-banner success" style="margin:8px 0"><div class="alert-banner-icon">✓</div><div><div class="alert-banner-title">Salida ${anulRefLabel} anulada</div><div class="alert-banner-text">Se generaron ${n} ajuste(s) positivo(s) en Ajuste de Inventario. La salida original permanece en Movimientos para trazabilidad. Si el N° de documento coincide con una Factura por Despachar, su estatus se actualizó automáticamente.</div></div></div>`);
         })
         .catch(err => showFormError('anular-err', 'Error: ' + err.message));
 }
@@ -8085,8 +8114,16 @@ function abrirAnularEntrada() {
         alert('Cargue primero una entrada válida en el buscador.');
         return;
     }
-    const docId = _ajMovHeader.documentoId || '';
-    const yaAnul = Object.values(data.movimientos || {}).some(m => m.tipo === 'AjusteInventario' && (m.anulacionDe || '') === docId);
+    const docId  = _ajMovHeader.documentoId || '';
+    const numMov = _ajMovHeader.numeroMovimiento || '';
+    // Identifica por N° Movimiento (única fuente autoritativa) — si no
+    // existe (histórico) cae al documentoId.
+    const yaAnul = Object.values(data.movimientos || {}).some(m => {
+        if (m.tipo !== 'AjusteInventario') return false;
+        if (numMov && m.anulacionDeNumMov) return m.anulacionDeNumMov === numMov;
+        if (!numMov) return (m.anulacionDe || '') === docId;
+        return false;
+    });
     const totalLineas = _ajMovItems.length;
     const totalQty = _ajMovItems.reduce((a, it) => a + (parseFloat(it.original.cantidad) || 0), 0);
     const bloqueos = _salidasAsociadasEntrada(_ajMovItems, _ajMovHeader.fecha);
@@ -8116,7 +8153,8 @@ function abrirAnularEntrada() {
             warn = `<br><span style="color:var(--warning);font-weight:600">⚠ Este documento ya tiene una anulación previa registrada. Si confirmas, se generarán ajustes adicionales (riesgo de duplicación de descuento).</span>`;
         }
     }
-    info.innerHTML = `Documento <strong>${docId}</strong> · <strong>${totalLineas}</strong> línea(s) · Total <strong>${totalQty}</strong> ud.${warn}`;
+    const idLabelEnt = numMov ? `N° Movimiento <strong>${numMov}</strong>` : `Documento <strong>${docId}</strong>`;
+    info.innerHTML = `${idLabelEnt} · <strong>${totalLineas}</strong> línea(s) · Total <strong>${totalQty}</strong> ud.${warn}`;
     document.getElementById('anular-ent-motivo').value = '';
     const err = document.getElementById('anular-ent-err'); if (err) err.style.display = 'none';
     openModal('anularEntradaModal');
@@ -8138,6 +8176,7 @@ async function confirmarAnularEntrada() {
     const motivo = (document.getElementById('anular-ent-motivo')?.value || '').trim();
     if (!motivo) { showFormError('anular-ent-err', 'Ingrese el motivo de la anulación.'); return; }
     const docId = _ajMovHeader.documentoId || '';
+    const numMovAnulado = _ajMovHeader.numeroMovimiento || '';
     const uid = rootUid || currentUser.uid;
     const ahora = new Date().toISOString();
     let numeroMovimiento = '';
@@ -8161,9 +8200,12 @@ async function confirmarAnularEntrada() {
             // Negativo; aquí hacemos lo mismo para no dejar el stock inflado.
             cantidad: -qty,
             bodega: o.bodega || '', ubicacion: o.ubicacion || '',
-            observaciones: `Anulación entrada N° ${docId} — ${motivo}`,
+            observaciones: `Anulación de ${numMovAnulado ? 'N° Movimiento ' + numMovAnulado : 'entrada'}${docId ? ` (doc ${docId})` : ''} — ${motivo}`,
             fecha: ahora, usuario: currentUser.email,
             status: 'Aprobado',
+            // Fuente autoritativa: N° Movimiento único de la operación anulada.
+            anulacionDeNumMov: numMovAnulado,
+            // Compat.: documentoId, para históricos y para el recálculo de factura.
             anulacionDe: docId,
             anulacionLineaKey: it.key
         };
