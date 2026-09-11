@@ -6699,6 +6699,46 @@ function saveDocumento() {
         tipo === 'Salida' ? 'btn-danger' : 'btn-primary',
         async () => {
             _setBtnLoading('btn-save-doc', true); // I1: spinner
+            // ── Validación FINAL de stock (previene race condition) ──
+            // Antes de escribir, forzamos recálculo del stock y verificamos que
+            // TODOS los ítems tengan disponibilidad real por (sku, lote, bodega,
+            // ubicación). Este check evita que, si el listener de Firebase no
+            // había alcanzado a actualizar data.movimientos con un movimiento
+            // anterior (grabado en otra sesión o pocos segundos antes), se
+            // termine grabando una Salida que consume stock ya consumido.
+            // Se agrega también validación por Cuarentena/estado terminal.
+            if (tipo === 'Salida') {
+                _invalidateStockCache();
+                const stockFinal = calcStock();
+                const requerido = {}; // key `sku|lote|bodega|ubic` → cantidad
+                movDocItems.forEach(it => {
+                    const k = `${it.sku}|${it.lote}|${bodega}|${it.ubicacion || ''}`;
+                    requerido[k] = (requerido[k] || 0) + (parseFloat(it.qty) || 0);
+                });
+                const problemas = [];
+                for (const [k, req] of Object.entries(requerido)) {
+                    const s = stockFinal[k];
+                    const [sku_, lote_, bod_, ubic_] = k.split('|');
+                    if (!s) {
+                        problemas.push(`SKU ${sku_} · Lote ${lote_} · ${ubic_ || '(sin ubic.)'}: sin registro en stock (requiere ${req} ud.).`);
+                        continue;
+                    }
+                    const st = getLoteStatus(s);
+                    if (st !== 'Aprobado') {
+                        problemas.push(`SKU ${sku_} · Lote ${lote_} · ${ubic_ || '(sin ubic.)'}: lote en estado "${st}", no despachable.`);
+                        continue;
+                    }
+                    const disp = parseFloat(s.cantidad) || 0;
+                    if (req > disp + 1e-6) {
+                        problemas.push(`SKU ${sku_} · Lote ${lote_} · ${ubic_ || '(sin ubic.)'}: disponible ${disp} ud., pide ${req} ud.`);
+                    }
+                }
+                if (problemas.length) {
+                    _setBtnLoading('btn-save-doc', false);
+                    alert('⚠ No se puede guardar la Salida — el stock disponible ya no cubre lo solicitado (probable actualización paralela desde otra sesión o cambio reciente en el mismo lote):\n\n' + problemas.join('\n\n') + '\n\nRefresque la página y vuelva a armar la salida.');
+                    return;
+                }
+            }
             // Un N° movimiento único por operación (transacción sobre el
             // correlativo). Se comparte entre todos los ítems del mismo documento
             // pero NUNCA se reutiliza aunque otra operación posterior use la misma
@@ -6744,6 +6784,19 @@ function saveDocumento() {
             });
             db.ref().update(updates)
                 .then(() => {
+                    // Inyección optimista: los movimientos que acabamos de
+                    // escribir se agregan a data.movimientos LOCALMENTE para que
+                    // calcStock los refleje inmediatamente en cualquier acción
+                    // siguiente del usuario, sin esperar el on('value') del
+                    // listener (que puede tardar cientos de ms). Cuando el
+                    // listener llegue, sobreescribirá con el mismo contenido —
+                    // es idempotente.
+                    for (let i = 0; i < movDocItems.length; i++) {
+                        const movId = String(ts0 + i);
+                        const mov = updates[`usuarios/${uid}/movimientos/${movId}`];
+                        if (mov) data.movimientos[movId] = mov;
+                    }
+                    _invalidateStockCache();
                     logAudit(tipo, 'Movimientos', `${movDocItems.length} SKUs`, documentoId, `Total: ${totalUnidades} ud.`);
                     // Si es Salida y coincide con una Factura por Despachar "abierta"
                     // (Pendiente o Parcialmente despachada), recalcular su estatus según
@@ -12879,6 +12932,64 @@ window.barridoIntegridad = async function() {
     console.log(text);
     try { copy(text); console.log('\n(reporte copiado al portapapeles)'); } catch (_) {}
     return { negativos, anom };
+};
+
+// Diagnóstico específico de un lote — se ejecuta desde la consola con:
+//     diagLote('A-008', '04550926')
+// Lista TODOS los movimientos del lote en orden cronológico, calcula el
+// stock resultante por ubicación y detecta si hubo sobreconsumo. Útil
+// para investigar un lote puntual sin barrer todo el histórico.
+window.diagLote = function(sku, lote) {
+    if (!sku || !lote) { console.log('Uso: diagLote(sku, lote)'); return; }
+    const movs = Object.values(data.movimientos || {})
+        .filter(m => m && m.sku === sku && m.lote === lote)
+        .sort((a, b) => new Date(a.fecha || 0) - new Date(b.fecha || 0));
+    if (!movs.length) { console.log(`Sin movimientos para SKU ${sku} · Lote ${lote}`); return; }
+    const stock = {}; // `bodega|ubic` → cantidad
+    const timeline = [];
+    movs.forEach(m => {
+        const q = parseFloat(m.cantidad) || 0;
+        let bodega = m.bodega || '', ubic = m.ubicacion || '';
+        const num = m.numeroMovimiento || m.documentoId || '—';
+        let delta = 0, dst = '', prev = 0;
+        if (m.tipo === 'Entrada' || m.tipo === 'AjusteInventario' || m.tipo === 'Devolución') {
+            const K = `${bodega}|${ubic}`;
+            prev = stock[K] || 0; stock[K] = prev + q; delta = +q; dst = K;
+        } else if (m.tipo === 'Salida' || m.tipo === 'Destrucción') {
+            const K = `${bodega}|${ubic}`;
+            prev = stock[K] || 0; stock[K] = prev - q; delta = -q; dst = K;
+        } else if (m.tipo === 'CambioUbicacion') {
+            const Ko = `${bodega}|${m.ubicacionOrigen || ''}`, Kd = `${bodega}|${ubic}`;
+            prev = stock[Ko] || 0;
+            stock[Ko] = prev - q; stock[Kd] = (stock[Kd] || 0) + q;
+            delta = -q; dst = `${Ko} → ${Kd}`;
+        } else {
+            dst = `${bodega}|${ubic}`; delta = 0; prev = stock[dst] || 0;
+        }
+        const flag = (m.tipo === 'Salida' || m.tipo === 'Destrucción' || m.tipo === 'CambioUbicacion') && prev < q ? '  ⚠ SOBRECONSUMO' : '';
+        timeline.push({
+            fecha: m.fecha, num, tipo: m.tipo, status: m.status || '',
+            qty: q, delta, prev, dst, resultado: (stock[dst.split(' → ')[0]] || 0), flag
+        });
+    });
+    const out = [`==== DIAGNÓSTICO DE LOTE ${sku} · ${lote} ====`, ''];
+    out.push('-- MOVIMIENTOS CRONOLÓGICOS --');
+    timeline.forEach(t => {
+        out.push(`  ${t.fecha ? t.fecha.slice(0, 19) : '(sin fecha)'} · ${t.num} · ${t.tipo}${t.status ? ` [${t.status}]` : ''} · ${t.dst} · ${t.delta >= 0 ? '+' : ''}${t.delta}${t.flag}`);
+    });
+    out.push('');
+    out.push('-- STOCK RESULTANTE POR UBICACIÓN --');
+    Object.entries(stock).sort().forEach(([k, v]) => {
+        const mark = v < 0 ? '  ⚠ NEGATIVO' : (v === 0 ? '  (agotado)' : '');
+        out.push(`  ${k}: ${v}${mark}`);
+    });
+    const total = Object.values(stock).reduce((a, v) => a + v, 0);
+    out.push('');
+    out.push(`-- TOTAL LOTE (sumando ubicaciones): ${total} --`);
+    const text = out.join('\n');
+    console.log(text);
+    try { copy(text); console.log('\n(reporte copiado al portapapeles)'); } catch (_) {}
+    return { timeline, stock, total };
 };
 
 function _appReloadForUpdate() {
