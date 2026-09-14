@@ -273,12 +273,22 @@ h1 { font-size: 22px; margin: 0 0 4px; }
       <div id="distBlock" class="dist-block hidden"></div>
 
       <!-- Botón agregar -->
-      <div style="margin-top:14px;display:flex;gap:8px">
-        <button class="btn" id="addBtn" onclick="onAdd()" disabled>+ Agregar producto (simulación)</button>
-        <button class="btn btn-ghost" onclick="resetItem()">Limpiar</button>
+      <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" id="addBtn" onclick="onAdd()" disabled>+ Agregar SKU al documento</button>
+        <button class="btn btn-ghost" onclick="resetItem()">Limpiar SKU actual</button>
       </div>
 
       <div class="status-msg" id="itemMsg"></div>
+    </div>
+
+    <!-- Documento borrador — SKUs ya agregados -->
+    <div id="docCard" class="card hidden">
+      <h3 class="section-title">Documento borrador — SKUs agregados</h3>
+      <div id="docItems"></div>
+      <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
+        <button class="btn btn-ghost" onclick="onDocClear()">Vaciar documento</button>
+        <button class="btn" style="background:var(--success)" onclick="onDocFinish()">Finalizar y generar plan</button>
+      </div>
     </div>
 
     <!-- Plan final -->
@@ -307,12 +317,16 @@ const db   = firebase.database();
 let data = { productos: {}, bodegas: {}, movimientos: {}, cuarentena: {}, devoluciones: {}, ajustesMovimiento: {} };
 let rootUid = null;
 
-// Estado del ítem en curso
+// Estado del ítem en curso (SKU actualmente en edición)
 let itemState = {
     sku: '', desc: '', qtyReq: 0,
     pool: [],           // lotes ya elegidos: [{lote, vence, take, ubics:[{ubic,qty}]}]
     pendingLote: null,  // lote propuesto en el diálogo de faltante
 };
+
+// Estado del documento borrador (varios SKUs para la misma factura)
+// items: [{ sku, descripcion, qtyReq, pool: [...] }]
+let docState = { items: [] };
 
 // ═══════════════ Concentrados / bultos ═══════════════
 const CONCENTRADO_SKUS_STATIC = new Set(['A-001','A-002','A-003','A-004','A-005','A-006','A-007','A-008','A-009','A-010','B-001']);
@@ -801,23 +815,155 @@ function refreshAddBtn(){
     btn.title = ok ? '' : (sinUbic ? 'Hay líneas sin ubicación' : excede ? 'Alguna línea excede el stock disponible' : `Faltan ${itemState.qtyReq - _sumado()} ud. para cubrir el pedido`);
 }
 function onAdd(){
+    // Guardamos el ítem actual en el documento borrador y limpiamos el
+    // formulario para permitir agregar OTRO SKU (mismo documento/factura).
     const prod=data.productos[itemState.sku]||{};
+    // Snapshot profundo del ítem — el estado se limpia al final.
+    const item={
+        sku: itemState.sku,
+        descripcion: prod.descripcion || '',
+        tipo: prod.tipo || '',
+        qtyReq: itemState.qtyReq,
+        pool: JSON.parse(JSON.stringify(itemState.pool)) // deep copy
+    };
+    // Si ya existe un ítem para el mismo SKU, lo reemplazamos (evita
+    // duplicados accidentales). Si el usuario quiere manejar dos
+    // documentos, mejor lo hacemos en flujos separados.
+    const idxExistente = docState.items.findIndex(x => x.sku === item.sku);
+    if (idxExistente >= 0) {
+        if (!confirm(`Ya hay un ítem para el SKU ${item.sku} en el documento. ¿Reemplazarlo con la nueva selección?`)) return;
+        docState.items[idxExistente] = item;
+    } else {
+        docState.items.push(item);
+    }
+    renderDoc();
+    // Limpiar el formulario del ítem (sin tocar bodega ni docState)
+    resetItem();
+    const msg=document.getElementById('itemMsg');
+    msg.className='status-msg ok';
+    msg.textContent=`✓ SKU ${item.sku} agregado al documento (${docState.items.length} ítem${docState.items.length>1?'s':''}). Ingresá otro SKU o finalizá para generar el plan.`;
+    document.getElementById('miSku').focus();
+}
+
+// ═══════════════ Documento borrador ═══════════════
+function renderDoc(){
+    const card=document.getElementById('docCard');
+    const tbody=document.getElementById('docItems');
+    if(!docState.items.length){ card.classList.add('hidden'); tbody.innerHTML=''; return; }
+    let html='<table style="width:100%;border-collapse:collapse;font-size:12px">'
+        +'<thead><tr style="background:var(--bg3)">'
+        +'<th style="padding:6px 8px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.3px">#</th>'
+        +'<th style="padding:6px 8px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.3px">SKU</th>'
+        +'<th style="padding:6px 8px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.3px">Descripción</th>'
+        +'<th style="padding:6px 8px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:.3px">Cant.</th>'
+        +'<th style="padding:6px 8px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.3px">Renglones</th>'
+        +'<th style="padding:6px 8px;text-align:right"></th>'
+        +'</tr></thead><tbody>';
+    docState.items.forEach((it,idx)=>{
+        const renglones = it.pool.reduce((a,p)=>a+p.ubics.length,0);
+        const totalItem = it.pool.reduce((a,p)=>a+p.ubics.reduce((b,u)=>b+(parseFloat(u.qty)||0),0),0);
+        const lotesInfo = it.pool.map(p=>`${p.lote} (${p.ubics.map(u=>u.ubic||'—').join(', ')})`).join(' · ');
+        html+=`<tr style="border-bottom:1px solid var(--border)">
+            <td style="padding:6px 8px">${idx+1}</td>
+            <td style="padding:6px 8px;font-weight:700;color:var(--accent2)">${it.sku}</td>
+            <td style="padding:6px 8px;font-size:11px">${it.descripcion||'—'}<div style="font-size:10px;color:var(--text3);margin-top:2px">${lotesInfo}</div></td>
+            <td style="padding:6px 8px;text-align:right;font-weight:600">${totalItem} / ${it.qtyReq}</td>
+            <td style="padding:6px 8px;font-size:11px;color:var(--text2)">${renglones} renglón(es)</td>
+            <td style="padding:6px 8px;text-align:right;white-space:nowrap">
+                <button type="button" class="btn btn-sm btn-ghost" style="font-size:11px;padding:3px 8px" onclick="onDocEditItem(${idx})">Editar</button>
+                <button type="button" class="btn btn-sm" style="font-size:11px;padding:3px 8px;background:transparent;color:var(--danger);border:1px solid var(--border)" onclick="onDocRemoveItem(${idx})">✕</button>
+            </td>
+        </tr>`;
+    });
+    html+='</tbody><tfoot><tr style="background:var(--bg3);font-weight:700">'
+        +`<td colspan="3" style="padding:6px 8px">Documento borrador (${docState.items.length} SKU${docState.items.length>1?'s':''})</td>`
+        +`<td style="padding:6px 8px;text-align:right">${docState.items.reduce((a,it)=>a+it.pool.reduce((b,p)=>b+p.ubics.reduce((c,u)=>c+(parseFloat(u.qty)||0),0),0),0)}</td>`
+        +`<td style="padding:6px 8px" colspan="2">${docState.items.reduce((a,it)=>a+it.pool.reduce((b,p)=>b+p.ubics.length,0),0)} renglón(es)</td>`
+        +'</tr></tfoot></table>';
+    tbody.innerHTML=html;
+    card.classList.remove('hidden');
+}
+function onDocRemoveItem(idx){
+    if(!docState.items[idx]) return;
+    if(!confirm(`¿Quitar el SKU ${docState.items[idx].sku} del documento?`)) return;
+    docState.items.splice(idx,1);
+    renderDoc();
+}
+function onDocEditItem(idx){
+    if(!docState.items[idx]) return;
+    if(itemState.sku && !confirm('Hay un SKU en edición actualmente. ¿Descartar y editar el seleccionado del documento?')) return;
+    const it = docState.items[idx];
+    // Sacamos del documento y ponemos en el editor
+    docState.items.splice(idx,1);
+    document.getElementById('miSku').value = it.sku;
+    onSkuChange();
+    document.getElementById('miQty').value = it.qtyReq;
+    itemState.qtyReq = it.qtyReq;
+    itemState.pool = JSON.parse(JSON.stringify(it.pool));
+    renderPool(); renderLotes(); renderDist(); refreshAddBtn(); renderDoc();
+    document.getElementById('miSku').scrollIntoView({behavior:'smooth',block:'center'});
+}
+function onDocClear(){
+    if(!docState.items.length) return;
+    if(!confirm(`¿Vaciar todo el documento borrador (${docState.items.length} SKU${docState.items.length>1?'s':''})?`)) return;
+    docState.items=[];
+    renderDoc();
+}
+function onDocFinish(){
+    if(!docState.items.length){ alert('El documento borrador está vacío. Agrega al menos un SKU.'); return; }
     const bodega=document.getElementById('setBodega').value;
-    const filas=[];
-    itemState.pool.forEach(p=>p.ubics.forEach(u=>filas.push({sku:itemState.sku,lote:p.lote,ubic:u.ubic,qty:u.qty,vence:p.vence})));
     const planCard=document.getElementById('planCard');
+    // Aplanar todos los items del documento en renglones
+    const filas=[];
+    docState.items.forEach(it=>{
+        it.pool.forEach(p=>{
+            p.ubics.forEach(u=>{
+                filas.push({
+                    sku: it.sku,
+                    descripcion: it.descripcion,
+                    lote: p.lote,
+                    ubic: u.ubic,
+                    qty: parseFloat(u.qty)||0,
+                    vence: p.vence
+                });
+            });
+        });
+    });
     let tbl=`<table style="width:100%;border-collapse:collapse;font-size:12px">
-        <thead><tr style="background:var(--bg3)"><th style="padding:6px;text-align:left">#</th><th style="padding:6px;text-align:left">SKU</th><th style="padding:6px;text-align:left">Lote</th><th style="padding:6px;text-align:left">Ubicación</th><th style="padding:6px;text-align:right">Cant.</th><th style="padding:6px;text-align:center">Bultos</th><th style="padding:6px;text-align:left">Vence</th></tr></thead>
+        <thead><tr style="background:var(--bg3)">
+            <th style="padding:6px;text-align:left">#</th>
+            <th style="padding:6px;text-align:left">SKU</th>
+            <th style="padding:6px;text-align:left">Descripción</th>
+            <th style="padding:6px;text-align:left">Lote</th>
+            <th style="padding:6px;text-align:left">Ubicación</th>
+            <th style="padding:6px;text-align:right">Cant.</th>
+            <th style="padding:6px;text-align:center">Bultos</th>
+            <th style="padding:6px;text-align:left">Vence</th>
+        </tr></thead>
         <tbody>${filas.map((f,i)=>{
-            const uds=_udsPorBulto(itemState.sku,f.lote,prod);
+            const prod=data.productos[f.sku]||{};
+            const uds=_udsPorBulto(f.sku,f.lote,prod);
             const b=uds?fmtBultos(f.qty,uds):'—';
-            return `<tr style="border-bottom:1px solid var(--border)"><td style="padding:6px">${i+1}</td><td style="padding:6px;font-weight:700">${f.sku}</td><td style="padding:6px;font-family:var(--mono)">${f.lote}</td><td style="padding:6px">${f.ubic||'—'}</td><td style="padding:6px;text-align:right">${f.qty}</td><td style="padding:6px;text-align:center;font-weight:700">${b}</td><td style="padding:6px">${fmtDate(f.vence)}</td></tr>`;
+            return `<tr style="border-bottom:1px solid var(--border)">
+                <td style="padding:6px">${i+1}</td>
+                <td style="padding:6px;font-weight:700">${f.sku}</td>
+                <td style="padding:6px;font-size:11px">${f.descripcion||'—'}</td>
+                <td style="padding:6px;font-family:var(--mono)">${f.lote}</td>
+                <td style="padding:6px">${f.ubic||'—'}</td>
+                <td style="padding:6px;text-align:right">${f.qty}</td>
+                <td style="padding:6px;text-align:center;font-weight:700">${b}</td>
+                <td style="padding:6px">${fmtDate(f.vence)}</td>
+            </tr>`;
         }).join('')}</tbody>
-        <tfoot><tr style="background:var(--bg3);font-weight:700"><td colspan="4" style="padding:6px">Total (${filas.length} renglones)</td><td style="padding:6px;text-align:right">${filas.reduce((a,f)=>a+f.qty,0)}</td><td colspan="2"></td></tr></tfoot>
+        <tfoot><tr style="background:var(--bg3);font-weight:700">
+            <td colspan="5" style="padding:6px">Total documento (${filas.length} renglones · ${docState.items.length} SKU${docState.items.length>1?'s':''})</td>
+            <td style="padding:6px;text-align:right">${filas.reduce((a,f)=>a+f.qty,0)}</td>
+            <td colspan="2"></td>
+        </tr></tfoot>
     </table>`;
     planCard.querySelector('#planDetail').innerHTML=`
         <p style="font-size:12px;color:var(--text2);margin:0 0 10px">
-            <strong>${prod.descripcion||itemState.sku}</strong> · Bodega ${bodega} · Cantidad requerida ${itemState.qtyReq}
+            <strong>Bodega ${bodega}</strong> · ${docState.items.length} SKU${docState.items.length>1?'s':''} · ${filas.length} renglón(es)
         </p>
         ${tbl}
         <div style="margin-top:10px;padding:8px 10px;background:#e3f2fd;border:1px solid #bbdefb;border-radius:5px;font-size:12px;color:#0d47a1">
@@ -825,9 +971,6 @@ function onAdd(){
         </div>`;
     planCard.classList.remove('hidden');
     planCard.scrollIntoView({behavior:'smooth',block:'nearest'});
-    const msg=document.getElementById('itemMsg');
-    msg.className='status-msg ok';
-    msg.textContent=`Ítem simulado con ${filas.length} renglón(es).`;
 }
 
 // ═══════════════ Reset ═══════════════
@@ -845,6 +988,8 @@ function resetItem(){
 }
 function resetTodo(){
     resetItem();
+    docState.items=[];
+    renderDoc();
     document.getElementById('planCard').classList.add('hidden');
     document.getElementById('planCard').querySelector('#planDetail').innerHTML='';
 }
