@@ -5005,8 +5005,13 @@ function _autoFillPalletsForSku() {
 let _mlPool = { activo: false, sku: '', bodega: '', qtyReq: 0, items: [], pendingLote: null };
 
 function _mlDebeActivar(tipo, sku) {
+    // Multi-lote activo para TODAS las Salidas de cualquier producto en
+    // cualquier bodega (antes sólo para concentrados). Se exige SKU válido
+    // en el maestro para evitar activar con SKU incompleto.
     if (tipo !== 'Salida') return false;
-    return CONCENTRADO_SKUS.has((sku || '').trim().toUpperCase());
+    const skuU = (sku || '').trim().toUpperCase();
+    if (!skuU) return false;
+    return !!(data && data.productos && data.productos[skuU]);
 }
 
 // Grupos por lote descontando el pool actual — se usa para renderizar
@@ -5145,20 +5150,94 @@ function _mlHideFaltante() {
     if (dlg) { dlg.style.display = 'none'; dlg.innerHTML = ''; }
 }
 
+// Pool EDITABLE (Opción E) — cada línea del pool despliega su propia
+// ubicación (select) y cantidad (input) editables. El operador puede
+// cambiar la sugerencia automática, mover unidades entre ubicaciones,
+// agregar/quitar líneas dentro del mismo lote, o mantener la propuesta.
+// Se valida en vivo: exceso de stock por ubicación, ubicación sin
+// seleccionar, exceso o déficit vs. cantidad requerida.
 function _mlRenderPool() {
     const el = document.getElementById('mi-ml-pool');
     if (!el) return;
     if (!_mlPool.activo || !_mlPool.items.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
     const prod = data.productos[_mlPool.sku];
-    const rowsHtml = _mlPool.items.map((p, i) => {
+    // Stock bruto por (lote, ubicación) para este SKU+bodega, EN vivo.
+    const stock = calcStock();
+    const brutoByLoteUbic = {}; // `lote|ubic` → stock aprobado
+    Object.values(stock).forEach(s => {
+        if (s.sku !== _mlPool.sku) return;
+        if ((s.bodega || '') !== _mlPool.bodega) return;
+        if ((parseFloat(s.cantidad) || 0) <= 0) return;
+        if (getLoteStatus(s) !== 'Aprobado') return;
+        brutoByLoteUbic[`${s.lote}|${s.ubicacion || ''}`] = parseFloat(s.cantidad) || 0;
+    });
+    // Ubicaciones disponibles por lote (para el dropdown).
+    const ubicsPorLote = {};
+    Object.keys(brutoByLoteUbic).forEach(k => {
+        const [lote, ubic] = k.split('|');
+        (ubicsPorLote[lote] || (ubicsPorLote[lote] = [])).push(ubic);
+    });
+    // Descontamos lo que ya toma cada OTRA línea del pool + movDocItems para
+    // saber cuánto máximo puede tomar cada línea sin exceder el disponible.
+    const enOtrasLineas = (lote, ubic, iSelf, jSelf) => {
+        let sum = 0;
+        _mlPool.items.forEach((p2, ii) => {
+            if (p2.lote !== lote) return;
+            p2.ubics.forEach((u2, jj) => {
+                if (ii === iSelf && jj === jSelf) return;
+                if ((u2.ubic || '') === (ubic || '')) sum += parseFloat(u2.qty) || 0;
+            });
+        });
+        (movDocItems || []).forEach(it => {
+            if (it.sku !== _mlPool.sku) return;
+            if ((it.bodega || _mlPool.bodega) !== _mlPool.bodega) return;
+            if (it.lote !== lote) return;
+            if ((it.ubicacion || '') !== (ubic || '')) return;
+            sum += parseFloat(it.qty) || 0;
+        });
+        return sum;
+    };
+    const itemsHtml = _mlPool.items.map((p, i) => {
         const uds = _udsPorBulto(_mlPool.sku, p.lote, prod);
-        const bultos = uds ? `${_fmtBultos(p.take, uds)} bultos` : '';
-        const ubicsTxt = p.ubics.map(u => `${u.ubic || '(sin ubic.)'}: ${u.qty}`).join(' · ');
-        return `<div class="ml-pool-row">
-            <div class="lote-code">${p.lote}</div>
-            <div>${p.take} ud.<div style="font-size:10px;color:var(--text3)">${bultos}</div></div>
-            <div style="font-size:11px;color:var(--text2)">${ubicsTxt}</div>
-            <button type="button" class="rm" title="Quitar lote" onclick="_mlPoolRemove(${i})">✕</button>
+        const bultosLote = uds ? ` · <span style="color:var(--text3);font-weight:400">${_fmtBultos(p.take, uds)} bultos</span>` : '';
+        const opciones = (ubicsPorLote[p.lote] || []).sort();
+        const linesHtml = p.ubics.map((u, j) => {
+            const bruto = brutoByLoteUbic[`${p.lote}|${u.ubic || ''}`] || 0;
+            const restanteOtras = enOtrasLineas(p.lote, u.ubic || '', i, j);
+            const dispMax = Math.max(0, bruto - restanteOtras);
+            const qtyNum = parseFloat(u.qty) || 0;
+            const excede = qtyNum > dispMax + 1e-6;
+            const sinUbic = !u.ubic;
+            const borde = (excede || sinUbic) ? 'border-color:var(--danger)' : '';
+            const opcionesHtml = opciones.map(o => {
+                const brutoOpt = brutoByLoteUbic[`${p.lote}|${o}`] || 0;
+                return `<option value="${o.replace(/"/g,'&quot;')}" ${o === u.ubic ? 'selected' : ''}>📍 ${o || '(sin ubic.)'} · stock ${brutoOpt}</option>`;
+            }).join('');
+            const alerta = excede
+                ? `<div style="grid-column:1/-1;font-size:11px;color:var(--danger);margin-top:2px">⚠ Excede stock en ${u.ubic || '(esta ubic.)'} — máx ${dispMax} ud.</div>`
+                : (sinUbic ? `<div style="grid-column:1/-1;font-size:11px;color:var(--danger);margin-top:2px">⚠ Seleccione una ubicación</div>` : '');
+            return `<div style="display:grid;grid-template-columns:1fr 110px 36px;gap:6px;align-items:center;margin-bottom:4px">
+                <select class="form-select" style="font-size:12px;${borde}" onchange="_mlPoolUbicChange(${i},${j},this.value)">
+                    <option value="">— sin ubicación —</option>
+                    ${opcionesHtml}
+                </select>
+                <input type="number" class="form-input no-spinner" style="font-size:12px;text-align:right;${borde}" min="0" step="1" value="${qtyNum}" onchange="_mlPoolQtyChange(${i},${j},this.value)" onwheel="this.blur()">
+                <button type="button" title="Quitar línea" onclick="_mlPoolLineaRemove(${i},${j})" style="background:transparent;border:1px solid var(--border);border-radius:4px;color:var(--danger);cursor:pointer;padding:4px 6px;font-size:13px">✕</button>
+                ${alerta}
+            </div>`;
+        }).join('');
+        return `<div style="border:1px solid rgba(8,84,160,.25);border-radius:6px;padding:8px 10px;margin-bottom:6px;background:white">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:6px;font-size:12px">
+                <div><strong style="font-family:var(--mono);font-size:13px">Lote ${p.lote}</strong> · Total tomado <strong>${p.take}</strong> ud.${bultosLote}</div>
+                <div style="display:flex;gap:6px">
+                    <button type="button" class="btn btn-sm btn-ghost" style="font-size:11px;padding:3px 8px" onclick="_mlPoolAddUbic(${i})">+ Agregar ubicación</button>
+                    <button type="button" class="btn btn-sm" style="font-size:11px;padding:3px 8px;background:transparent;color:var(--danger);border:1px solid var(--border)" onclick="_mlPoolRemove(${i})">Quitar lote</button>
+                </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 110px 36px;gap:6px;font-size:10px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.3px;padding:2px;border-bottom:1px dashed var(--border);margin-bottom:4px">
+                <span>Ubicación (stock)</span><span style="text-align:right">Cantidad</span><span></span>
+            </div>
+            ${linesHtml}
         </div>`;
     }).join('');
     const sum = _mlSumado();
@@ -5166,8 +5245,8 @@ function _mlRenderPool() {
     const cls = diff === 0 ? 'ok' : 'miss';
     const msg = diff === 0 ? '✓ Cubre el pedido' : (diff > 0 ? `Faltan ${diff} ud.` : `Sobran ${-diff} ud.`);
     el.innerHTML = `<div class="ml-pool-card">
-        <div class="ml-pool-title">Selección acumulada (${_mlPool.items.length} lote${_mlPool.items.length > 1 ? 's' : ''})</div>
-        ${rowsHtml}
+        <div class="ml-pool-title">Selección acumulada — editable (${_mlPool.items.length} lote${_mlPool.items.length > 1 ? 's' : ''})</div>
+        ${itemsHtml}
         <div class="ml-pool-total ${cls}"><span>Total: ${sum} / ${_mlPool.qtyReq} ud.</span><span>${msg}</span></div>
     </div>`;
     el.style.display = '';
@@ -5178,6 +5257,37 @@ function _mlPoolRemove(idx) {
     _mlRenderPool();
     if (_mlPool.sku) loadMiLotesDisponibles(_mlPool.sku);
     _mlSyncHiddenLote();
+}
+function _mlPoolUbicChange(i, j, nuevaUbic) {
+    if (!_mlPool.items[i] || !_mlPool.items[i].ubics[j]) return;
+    _mlPool.items[i].ubics[j].ubic = nuevaUbic;
+    _mlRenderPool();
+    if (_mlPool.sku) loadMiLotesDisponibles(_mlPool.sku);
+}
+function _mlPoolQtyChange(i, j, val) {
+    if (!_mlPool.items[i] || !_mlPool.items[i].ubics[j]) return;
+    const q = Math.max(0, parseFloat(val) || 0);
+    _mlPool.items[i].ubics[j].qty = q;
+    _mlPool.items[i].take = _mlPool.items[i].ubics.reduce((a, u) => a + (parseFloat(u.qty) || 0), 0);
+    _mlRenderPool();
+    if (_mlPool.sku) loadMiLotesDisponibles(_mlPool.sku);
+}
+function _mlPoolLineaRemove(i, j) {
+    if (!_mlPool.items[i] || !_mlPool.items[i].ubics[j]) return;
+    _mlPool.items[i].ubics.splice(j, 1);
+    if (!_mlPool.items[i].ubics.length) {
+        _mlPool.items.splice(i, 1);
+    } else {
+        _mlPool.items[i].take = _mlPool.items[i].ubics.reduce((a, u) => a + (parseFloat(u.qty) || 0), 0);
+    }
+    _mlRenderPool();
+    if (_mlPool.sku) loadMiLotesDisponibles(_mlPool.sku);
+    _mlSyncHiddenLote();
+}
+function _mlPoolAddUbic(i) {
+    if (!_mlPool.items[i]) return;
+    _mlPool.items[i].ubics.push({ ubic: '', qty: 0 });
+    _mlRenderPool();
 }
 
 // Sincroniza _mlPool con el estado del formulario (tipo, sku, bodega, qty).
@@ -5421,11 +5531,14 @@ function loadMiLotesDisponibles(sku) {
     }
 
     const isAjuste = tipoMov === 'Ajuste';
-    // Salida de concentrado: consolidamos las tarjetas por (lote, status) para
-    // evitar que un mismo lote se repita cuando está en varias ubicaciones.
-    // Cada tarjeta muestra en línea el detalle de ubicaciones y sus cantidades.
-    const isConcSalida = (tipoMov === 'Salida') && CONCENTRADO_SKUS.has((sku||'').toUpperCase());
-    if (isConcSalida) {
+    // Consolidamos las tarjetas por (lote, status) para TODAS las Salidas
+    // (antes sólo se hacía para concentrados). Un mismo lote en varias
+    // ubicaciones ahora se muestra como una sola tarjeta con el detalle
+    // de ubicaciones inline — corrige el bug de "mismo lote 6 veces" en
+    // salidas de no-concentrado (captura 2026-09-14_2).
+    const esSalidaAgrupada = (tipoMov === 'Salida');
+    const isConcSalida = esSalidaAgrupada && CONCENTRADO_SKUS.has((sku||'').toUpperCase());
+    if (esSalidaAgrupada) {
         const groups = {};
         lotes.forEach(l => {
             const st = getLoteStatus(l);
@@ -5494,16 +5607,20 @@ function loadMiLotesDisponibles(sku) {
         const diasLabel = dias !== null ? (dias < 0 ? '<span style="color:var(--danger);font-weight:600">VENCIDO</span>' : `${dias}d`) : '—';
         // En Cambio de Status mostramos siempre la ubicación específica del lote,
         // ya que cada tarjeta corresponde a un stock (lote+ubicación+estado) puntual.
-        const nUbic = isConcSalida
+        // FIX bug conteo: filtrar SIEMPRE por bodega. Antes contaba ubicaciones
+        // en TODAS las bodegas para el mismo lote — producía "9 ubicaciones"
+        // cuando en la bodega actual sólo había 1 (captura 2026-09-14_3).
+        const nUbic = esSalidaAgrupada
             ? (l.ubicaciones ? l.ubicaciones.length : 1)
-            : Object.values(stock).filter(s => s.sku === sku && s.lote === l.lote && s.cantidad > 0).length;
+            : Object.values(stock).filter(s => s.sku === sku && s.lote === l.lote && (s.bodega||'') === bodegaSel && s.cantidad > 0).length;
         const ubicLabel = isAjuste
             ? (l.ubicacion ? `<span style="font-size:10px;color:var(--text3)">📍 ${l.ubicacion}</span>` : '')
             : (nUbic > 1 ? `<span style="color:var(--accent);font-size:10px;font-weight:600">📍 ${nUbic} ubicaciones</span>` : (l.ubicacion ? `<span style="font-size:10px;color:var(--text3)">📍 ${l.ubicacion}</span>` : ''));
-        // Detalle horizontal de ubicaciones/cantidad para Salida de concentrado.
-        // Renderiza chips inline: "A-1: 126 · A-2: 126 · A-3: 118".
+        // Detalle horizontal de ubicaciones/cantidad para TODAS las Salidas
+        // agrupadas (ahora también no-concentrado). Renderiza chips inline:
+        // "A-1: 126 · A-2: 126 · A-3: 118".
         let ubicDetail = '';
-        if (isConcSalida && Array.isArray(l.ubicaciones) && l.ubicaciones.length) {
+        if (esSalidaAgrupada && Array.isArray(l.ubicaciones) && l.ubicaciones.length) {
             const chips = l.ubicaciones.map(u => {
                 const nombre = u.ubicacion || '(sin ubic.)';
                 return `<span style="display:inline-block;padding:2px 8px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;font-size:11px;color:var(--text2);font-family:var(--mono)">📍 ${nombre}: <strong>${u.cantidad}</strong></span>`;
@@ -5520,7 +5637,7 @@ function loadMiLotesDisponibles(sku) {
         // Badge Insuf. cuando en modo multi-lote el lote no cubre el faltante
         let insufBadge = '';
         let insufCls = '';
-        if (isConcSalida && _mlPool.activo && _mlPool.qtyReq > 0) {
+        if (esSalidaAgrupada && _mlPool.activo && _mlPool.qtyReq > 0) {
             const falt = _mlFaltante();
             if (falt > 0 && (parseFloat(l.cantidad) || 0) < falt) {
                 insufBadge = `<span style="font-size:10px;font-weight:700;padding:2px 6px;border-radius:3px;background:rgba(237,108,2,.14);color:var(--warning);letter-spacing:.3px">Insuf. (${l.cantidad}/${falt})</span>`;
@@ -5964,6 +6081,12 @@ function addItemToDoc() {
         for (const it of _mlPool.items) {
             for (const d of (it.ubics || [])) {
                 if (!(d.qty > 0)) continue;
+                // Ubicación vacía en una línea con qty > 0 es error del operador —
+                // debe seleccionar una ubicación real (bug de datos si se persiste).
+                if (!d.ubic) {
+                    showFormError('mi-err', `Lote ${it.lote}: hay una línea con cantidad (${d.qty} ud.) sin ubicación asignada. Seleccione una ubicación o elimine la línea.`);
+                    return;
+                }
                 const loc = Object.values(stockML).find(s =>
                     s.sku === sku && s.lote === it.lote && (s.bodega || '') === bodegaSelML
                     && (s.ubicacion || '') === (d.ubic || '') && getLoteStatus(s) === 'Aprobado');
@@ -5971,8 +6094,14 @@ function addItemToDoc() {
                 const enDoc = movDocItems
                     .filter(x => x.sku === sku && x.lote === it.lote && (x.ubicacion || '') === (d.ubic || ''))
                     .reduce((a, x) => a + x.qty, 0);
-                if (d.qty + enDoc > disp) {
-                    showFormError('mi-err', `Stock insuficiente en lote ${it.lote} / ubicación ${d.ubic || '(sin ubic.)'}: disponible ${disp} ud., ya en documento ${enDoc}, requerido ${d.qty}.`);
+                // Descontar también OTRAS líneas del pool que apunten a la misma ubic
+                const enOtrasLineas = _mlPool.items.reduce((acc, p2) => {
+                    if (p2 === it) return acc;
+                    if (p2.lote !== it.lote) return acc;
+                    return acc + p2.ubics.reduce((a2, u2) => a2 + ((u2.ubic || '') === d.ubic ? (parseFloat(u2.qty) || 0) : 0), 0);
+                }, 0);
+                if (d.qty + enDoc + enOtrasLineas > disp + 1e-6) {
+                    showFormError('mi-err', `Stock insuficiente en lote ${it.lote} / ubicación ${d.ubic}: disponible ${disp} ud., ya en documento ${enDoc}${enOtrasLineas > 0 ? ' + ' + enOtrasLineas + ' en otra línea del pool' : ''}, requerido ${d.qty}.`);
                     return;
                 }
             }
