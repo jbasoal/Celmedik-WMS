@@ -6717,7 +6717,11 @@ const NUMMOV_PREFIJOS = {
     'CambioEstado':     'CST',
     'CambioUbicacion':  'TRF',
     'Destrucción':      'DES',
-    'AjusteInventario': 'AJU'
+    'AjusteInventario': 'AJU',
+    // Ajuste de Movimiento (modificación de un movimiento previo). Emite un
+    // N° propio distinto del N° del movimiento original — aparece en el
+    // banner de trazabilidad del PDF.
+    'AjusteMovimiento': 'AJM'
 };
 function _prefijoNumMov(tipo) { return NUMMOV_PREFIJOS[tipo] || 'MOV'; }
 
@@ -7260,6 +7264,77 @@ function generatePDF(docData, opts) {
         addInfo('Observaciones:', docData.obs, margin, y, 35);
     }
 
+    // ── Banner de trazabilidad del AJUSTE (aparece sólo si el movimiento
+    // fue modificado por Ajuste de Movimiento o Anulación). Muestra:
+    //   • N° Ajuste (nuevo, distinto del N° Movimiento original)
+    //   • N° Movimiento original al que se aplicó el ajuste
+    //   • Persona (email + perfil) que hizo el ajuste
+    //   • Fecha y hora del ajuste
+    //   • Motivo del ajuste
+    // Diseño: rectángulo naranja/ámbar destacado sobre la tabla de productos.
+    const ajInfo = docData.ajusteInfo;
+    if (ajInfo && (ajInfo.ajusteNumMov || ajInfo.ajustadoEn)) {
+        y += 10;
+        const bannerX = margin;
+        const bannerW = pageW - margin * 2;
+        const esAnulado = (ajInfo.modo === 'ANULADO');
+        // Cabecera del banner (barra ámbar para MODIFICADO, roja para ANULADO).
+        if (esAnulado) doc.setFillColor(198, 40, 40);
+        else           doc.setFillColor(237, 108, 2);
+        doc.rect(bannerX, y - 3, bannerW, 6, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(9); doc.setFont('helvetica', 'bold');
+        const tituloBanner = esAnulado
+            ? '⛔  DOCUMENTO ANULADO — TRAZABILIDAD DE LA ANULACIÓN'
+            : '⚠  DOCUMENTO MODIFICADO POR AJUSTE DE MOVIMIENTO — TRAZABILIDAD';
+        doc.text(tituloBanner, bannerX + 2, y + 1);
+        // Cuerpo del banner (fondo crema para MOD, rosa claro para ANU).
+        const bodyH = 26;
+        if (esAnulado) doc.setFillColor(253, 236, 234);
+        else           doc.setFillColor(255, 248, 225);
+        doc.rect(bannerX, y + 3, bannerW, bodyH, 'F');
+        if (esAnulado) doc.setDrawColor(198, 40, 40);
+        else           doc.setDrawColor(237, 108, 2);
+        doc.setLineWidth(0.3);
+        doc.rect(bannerX, y - 3, bannerW, bodyH + 6);
+        // Contenido
+        if (esAnulado) doc.setTextColor(114, 34, 34);
+        else           doc.setTextColor(107, 77, 0);
+        doc.setFontSize(8);
+        const rowY0 = y + 8;
+        const rowStep = 5;
+        const colA = bannerX + 2;
+        const colB = bannerX + bannerW / 2 + 2;
+        const putRow = (lbl1, val1, lbl2, val2, ry) => {
+            doc.setFont('helvetica', 'bold'); doc.text(lbl1, colA, ry);
+            doc.setFont('helvetica', 'normal'); doc.text(String(val1 || '—'), colA + 36, ry);
+            if (lbl2) {
+                doc.setFont('helvetica', 'bold'); doc.text(lbl2, colB, ry);
+                doc.setFont('helvetica', 'normal'); doc.text(String(val2 || '—'), colB + 40, ry);
+            }
+        };
+        const numMovOrig = ajInfo.numMovOriginal || docData.numeroMovimiento || '—';
+        const numAjuste  = ajInfo.ajusteNumMov || `(sin N° · ajusteId ${(ajInfo.ajusteId||'').slice(-8)})`;
+        const fechaAjuste = ajInfo.ajustadoEn ? new Date(ajInfo.ajustadoEn).toLocaleString('es-CL') : '—';
+        const ajustadoPor = ajInfo.ajustadoPor
+            ? (ajInfo.ajustadoPorPerfil ? `${ajInfo.ajustadoPor} · ${ajInfo.ajustadoPorPerfil}` : ajInfo.ajustadoPor)
+            : '—';
+        const lblAccion  = esAnulado ? 'N° Anulación:' : 'N° Ajuste:';
+        const lblAgente  = esAnulado ? 'Anulado por:' : 'Ajustado por:';
+        const lblFecha   = esAnulado ? 'Fecha anulación:' : 'Fecha del ajuste:';
+        const lblMotivo  = esAnulado ? 'Motivo anulación:' : 'Motivo del ajuste:';
+        putRow(lblAccion, numAjuste, 'N° Movimiento original:', numMovOrig, rowY0);
+        putRow(lblAgente, ajustadoPor, lblFecha, fechaAjuste, rowY0 + rowStep);
+        if (ajInfo.ajusteMotivo) {
+            putRow(lblMotivo, ajInfo.ajusteMotivo, '', '', rowY0 + rowStep * 2);
+        }
+        doc.setDrawColor(180, 180, 180);
+        doc.setLineWidth(0.2);
+        y += bodyH + 8;
+        // Reset color de texto para el contenido siguiente
+        doc.setTextColor(29, 45, 62);
+    }
+
     // Tabla de productos
     y += 12;
     doc.setFontSize(10); doc.setFont('helvetica', 'bold'); doc.setTextColor(29, 45, 62);
@@ -7441,7 +7516,12 @@ function generatePDF(docData, opts) {
         .replace(/[^a-zA-Z0-9._-]/g, '_') // sanitizar
         .slice(0, 24);
     const fechaSlug = new Date().toISOString().split('T')[0];
-    const sufijo = porUbicacion ? '_DETALLE_UBICACION' : '';
+    let sufijo = porUbicacion ? '_DETALLE_UBICACION' : '';
+    // Marca de AJUSTE en el nombre del archivo si el movimiento fue modificado.
+    // Ayuda a distinguirlo del PDF original cuando se comparten por Drive.
+    if (docData.ajusteInfo && docData.ajusteInfo.ajusteNumMov) {
+        sufijo += `_AJUSTE_${docData.ajusteInfo.ajusteNumMov}`;
+    }
     // Nombre asociado al N° movimiento (identificador único de la operación).
     // Si no existe (movimientos históricos), se cae al documentoId.
     const idArchivo = docData.numeroMovimiento || docData.documentoId;
@@ -7515,6 +7595,33 @@ function regenerarPDF(idOperacion) {
         usuarioPerfil: perfilRegen,
         usuarioUid: uidRegen
     };
+    // Metadatos del último ajuste O anulación (si el movimiento fue
+    // modificado o anulado), para que generatePDF pinte el banner de
+    // trazabilidad. Se prioriza el AJUSTE de movimiento; si no existe pero
+    // sí hay anulación, se muestran los datos de la anulación.
+    if (ref.ajustadoEn || ref.ajusteNumMov) {
+        docData.ajusteInfo = {
+            modo:               'MODIFICADO',
+            ajusteNumMov:       ref.ajusteNumMov || '',
+            ajusteId:           ref.ajusteId || '',
+            ajustadoEn:         ref.ajustadoEn || '',
+            ajustadoPor:        ref.ajustadoPor || '',
+            ajustadoPorPerfil:  ref.ajustadoPorPerfil || '',
+            ajusteMotivo:       ref.ajusteMotivo || '',
+            numMovOriginal:     ref.numeroMovimiento || ''
+        };
+    } else if (ref.anuladoEn || ref.anulacionNumMov) {
+        docData.ajusteInfo = {
+            modo:               'ANULADO',
+            ajusteNumMov:       ref.anulacionNumMov || '',
+            ajusteId:           ref.anulacionAjusteId || '',
+            ajustadoEn:         ref.anuladoEn || '',
+            ajustadoPor:        ref.anuladoPor || '',
+            ajustadoPorPerfil:  ref.anuladoPorPerfil || '',
+            ajusteMotivo:       ref.anulacionMotivo || '',
+            numMovOriginal:     ref.numeroMovimiento || ''
+        };
+    }
     generatePDF(docData);
     // PDF adicional con detalle por ubicación (Salidas de Biodial con SKUs A-*/B-001)
     if (_requiereDetalleUbicacion(docData)) generatePDF(docData, { porUbicacion: true });
@@ -8038,7 +8145,7 @@ function _detalleCambiosPorItem() {
     }).filter(x => Object.keys(x.cambios).length > 0);
 }
 
-function guardarAjusteMov() {
+async function guardarAjusteMov() {
     const uid = rootUid || currentUser.uid;
     const h = _ajMovHeader;
     const cambios = _resumeCambiosAjMov();
@@ -8046,6 +8153,18 @@ function guardarAjusteMov() {
     const ref0 = _ajMovItems[0]?.original || {};
     const fechaAjuste = new Date().toISOString();
     const ajusteId = db.ref(`usuarios/${uid}/ajustesMovimiento`).push().key;
+
+    // N° de transacción del AJUSTE — distinto del N° Movimiento original.
+    // Aparece en el PDF y en el historial para trazabilidad completa.
+    // Usa el prefijo AJM (Ajuste de Movimiento). Si la generación falla,
+    // se cae a un tag reversible con el ajusteId truncado.
+    _setBtnLoading('btn-save-ajmov', true);
+    let ajusteNumMov = '';
+    try { ajusteNumMov = await generarNumeroMovimiento('AjusteMovimiento'); }
+    catch (e) {
+        console.warn('No se pudo generar N° de ajuste, usando fallback:', e);
+        ajusteNumMov = `AJM-${new Date().getFullYear()}-${ajusteId.slice(-6).toUpperCase()}`;
+    }
 
     const updates = {};
     _ajMovItems.forEach(it => {
@@ -8066,9 +8185,13 @@ function guardarAjusteMov() {
         };
         if (it.original.tipo === 'Salida') merged.fechaDespacho = h.fechaDespacho || '';
         if (it.original.tipo === 'CambioUbicacion') merged.ubicacionOrigen = o.ubicacionOrigen || '';
+        // Metadatos de trazabilidad del ajuste (aparecen en el PDF regenerado).
         merged.ajustadoEn = fechaAjuste;
         merged.ajustadoPor = currentUser.email;
+        merged.ajustadoPorPerfil = userPerfil || '';
         merged.ajusteId = ajusteId;
+        merged.ajusteNumMov = ajusteNumMov;         // nuevo N° AJM-XXXX
+        merged.ajusteMotivo = h.motivoAjuste || '';
         updates[`usuarios/${uid}/movimientos/${it.key}`] = merged;
     });
 
@@ -8086,6 +8209,7 @@ function guardarAjusteMov() {
         // N° movimiento de la operación ajustada — único, permite regenerar
         // el PDF de esa operación específica aunque comparta referencia con otras.
         numeroMovimiento: ref0.numeroMovimiento || '',
+        ajusteNumeroMovimiento: ajusteNumMov,       // N° del propio ajuste
         documentoId: h.documentoId || '',
         referencia: h.referencia || (ref0.referencia || ''),
         tipoMovimiento: ref0.tipo || '',
@@ -8098,7 +8222,6 @@ function guardarAjusteMov() {
         resumen: cambios.slice(0, 30)
     };
 
-    _setBtnLoading('btn-save-ajmov', true);
     db.ref().update(updates)
         .then(() => {
             // Auditoría: resumen general + una entrada por cada cambio (recortada si es grande)
@@ -8113,7 +8236,7 @@ function guardarAjusteMov() {
             // para no mezclar con otras operaciones que compartan referencia.
             try { regenerarPDF(ref0.numeroMovimiento || h.documentoId); } catch(e) { console.warn('No se pudo regenerar PDF:', e); }
             const c = document.getElementById('ajMovResults');
-            if (c) c.insertAdjacentHTML('afterbegin', '<div class="alert-banner success" style="margin:8px 0"><div class="alert-banner-icon">✓</div><div><div class="alert-banner-title">Ajuste aplicado</div><div class="alert-banner-text">Los cambios fueron guardados, el stock se recalcula automáticamente, quedó registrado en el historial de ajustes y en auditoría, y se generó un nuevo PDF con la información final.</div></div></div>');
+            if (c) c.insertAdjacentHTML('afterbegin', `<div class="alert-banner success" style="margin:8px 0"><div class="alert-banner-icon">✓</div><div><div class="alert-banner-title">Ajuste aplicado · N° Ajuste ${ajusteNumMov}</div><div class="alert-banner-text">Los cambios fueron guardados. Se generó un nuevo PDF con banner de trazabilidad indicando el N° Ajuste (${ajusteNumMov}), el N° Movimiento original (${ref0.numeroMovimiento || '—'}), la persona que lo realizó y la fecha. El stock se recalcula automáticamente y quedó registrado en historial y auditoría.</div></div></div>`);
             // El listener de ajustesMovimiento refrescará el historial automáticamente
         })
         .catch(err => {
@@ -8284,6 +8407,24 @@ async function confirmarAnularSalida() {
     // Registrar en el Historial de Ajustes de Movimiento — así aparece en
     // el mismo listado que los ajustes de datos, distinguido como Anulación.
     const ajusteId = db.ref(`usuarios/${uid}/ajustesMovimiento`).push().key;
+
+    // Marcar los movimientos ORIGINALES con metadatos de trazabilidad de la
+    // anulación. No afecta cantidad/status/stock — sólo agrega flags para
+    // que el PDF regenerado del movimiento original muestre el banner de
+    // "ANULADO por AJU-XXXX el DD-MM · por USER".
+    _ajMovItems.forEach(it => {
+        const orig = it.original;
+        const marca = {
+            ...orig,
+            anuladoEn: ahora,
+            anuladoPor: currentUser.email,
+            anuladoPorPerfil: userPerfil || '',
+            anulacionNumMov: numeroMovimiento, // N° del AjusteInventario que anula
+            anulacionMotivo: motivo,
+            anulacionAjusteId: ajusteId
+        };
+        updates[`usuarios/${uid}/movimientos/${it.key}`] = marca;
+    });
     updates[`usuarios/${uid}/ajustesMovimiento/${ajusteId}`] = {
         fecha: ahora,
         usuario: currentUser.email,
@@ -8475,6 +8616,23 @@ async function confirmarAnularEntrada() {
     // Registrar en el Historial de Ajustes de Movimiento — así aparece en
     // el mismo listado que los ajustes de datos, distinguido como Anulación.
     const ajusteId = db.ref(`usuarios/${uid}/ajustesMovimiento`).push().key;
+
+    // Marcar los movimientos ORIGINALES con metadatos de trazabilidad de la
+    // anulación. No afecta cantidad/status/stock — sólo agrega flags para el
+    // banner de trazabilidad del PDF del movimiento original.
+    _ajMovItems.forEach(it => {
+        const orig = it.original;
+        const marca = {
+            ...orig,
+            anuladoEn: ahora,
+            anuladoPor: currentUser.email,
+            anuladoPorPerfil: userPerfil || '',
+            anulacionNumMov: numeroMovimiento,
+            anulacionMotivo: motivo,
+            anulacionAjusteId: ajusteId
+        };
+        updates[`usuarios/${uid}/movimientos/${it.key}`] = marca;
+    });
     updates[`usuarios/${uid}/ajustesMovimiento/${ajusteId}`] = {
         fecha: ahora,
         usuario: currentUser.email,
