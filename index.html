@@ -5437,37 +5437,40 @@ function loadMiLotesDisponibles(sku) {
             groups[gkey].ubicaciones.push({ ubicacion:l.ubicacion || '', cantidad: parseFloat(l.cantidad) || 0 });
             if (!groups[gkey].vence && l.vence) groups[gkey].vence = l.vence;
         });
-        // Descontar pool multi-lote actual y movDocItems ya cargados para el
-        // mismo SKU/lote/bodega, para que no aparezca stock ya "reservado".
-        const enUsoPorLote = {};
+        // Descontar pool multi-lote actual y movDocItems ya cargados POR
+        // (lote, ubicación) — la misma clave que usa _mlGruposDisponibles y
+        // _mlDistribuirEnUbics. Antes se descontaba por lote agregado
+        // "de la ubicación más grande primero", lo que producía labels
+        // inconsistentes: la tarjeta del lote mostraba ubicaciones/qtys que
+        // no coincidían con las que efectivamente se estaban consumiendo
+        // del stock, y al elegir el lote _mlGruposDisponibles devolvía
+        // otro reparto (bug reportado en captura 2026-09-14).
+        const enUsoPorClave = {}; // `lote|ubic` → cantidad ya reservada
         (_mlPool.items || []).forEach(p => {
-            enUsoPorLote[p.lote] = (enUsoPorLote[p.lote] || 0) + (parseFloat(p.take) || 0);
+            (p.ubics || []).forEach(pu => {
+                const k = `${p.lote}|${pu.ubic || ''}`;
+                enUsoPorClave[k] = (enUsoPorClave[k] || 0) + (parseFloat(pu.qty) || 0);
+            });
         });
         (movDocItems || []).forEach(it => {
             if (it.sku !== sku) return;
             if ((it.bodega || bodegaSel) !== bodegaSel) return;
-            enUsoPorLote[it.lote] = (enUsoPorLote[it.lote] || 0) + (parseFloat(it.qty) || 0);
+            const k = `${it.lote}|${it.ubicacion || ''}`;
+            enUsoPorClave[k] = (enUsoPorClave[k] || 0) + (parseFloat(it.qty) || 0);
         });
         Object.values(groups).forEach(g => {
-            // Descontar por lote (proporcional a ubicaciones — tomamos las más grandes primero)
-            let restar = enUsoPorLote[g.lote] || 0;
-            if (restar > 0) {
-                g.ubicaciones.sort((a,b) => b.cantidad - a.cantidad);
-                for (const u of g.ubicaciones) {
-                    if (restar <= 0) break;
-                    const t = Math.min(u.cantidad, restar);
-                    u.cantidad -= t;
-                    restar -= t;
-                }
-                g.ubicaciones = g.ubicaciones.filter(u => u.cantidad > 0);
-                g.cantidad = g.ubicaciones.reduce((a,u) => a + u.cantidad, 0);
-            }
-            g.ubicaciones.sort((a,b) => (a.ubicacion||'').localeCompare(b.ubicacion||''));
+            g.ubicaciones.forEach(u => {
+                const dec = enUsoPorClave[`${g.lote}|${u.ubicacion || ''}`] || 0;
+                u.cantidad = Math.max(0, u.cantidad - dec);
+            });
+            g.ubicaciones = g.ubicaciones.filter(u => u.cantidad > 0);
+            g.cantidad = g.ubicaciones.reduce((a, u) => a + u.cantidad, 0);
+            g.ubicaciones.sort((a, b) => (a.ubicacion || '').localeCompare(b.ubicacion || ''));
             g.ubicacion = g.ubicaciones[0] ? g.ubicaciones[0].ubicacion : '';
         });
         lotes = Object.values(groups)
             .filter(g => g.cantidad > 0)
-            .sort((a,b) => new Date(a.vence||'9999') - new Date(b.vence||'9999'));
+            .sort((a, b) => new Date(a.vence || '9999') - new Date(b.vence || '9999'));
     }
     let html = '<input type="hidden" id="mi-lote" value=""><input type="hidden" id="mi-lote-status" value=""><div class="lote-selector-list">';
     lotes.forEach(l => {
