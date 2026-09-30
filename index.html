@@ -5197,9 +5197,16 @@ function _mlRenderPool() {
         });
         return sum;
     };
+    // Grid del pool: Ubicación | Cantidad | Bultos | Quitar. La columna Bultos
+    // sólo se dibuja cuando la presentación es parseable (concentrado o
+    // medicamento con "x N"). Para el resto de casos se colapsa a 3 columnas
+    // igual que antes.
+    const gridCols3 = '1fr 110px 36px';
+    const gridCols4 = '1fr 90px 130px 36px';
     const itemsHtml = _mlPool.items.map((p, i) => {
         const uds = _udsPorBulto(_mlPool.sku, p.lote, prod);
-        const bultosLote = uds ? ` · <span style="color:var(--text3);font-weight:400">${_fmtBultos(p.take, uds)} bultos</span>` : '';
+        const bultosLote = uds ? ` · <span style="color:var(--text3);font-weight:400">${_fmtBultosLegible(p.take, uds)}</span>` : '';
+        const gridCols = uds ? gridCols4 : gridCols3;
         const opciones = (ubicsPorLote[p.lote] || []).sort();
         const linesHtml = p.ubics.map((u, j) => {
             const bruto = brutoByLoteUbic[`${p.lote}|${u.ubic || ''}`] || 0;
@@ -5216,16 +5223,21 @@ function _mlRenderPool() {
             const alerta = excede
                 ? `<div style="grid-column:1/-1;font-size:11px;color:var(--danger);margin-top:2px">⚠ Excede stock en ${u.ubic || '(esta ubic.)'} — máx ${dispMax} ud.</div>`
                 : (sinUbic ? `<div style="grid-column:1/-1;font-size:11px;color:var(--danger);margin-top:2px">⚠ Seleccione una ubicación</div>` : '');
-            return `<div style="display:grid;grid-template-columns:1fr 110px 36px;gap:6px;align-items:center;margin-bottom:4px">
+            const bultosCell = uds
+                ? `<div style="font-size:11px;color:var(--text2);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${_fmtBultosLegible(qtyNum, uds) || '—'}">${_fmtBultosLegible(qtyNum, uds) || '—'}</div>`
+                : '';
+            return `<div style="display:grid;grid-template-columns:${gridCols};gap:6px;align-items:center;margin-bottom:4px">
                 <select class="form-select" style="font-size:12px;${borde}" onchange="_mlPoolUbicChange(${i},${j},this.value)">
                     <option value="">— sin ubicación —</option>
                     ${opcionesHtml}
                 </select>
                 <input type="number" class="form-input no-spinner" style="font-size:12px;text-align:right;${borde}" min="0" step="1" value="${qtyNum}" onchange="_mlPoolQtyChange(${i},${j},this.value)" onwheel="this.blur()">
+                ${bultosCell}
                 <button type="button" title="Quitar línea" onclick="_mlPoolLineaRemove(${i},${j})" style="background:transparent;border:1px solid var(--border);border-radius:4px;color:var(--danger);cursor:pointer;padding:4px 6px;font-size:13px">✕</button>
                 ${alerta}
             </div>`;
         }).join('');
+        const headerBultosCol = uds ? '<span style="text-align:center">Bultos</span>' : '';
         return `<div style="border:1px solid rgba(8,84,160,.25);border-radius:6px;padding:8px 10px;margin-bottom:6px;background:white">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:6px;font-size:12px">
                 <div><strong style="font-family:var(--mono);font-size:13px">Lote ${p.lote}</strong> · Total tomado <strong>${p.take}</strong> ud.${bultosLote}</div>
@@ -5234,8 +5246,8 @@ function _mlRenderPool() {
                     <button type="button" class="btn btn-sm" style="font-size:11px;padding:3px 8px;background:transparent;color:var(--danger);border:1px solid var(--border)" onclick="_mlPoolRemove(${i})">Quitar lote</button>
                 </div>
             </div>
-            <div style="display:grid;grid-template-columns:1fr 110px 36px;gap:6px;font-size:10px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.3px;padding:2px;border-bottom:1px dashed var(--border);margin-bottom:4px">
-                <span>Ubicación (stock)</span><span style="text-align:right">Cantidad</span><span></span>
+            <div style="display:grid;grid-template-columns:${gridCols};gap:6px;font-size:10px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.3px;padding:2px;border-bottom:1px dashed var(--border);margin-bottom:4px">
+                <span>Ubicación (stock)</span><span style="text-align:right">Cantidad</span>${headerBultosCol}<span></span>
             </div>
             ${linesHtml}
         </div>`;
@@ -5244,10 +5256,29 @@ function _mlRenderPool() {
     const diff = _mlPool.qtyReq - sum;
     const cls = diff === 0 ? 'ok' : 'miss';
     const msg = diff === 0 ? '✓ Cubre el pedido' : (diff > 0 ? `Faltan ${diff} ud.` : `Sobran ${-diff} ud.`);
+    // Total en bultos: se calcula por lote (uds/bulto puede variar entre lotes
+    // antiguos y nuevos del mismo SKU) y luego se suma en bultos enteros +
+    // unidades sueltas del pool completo.
+    let totalBultosTxt = '';
+    let bultosEnteros = 0, sueltasTot = 0, aplicaAlgunLote = false;
+    _mlPool.items.forEach(p => {
+        const uds = _udsPorBulto(_mlPool.sku, p.lote, prod);
+        if (!uds) return;
+        aplicaAlgunLote = true;
+        const q = parseFloat(p.take) || 0;
+        bultosEnteros += Math.floor(q / uds);
+        sueltasTot += q - Math.floor(q / uds) * uds;
+    });
+    if (aplicaAlgunLote && (bultosEnteros > 0 || sueltasTot > 0)) {
+        const partes = [];
+        if (bultosEnteros > 0) partes.push(`${bultosEnteros} bulto${bultosEnteros === 1 ? '' : 's'}`);
+        if (sueltasTot > 0)    partes.push(`${sueltasTot} ud. sueltas`);
+        totalBultosTxt = ` · <span style="color:var(--text3);font-weight:400">${partes.join(' + ')}</span>`;
+    }
     el.innerHTML = `<div class="ml-pool-card">
         <div class="ml-pool-title">Selección acumulada — editable (${_mlPool.items.length} lote${_mlPool.items.length > 1 ? 's' : ''})</div>
         ${itemsHtml}
-        <div class="ml-pool-total ${cls}"><span>Total: ${sum} / ${_mlPool.qtyReq} ud.</span><span>${msg}</span></div>
+        <div class="ml-pool-total ${cls}"><span>Total: ${sum} / ${_mlPool.qtyReq} ud.${totalBultosTxt}</span><span>${msg}</span></div>
     </div>`;
     el.style.display = '';
 }
@@ -6028,8 +6059,8 @@ function _updPalletSum() {
 
         let bultosExtra = '';
         if (udsBulto) {
-            const totalBultos = _fmtBultos(sum, udsBulto);
-            if (totalBultos) bultosExtra = ` · <strong>${totalBultos}</strong> bultos`;
+            const totalBultosLegible = _fmtBultosLegible(sum, udsBulto);
+            if (totalBultosLegible) bultosExtra = ` · <strong>${totalBultosLegible}</strong>`;
         }
 
         let diffMsg = '';
