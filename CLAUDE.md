@@ -3,10 +3,12 @@ Sistema de gestión de bodega (WMS) para almacenamiento de
 medicamentos a temperatura ambiente.
 
 > **Alcance de este proyecto:** solo Celmedik WMS. **OT-Biodial es un
-> proyecto separado** que vive en otra carpeta y otro repositorio. Si el
-> usuario pide cambios de OT-Biodial, no los ejecutes aquí — pídele
-> abrir el otro proyecto. No leas ni referencies carpetas o archivos de
-> OT-Biodial desde este proyecto.
+> proyecto separado** que vive en `C:\Users\DT BIODIAL\OT-Biodial\` con
+> su propio repositorio git (aún sin remoto GitHub al momento de la
+> separación, 2026-09-07). Si el usuario pide cambios de OT-Biodial, no
+> los ejecutes aquí — pídele abrir el otro proyecto (`cd "C:/Users/DT
+> BIODIAL/OT-Biodial" && claude`). No leas ni referencies carpetas o
+> archivos de OT-Biodial desde este proyecto.
 
 ## Stack tecnológico
 - HTML + JavaScript + Firebase (Firestore + Hosting + Auth)

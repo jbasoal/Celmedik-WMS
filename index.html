@@ -7736,6 +7736,11 @@ function renderAjusteMovUI() {
     const statusOpts = ['Aprobado','Cuarentena','Rechazado','Vencido','Retiro de mercado','Falsificado'];
     const isCambioUbic = h.tipo === 'CambioUbicacion';
     const isSalida     = h.tipo === 'Salida';
+    // La columna Bultos se muestra sólo en Salidas cuando al menos un ítem
+    // tiene presentación parseable (concentrados o medicamentos con "x N").
+    const mostrarBultosAjM = isSalida && _ajMovItems.some(it =>
+        _distDebeMostrarBultos('Salida', it.editado.sku)
+    );
 
     const numMovLabel = h.numeroMovimiento
         ? `N° Movimiento <span class="text-mono" style="color:var(--accent2)">${_ajmEsc(h.numeroMovimiento)}</span>`
@@ -7776,7 +7781,7 @@ function renderAjusteMovUI() {
             <div class="table-wrap">
                 <table>
                     <thead><tr>
-                        <th>SKU</th><th>Descripción</th><th>Lote</th><th>Vencimiento</th><th>Cantidad</th><th>Precio unit.</th><th>Estatus</th><th>${isCambioUbic ? 'Ubicación origen → destino' : 'Ubicación'}</th><th>Observaciones</th>
+                        <th>SKU</th><th>Descripción</th><th>Lote</th><th>Vencimiento</th><th>Cantidad</th>${mostrarBultosAjM ? '<th>Bultos</th>' : ''}<th>Precio unit.</th><th>Estatus</th><th>${isCambioUbic ? 'Ubicación origen → destino' : 'Ubicación'}</th><th>Observaciones</th>
                     </tr></thead>
                     <tbody>
                     ${_ajMovItems.map((it, idx) => {
@@ -7786,12 +7791,19 @@ function renderAjusteMovUI() {
                           ? `<input type="text" id="ajm-i-${idx}-ubicacionOrigen" class="form-input" style="font-size:12px;width:110px;display:inline-block;margin-right:4px" value="${_ajmEsc(o.ubicacionOrigen||'')}" oninput="updAjMovField(${idx},'ubicacionOrigen',this.value)" placeholder="Origen">
                              <input type="text" id="ajm-i-${idx}-ubicacion" class="form-input" style="font-size:12px;width:110px;display:inline-block" value="${_ajmEsc(o.ubicacion||'')}" oninput="updAjMovField(${idx},'ubicacion',this.value)" placeholder="Destino">`
                           : `<input type="text" id="ajm-i-${idx}-ubicacion" class="form-input" style="font-size:12px;min-width:120px" value="${_ajmEsc(o.ubicacion||'')}" oninput="updAjMovField(${idx},'ubicacion',this.value)">`;
+                        let bultosCell = '';
+                        if (mostrarBultosAjM) {
+                            const udsB = _udsPorBulto(o.sku, o.lote, data.productos[o.sku]);
+                            const txt  = udsB ? (_fmtBultosLegible(o.cantidad, udsB) || '—') : '—';
+                            bultosCell = `<td id="ajm-i-${idx}-bultos" style="font-size:12px;color:var(--text2);white-space:nowrap;min-width:150px">${_ajmEsc(txt)}</td>`;
+                        }
                         return `<tr>
                             <td class="text-mono" style="color:var(--accent2)">${_ajmEsc(o.sku||'')}</td>
                             <td style="font-size:12px">${_ajmEsc(o.descripcion||'—')}</td>
                             <td><input type="text" id="ajm-i-${idx}-lote" class="form-input" style="font-size:12px;min-width:90px" value="${_ajmEsc(o.lote||'')}" oninput="updAjMovField(${idx},'lote',this.value)"></td>
                             <td><input type="date" id="ajm-i-${idx}-vence" class="form-input" style="font-size:12px" value="${_ajmEsc((o.vence||'').slice(0,10))}" oninput="updAjMovField(${idx},'vence',this.value)"></td>
                             <td><input type="number" id="ajm-i-${idx}-cantidad" class="form-input" style="font-size:12px;width:80px" min="0" step="any" value="${_ajmEsc(o.cantidad||0)}" oninput="updAjMovField(${idx},'cantidad',this.value)" title="0 elimina el efecto de esta línea (queda registrada pero no afecta stock)"></td>
+                            ${bultosCell}
                             <td><input type="number" id="ajm-i-${idx}-precio" class="form-input" style="font-size:12px;width:90px" min="0" step="0.01" value="${_ajmEsc(o.precio||0)}" oninput="updAjMovField(${idx},'precio',this.value)"></td>
                             <td><select id="ajm-i-${idx}-status" class="form-select" style="font-size:12px" onchange="updAjMovField(${idx},'status',this.value)">${stOpts}</select></td>
                             <td>${ubicCell}</td>
@@ -7817,6 +7829,16 @@ function updAjMovField(idx, field, value) {
     if (field === 'cantidad') value = parseFloat(value) || 0;
     else if (field === 'precio') value = parseFloat(value) || 0;
     _ajMovItems[idx].editado[field] = value;
+    // Refrescar la celda de Bultos en vivo cuando cambia la cantidad o el lote
+    // (el uds/bulto de un concentrado depende del lote — 3 antiguos, 4 nuevos).
+    if (field === 'cantidad' || field === 'lote') {
+        const cell = document.getElementById(`ajm-i-${idx}-bultos`);
+        if (cell) {
+            const o = _ajMovItems[idx].editado;
+            const udsB = _udsPorBulto(o.sku, o.lote, data.productos[o.sku]);
+            cell.textContent = udsB ? (_fmtBultosLegible(o.cantidad, udsB) || '—') : '—';
+        }
+    }
 }
 
 function _readAjMovHeaderFromForm() {
@@ -9511,6 +9533,23 @@ function _fmtBultos(qty, udsBulto) {
     const b = q / udsBulto;
     if (Math.abs(b - Math.round(b)) < 1e-9) return String(Math.round(b));
     return b.toFixed(2);
+}
+// Formato legible para operador de bodega: separa bultos completos
+// y unidades sueltas cuando la cantidad no cierra un bulto entero.
+// Ejemplos con udsBulto=4:
+//   10 ud → "2 bultos + 2 ud."
+//    8 ud → "2 bultos"
+//    3 ud → "3 ud. (fracción de bulto)"
+//    0 ud → ""
+function _fmtBultosLegible(qty, udsBulto) {
+    const q = parseFloat(qty) || 0;
+    if (!udsBulto || udsBulto <= 0 || q <= 0) return '';
+    const bultosEnteros = Math.floor(q / udsBulto);
+    const sueltas = q - bultosEnteros * udsBulto;
+    if (bultosEnteros === 0) return `${sueltas} ud. (fracción de bulto)`;
+    const bultosTxt = `${bultosEnteros} bulto${bultosEnteros === 1 ? '' : 's'}`;
+    if (sueltas === 0) return bultosTxt;
+    return `${bultosTxt} + ${sueltas} ud.`;
 }
 // ¿La distribución por pallet debe mostrar la columna Bultos?
 // Sólo Salida de concentrado o de medicamento (con presentación parseable).
