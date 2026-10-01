@@ -9063,18 +9063,44 @@ function consultarKardex() {
 
     const conLote = !!lote;
     const arrFijas = bodegasFijasActual();
-    let movs = Object.values(data.movimientos || {}).filter(m => (m.sku || '').toUpperCase() === sku);
-    if (conLote)  movs = movs.filter(m => (m.lote || '') === lote);
-    if (arrFijas) movs = movs.filter(m => arrFijas.includes(m.bodega || ''));
-    if (bodega)   movs = movs.filter(m => (m.bodega || '') === bodega);
-    if (tipo)     movs = movs.filter(m => m.tipo === tipo);
-    if (contra)   movs = movs.filter(m => {
-        const c = ((m.proveedor || '') + ' ' + (m.proveedorCliente || '')).toLowerCase();
-        return c.includes(contra);
-    });
+    // Filtros dimensionales (los que delimitan QUÉ se consulta: SKU, lote,
+    // bodega, tipo, contraparte). Se aplican tanto a los movimientos del
+    // período como al cálculo del saldo inicial.
+    const aplicarDimensionales = (lista) => {
+        let r = lista.filter(m => (m.sku || '').toUpperCase() === sku);
+        if (conLote)  r = r.filter(m => (m.lote || '') === lote);
+        if (arrFijas) r = r.filter(m => arrFijas.includes(m.bodega || ''));
+        if (bodega)   r = r.filter(m => (m.bodega || '') === bodega);
+        if (tipo)     r = r.filter(m => m.tipo === tipo);
+        if (contra)   r = r.filter(m => {
+            const c = ((m.proveedor || '') + ' ' + (m.proveedorCliente || '')).toLowerCase();
+            return c.includes(contra);
+        });
+        return r;
+    };
+    const todosFiltrados = aplicarDimensionales(Object.values(data.movimientos || {}));
+    let movs = todosFiltrados.slice();
     if (desde)    movs = movs.filter(m => m.fecha && m.fecha.slice(0, 10) >= desde);
     if (hasta)    movs = movs.filter(m => m.fecha && m.fecha.slice(0, 10) <= hasta);
     movs.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+
+    // ── Saldo inicial ──
+    // Suma algebraica de todas las entradas/salidas con fecha ANTERIOR al
+    // 'desde' del período (aplicando los mismos filtros dimensionales). Se
+    // usa como punto de partida de la columna Saldo para que el valor refleje
+    // el stock real y no un acumulado desde 0, que daría negativos cuando el
+    // período corta movimientos de ingreso previos. Si no hay 'desde', el
+    // saldo inicial es 0 (equivale al comportamiento original).
+    let saldoInicial = 0;
+    if (desde) {
+        todosFiltrados
+            .filter(m => m.fecha && m.fecha.slice(0, 10) < desde)
+            .forEach(m => {
+                const cls = _kxClasificarMov(m);
+                if (cls.direccion === 'in')       saldoInicial += cls.cantidad;
+                else if (cls.direccion === 'out') saldoInicial -= cls.cantidad;
+            });
+    }
 
     // Datos de cabecera
     const prod = (data.productos || {})[sku] || {};
@@ -9202,7 +9228,7 @@ function consultarKardex() {
     consolidados.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
 
     // Filas del Kardex
-    let saldo = 0, totIn = 0, totOut = 0;
+    let saldo = saldoInicial, totIn = 0, totOut = 0;
     const filas = consolidados.map(g => {
         let inCell = '—', outCell = '—';
         if (g.direccion === 'in')       { saldo += g.cantidad; totIn  += g.cantidad; inCell  = g.cantidad; }
@@ -9230,6 +9256,29 @@ function consultarKardex() {
 
     const loteTh   = conLote ? '' : '<th>Lote</th>';
     const tfootCol = conLote ? 5 : 6;
+    // Fila "Saldo inicial" al inicio de la tabla (solo cuando hay 'desde' y
+    // existen movimientos previos relevantes — para no mostrar un cero inútil
+    // cuando el filtro de fechas cubre toda la historia del SKU+lote).
+    const filaSaldoInicial = desde
+        ? `<tr class="kx-info" style="font-weight:600">
+            <td class="text-mono" style="font-size:11px">${fmtDate(desde)}</td>
+            <td>—</td>
+            <td colspan="${(conLote ? 3 : 4)}" style="font-style:normal;color:var(--text2)">
+                Saldo inicial al ${fmtDate(desde)}
+                <span style="color:var(--text3);font-size:11px;font-weight:400">(acumulado de movimientos previos con los mismos filtros de SKU/Lote/Bodega)</span>
+            </td>
+            <td class="kx-in">—</td>
+            <td class="kx-out">—</td>
+            <td class="kx-sal${saldoInicial < 0 ? ' neg' : ''}">${saldoInicial}</td>
+           </tr>`
+        : '';
+    // Nota al pie cuando hay filtros secundarios activos (tipo/contraparte):
+    // avisa que el saldo refleja solo las filas visibles, no el stock real.
+    const notaFiltros = (tipo || contra)
+        ? `<div style="padding:8px 12px;margin-top:8px;background:rgba(245,158,11,.10);border:1px solid rgba(245,158,11,.35);border-radius:6px;font-size:12px;color:#92400e">
+            ⚠ Hay filtros de tipo o contraparte activos. El saldo mostrado considera únicamente los movimientos de ese tipo/contraparte en el período, no el stock real total del SKU.
+           </div>`
+        : '';
     const tabla = `
         <div class="card">
             <div class="table-wrap">
@@ -9240,17 +9289,30 @@ function consultarKardex() {
                             <th style="text-align:right">Entradas</th><th style="text-align:right">Salidas</th><th style="text-align:right">Saldo</th>
                         </tr>
                     </thead>
-                    <tbody>${filas}</tbody>
+                    <tbody>${filaSaldoInicial}${filas}</tbody>
                     <tfoot>
+                        ${desde ? `<tr>
+                            <td colspan="${tfootCol}" style="text-align:right;color:var(--text2)">Saldo inicial al ${fmtDate(desde)}</td>
+                            <td class="kx-in">—</td>
+                            <td class="kx-out">—</td>
+                            <td class="kx-sal${saldoInicial < 0 ? ' neg' : ''}">${saldoInicial}</td>
+                        </tr>` : ''}
                         <tr>
-                            <td colspan="${tfootCol}" style="text-align:right">Totales del período</td>
+                            <td colspan="${tfootCol}" style="text-align:right">Movimientos del período</td>
                             <td class="kx-in">${totIn}</td>
                             <td class="kx-out">${totOut}</td>
-                            <td class="kx-sal${saldo < 0 ? ' neg' : ''}">${saldo}</td>
+                            <td style="text-align:right;color:var(--text2)">—</td>
+                        </tr>
+                        <tr>
+                            <td colspan="${tfootCol}" style="text-align:right;font-weight:800">Saldo final</td>
+                            <td class="kx-in">—</td>
+                            <td class="kx-out">—</td>
+                            <td class="kx-sal${saldo < 0 ? ' neg' : ''}" style="font-weight:800">${saldo}</td>
                         </tr>
                     </tfoot>
                 </table>
             </div>
+            ${notaFiltros}
             <div class="kardex-print-footer" style="display:none">
                 Celmedik · Generado conforme NT 147 — ISP Chile<br>
                 Fecha de emisión: <span id="kxPrintFecha"></span> · Usuario: <span id="kxPrintUser"></span>
