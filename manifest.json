@@ -1,0 +1,27 @@
+{
+  "name": "Celmedik Transporte",
+  "short_name": "Celmedik",
+  "description": "App para conductores de Celmedik: ver despachos asignados, confirmar entregas y subir cedibles firmados.",
+  "start_url": "/conductor.html",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1D2D3E",
+  "theme_color": "#1D2D3E",
+  "categories": ["business", "productivity"],
+  "lang": "es-CL",
+  "icons": [
+    {
+      "src": "icon-conductor-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-conductor-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

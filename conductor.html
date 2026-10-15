@@ -4,7 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Celmedik">
 <meta name="theme-color" content="#1D2D3E">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-conductor-192.svg">
+<link rel="icon" type="image/svg+xml" href="icon-conductor-192.svg">
 <title>Celmedik — Conductor</title>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
@@ -335,6 +341,18 @@ async function updateQueueBadge() {
 }
 
 // ══ AUTH ══
+// Registra el Service Worker (PWA) para que la app sea instalable desde
+// Chrome Android (banner "Agregar a inicio") y pueda abrir sin conexión.
+// El SW se sirve desde la raíz del dominio para alcanzar scope "/".
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/service-worker.js').catch(err => {
+      // No bloqueamos la app si falla el registro (p.ej., modo incógnito).
+      console.warn('[SW] No se pudo registrar:', err && err.message);
+    });
+  });
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   await openIDB();
   auth.onAuthStateChanged(async u => {

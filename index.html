@@ -2991,7 +2991,7 @@ function getStockFiltrado() {
     Object.entries(stock).forEach(([k, s]) => { if (arr.includes(s.bodega)) out[k] = s; });
     return out;
 }
-let data = { productos:{}, bodegas:{}, clientes:{}, movimientos:{}, cuarentena:{}, devoluciones:{}, auditoria:{}, ajustesMovimiento:{}, ordenesTransporte:{}, facturasPorDespachar:{} };
+let data = { productos:{}, bodegas:{}, clientes:{}, movimientos:{}, cuarentena:{}, devoluciones:{}, auditoria:{}, ajustesMovimiento:{}, ordenesTransporte:{}, facturasPorDespachar:{}, conductores:{} };
 let selectedBodega = 'TOTAL';
 let movDocItems = [];
 
@@ -3034,7 +3034,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // que acceda al mismo navegador después de un logout.
 function _resetAppMemoryState() {
     try {
-        data = { productos:{}, bodegas:{}, clientes:{}, movimientos:{}, cuarentena:{}, devoluciones:{}, auditoria:{}, ajustesMovimiento:{}, facturasPorDespachar:{} };
+        data = { productos:{}, bodegas:{}, clientes:{}, movimientos:{}, cuarentena:{}, devoluciones:{}, auditoria:{}, ajustesMovimiento:{}, facturasPorDespachar:{}, conductores:{} };
         movDocItems = [];
         _mlPool = { activo: false, sku: '', bodega: '', qtyReq: 0, items: [], pendingLote: null };
         userPerfil = null; rootUid = null; userClienteOwner = null;
@@ -3872,6 +3872,14 @@ function _flushPendingRenders() {
     if (q.has('devoluciones') && _isPageActive('devoluciones')) renderDevoluciones();
     if (q.has('ajustesMov') && _isPageActive('ajusteMov'))      renderAjustesMovHistorial();
     if (q.has('ordenesTransporte') && _isPageActive('ordenTransporte')) renderOTHistorial();
+    // Si cambia la lista de conductores y el modal de Movimiento está abierto,
+    // repoblamos el dropdown "Transportado por" para reflejar altas/bajas.
+    if (q.has('conductores')) {
+        const modal = document.getElementById('movModal');
+        if (modal && modal.classList.contains('active')) {
+            try { _poblarTransportadoSelect(); } catch(_){}
+        }
+    }
     if (q.has('facturasPorDespachar')) {
         _updateFPDBadge();
         if (_isPageActive('facturasPorDespachar')) renderFacturasPorDespachar();
@@ -3911,12 +3919,16 @@ function attachListeners() {
     db.ref(`usuarios/${uid}/ordenesTransporte`).on('value', s => { data.ordenesTransporte = s.val()||{}; _scheduleRender('ordenesTransporte'); });
     db.ref(`usuarios/${uid}/facturasPorDespachar`).on('value', s => { data.facturasPorDespachar = s.val()||{}; _invalidateStockCache(); _scheduleRender('facturasPorDespachar','stock','stats'); });
     db.ref(`usuarios/${uid}/clientes`).on('value', s => { data.clientes = s.val()||{}; _scheduleRender('clientes'); });
+    // Conductores: viven bajo organizaciones/ para compartir con el panel de
+    // transporte. Alimentan el dropdown "Transportado por" del modal de Salida.
+    db.ref(`organizaciones/${uid}/conductores`).on('value', s => { data.conductores = s.val()||{}; _scheduleRender('conductores'); });
 }
 
 function detachListeners() {
     if (!currentUser) return;
     const uid = rootUid || currentUser.uid;
     ['productos','bodegas','clientes','movimientos','cuarentena','devoluciones','ajustesMovimiento','ordenesTransporte','facturasPorDespachar'].forEach(k => db.ref(`usuarios/${uid}/${k}`).off());
+    db.ref(`organizaciones/${uid}/conductores`).off();
 }
 
 // ══ AUDIT LOG ══
@@ -4755,6 +4767,9 @@ function onDocBodegaChange() {
         if (sku && data.productos[sku]) loadMiLotesDisponibles(sku);
     }
     if (tipo === 'CambioUbicacion') populateUbicDestino();
+    // En Salida, el dropdown "Transportado por" depende de la bodega:
+    // solo muestra conductores que pueden retirar de esta bodega.
+    if (tipo === 'Salida') _poblarTransportadoSelect();
 }
 
 function onMdTipoChange() {
@@ -4795,33 +4810,90 @@ function _onTransportadoChange() {
     if (!esOtros && inp) inp.value = '';
 }
 
-// Opciones del select "Transportado por" según el perfil del usuario.
-// - Operador Los Angeles: Thomas Briones, Externo, Retira Cliente, Otros
-// - Operario Santiago:    Carlos Arcos, Mauricio Gonzalez, Externo, Retira Cliente
-// - Resto (Maestro, Farmacéutico, Operador base): lista completa.
-function _opcionesTransportadoPorPerfil(perfil) {
+// Opciones "genéricas" del select "Transportado por" (no son conductores
+// específicos). Se filtran según el perfil que registra la Salida.
+//   - Operador Los Angeles: Externo, Retira Cliente, Otros
+//   - Operario Santiago:    Externo, Retira Cliente
+//   - Resto: todas (incluye "Pendiente de asignación")
+function _opcionesGenericasTransportadoPorPerfil(perfil) {
     if (perfil === 'Operador Los Angeles') {
-        return ['Thomas Briones', 'Externo', 'Retira Cliente', 'Otros'];
+        return ['Externo', 'Retira Cliente', 'Otros'];
     }
     if (perfil === 'Operario Santiago') {
-        return ['Carlos Arcos', 'Mauricio Gonzalez', 'Externo', 'Retira Cliente'];
+        return ['Externo', 'Retira Cliente'];
     }
-    return [
-        'Carlos Arcos',
-        'Mauricio Gonzalez',
-        'Thomas Briones',
-        'Externo',
-        'Pendiente de asignación',
-        'Retira Cliente',
-        'Otros'
-    ];
+    return ['Externo', 'Pendiente de asignación', 'Retira Cliente', 'Otros'];
 }
+
+// Bodegas que el perfil del usuario actual puede operar. Usa el mismo
+// mapeo que bodegasFijasActual() para filtrar los conductores que
+// aparecen cuando el operador tiene una bodega restringida.
+function _bodegasPermitidasPerfilActual() {
+    try {
+        if (typeof bodegasFijasActual === 'function') {
+            const r = bodegasFijasActual();
+            return Array.isArray(r) ? r : null;
+        }
+    } catch(_){}
+    return null;
+}
+
+// Lee los conductores activos cuyas bodegasPermitidas:
+//   (a) incluyen la bodega actualmente seleccionada en md-bodega (si hay);
+//   (b) tienen al menos una bodega en común con las bodegas que puede
+//       operar el perfil del operador que registra la salida.
+// Devuelve pares [{nombreOpcion, bodegas}] ordenados por nombre.
+function _conductoresVisiblesEnSalida() {
+    const bodegaSel = (document.getElementById('md-bodega')?.value || '').trim();
+    const bodegasPerfil = _bodegasPermitidasPerfilActual(); // null = sin restricción
+    const todos = Object.values(data.conductores || {});
+    const visibles = todos.filter(c => {
+        if (!c || c.activo === false) return false;
+        if (!c.nombreOpcion) return false;
+        const bods = Array.isArray(c.bodegasPermitidas)
+            ? c.bodegasPermitidas
+            : (c.bodegasPermitidas ? Object.values(c.bodegasPermitidas) : []);
+        if (!bods.length) return false;
+        // Debe operar la bodega seleccionada (si ya la eligieron).
+        if (bodegaSel && !bods.includes(bodegaSel)) return false;
+        // Debe cruzar con las bodegas permitidas al perfil del operador.
+        if (bodegasPerfil && !bods.some(b => bodegasPerfil.includes(b))) return false;
+        return true;
+    });
+    return visibles.sort((a, b) => (a.nombreOpcion||'').localeCompare(b.nombreOpcion||''));
+}
+
 function _poblarTransportadoSelect() {
     const sel = document.getElementById('md-transportado');
     if (!sel) return;
-    const opts = _opcionesTransportadoPorPerfil(userPerfil);
-    sel.innerHTML = '<option value="">Seleccionar...</option>' +
-        opts.map(o => `<option value="${o}">${o}</option>`).join('');
+    const prev = sel.value;
+    const conductores = _conductoresVisiblesEnSalida();
+    const genericas = _opcionesGenericasTransportadoPorPerfil(userPerfil);
+
+    const groups = [];
+    if (conductores.length) {
+        groups.push(`<optgroup label="Conductores asignables">${
+            conductores.map(c => `<option value="${_escHtml ? _escHtml(c.nombreOpcion) : c.nombreOpcion}">${c.nombreOpcion}</option>`).join('')
+        }</optgroup>`);
+    }
+    if (genericas.length) {
+        groups.push(`<optgroup label="Otras opciones">${
+            genericas.map(o => `<option value="${o}">${o}</option>`).join('')
+        }</optgroup>`);
+    }
+
+    sel.innerHTML = '<option value="">Seleccionar...</option>' + groups.join('');
+
+    // Preserva la selección previa si sigue siendo válida (caso edición o
+    // cambio de bodega que no invalida al conductor ya elegido).
+    const valido = [...sel.options].some(o => o.value === prev);
+    if (prev && valido) sel.value = prev;
+    else if (prev && !valido) {
+        // Si el conductor dejó de ser válido tras cambiar la bodega,
+        // limpiamos la selección y ocultamos el detalle de "Otros".
+        sel.value = '';
+        if (typeof _onTransportadoChange === 'function') _onTransportadoChange();
+    }
 }
 
 // Actualiza opciones y visibilidad del campo Estatus por ítem
@@ -4854,6 +4926,9 @@ function _refreshMiStatusField(tipo) {
     if (transGroup) transGroup.style.display = esSalida ? '' : 'none';
     const transDetGroup = document.getElementById('md-transportado-detalle-group');
     if (transDetGroup && !esSalida) transDetGroup.style.display = 'none';
+    // Repuebla el dropdown al activar Salida, por si cambió la lista de
+    // conductores o la bodega ya tiene valor (Operador con bodega fija).
+    if (esSalida) _poblarTransportadoSelect();
     // N° RUT Cliente: solo Salida. Comparte fila con Proveedor/Cliente.
     const rutcliGroup = document.getElementById('md-rutcli-group');
     if (rutcliGroup) rutcliGroup.style.display = esSalida ? '' : 'none';

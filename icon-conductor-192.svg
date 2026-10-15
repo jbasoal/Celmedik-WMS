@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192">
+  <rect width="192" height="192" rx="36" fill="#1D2D3E"/>
+  <g transform="translate(32 56)" fill="none" stroke="#60AEFF" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 20h72v48H4z"/>
+    <path d="M76 32h32l20 20v16h-52z"/>
+    <circle cx="30" cy="76" r="12" fill="#1D2D3E"/>
+    <circle cx="100" cy="76" r="12" fill="#1D2D3E"/>
+  </g>
+  <text x="96" y="168" text-anchor="middle" fill="#FFFFFF" font-family="Inter, system-ui, sans-serif" font-size="18" font-weight="700" letter-spacing="2">CELMEDIK</text>
+</svg>

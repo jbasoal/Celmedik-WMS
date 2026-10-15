@@ -384,8 +384,8 @@ tbody tr:hover td{background:rgba(0,112,242,0.04);}
           <div class="card" style="padding:0;">
             <div class="table-wrap">
               <table>
-                <thead><tr><th>Nombre</th><th>RUT</th><th>Email (login)</th><th>Teléfono</th><th>Licencia</th><th>Vcto. Licencia</th><th>Estado</th><th>Acciones</th></tr></thead>
-                <tbody id="tConductores"><tr class="empty-row"><td colspan="8">Sin conductores registrados</td></tr></tbody>
+                <thead><tr><th>Nombre</th><th>Nombre en "Transportado por"</th><th>Bodegas permitidas</th><th>Email (login)</th><th>Teléfono</th><th>Licencia</th><th>Vcto.</th><th>Estado</th><th>Acciones</th></tr></thead>
+                <tbody id="tConductores"><tr class="empty-row"><td colspan="9">Sin conductores registrados</td></tr></tbody>
               </table>
             </div>
           </div>
@@ -592,6 +592,17 @@ tbody tr:hover td{background:rgba(0,112,242,0.04);}
     </div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Vcto. Licencia</label><input type="date" class="form-input" id="c-vcto"></div>
+      <div class="form-group">
+        <label class="form-label">Nombre en "Transportado por" *</label>
+        <input type="text" class="form-input" id="c-nombre-opcion" placeholder="Ej: Carlos Arcos" title="Texto exacto que aparece en el dropdown Transportado por del modal de Salida">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Bodegas desde las que puede retirar *</label>
+      <div id="c-bodegas-wrap" style="display:flex;flex-wrap:wrap;gap:10px;padding:10px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius)">
+        <span style="color:var(--text3);font-size:12px">Cargando bodegas...</span>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px">Define qué salidas verá el chofer cuando sean marcadas como "Pendiente de asignación".</div>
     </div>
     <div id="conductorLoginSection">
       <div class="section-div"><div class="section-div-line"></div><div class="section-div-text">Acceso App Móvil</div><div class="section-div-line"></div></div>
@@ -665,7 +676,7 @@ const db = firebase.database();
 const storage = firebase.storage();
 
 let currentUser = null, userPerfil = null, orgUid = null;
-let data = { ots:{}, conductores:{}, vehiculos:{}, trazabilidad:{}, movimientos:{}, notificaciones:{} };
+let data = { ots:{}, conductores:{}, vehiculos:{}, trazabilidad:{}, movimientos:{}, bodegas:{}, notificaciones:{} };
 let _detOT = null, _detTrazabilidad = [], _detMap = null;
 let _editConductorId = null, _editVehiculoId = null;
 let _selectedSalidaDocId = null;
@@ -734,7 +745,37 @@ function attachListeners() {
   listen(`organizaciones/${orgUid}/vehiculos`, 'vehiculos');
   listen(`organizaciones/${orgUid}/trazabilidadTransporte`, 'trazabilidad');
   listen(`usuarios/${orgUid}/movimientos`, 'movimientos');
+  listen(`usuarios/${orgUid}/bodegas`, 'bodegas');
   listen(`organizaciones/${orgUid}/notificaciones`, 'notificaciones');
+}
+
+// Renderiza los checkboxes de "Bodegas desde las que puede retirar" en el
+// modal de Conductor. Lee los nombres de bodega del maestro (lista
+// compartida con el WMS). Se re-llama al abrir el modal (nuevo o edición).
+function _renderConductorBodegas(selected) {
+    const wrap = document.getElementById('c-bodegas-wrap');
+    if (!wrap) return;
+    const sel = new Set(Array.isArray(selected) ? selected : []);
+    const bodegas = Object.values(data.bodegas || {})
+        .map(b => b.nombre)
+        .filter(Boolean)
+        .sort((a,b) => a.localeCompare(b));
+    if (!bodegas.length) {
+        wrap.innerHTML = '<span style="color:var(--text3);font-size:12px">Sin bodegas registradas en el WMS. Agregue bodegas desde el panel principal.</span>';
+        return;
+    }
+    wrap.innerHTML = bodegas.map(n => {
+        const safe = n.replace(/"/g, '&quot;');
+        const checked = sel.has(n) ? ' checked' : '';
+        return `<label style="display:inline-flex;align-items:center;gap:6px;background:var(--surface);padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;font-size:12.5px">
+            <input type="checkbox" value="${safe}" class="c-bodega-chk"${checked}>
+            <span>${safe}</span>
+        </label>`;
+    }).join('');
+}
+
+function _getConductorBodegasSeleccionadas() {
+    return [...document.querySelectorAll('.c-bodega-chk:checked')].map(c => c.value);
 }
 
 // ══ NAVIGATION ══
@@ -905,8 +946,9 @@ function openModal(id) {
     _editConductorId = null;
     document.getElementById('conductorModalTitle').textContent = 'Nuevo Conductor';
     document.getElementById('conductorLoginSection').style.display = '';
-    ['c-nombre','c-rut','c-tel','c-licencia','c-email','c-pass'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
+    ['c-nombre','c-rut','c-tel','c-licencia','c-email','c-pass','c-nombre-opcion'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
     document.getElementById('c-vcto').value = '';
+    _renderConductorBodegas([]);
     document.getElementById('conductor-err').style.display = 'none';
     document.getElementById('conductor-ok').style.display = 'none';
   }
@@ -1129,22 +1171,32 @@ function populateConductorSelects() {
 function renderConductores() {
   const tb = document.getElementById('tConductores');
   const rows = Object.entries(data.conductores);
-  if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="8">Sin conductores registrados</td></tr>'; return; }
-  tb.innerHTML = rows.map(([id, c]) => `<tr>
-    <td style="font-weight:500">${c.nombre}</td>
-    <td class="text-mono" style="font-size:11px">${c.rut||'—'}</td>
-    <td style="font-size:12px">${c.email||'—'}</td>
-    <td>${c.telefono||'—'}</td>
-    <td class="text-mono" style="font-size:11px">${c.licencia||'—'}</td>
-    <td>${fmtDate(c.vencimientoLicencia)}</td>
-    <td>${c.activo!==false ? '<span class="badge badge-success">Activo</span>' : '<span class="badge badge-gray">Inactivo</span>'}</td>
-    <td>
-      <button class="btn btn-icon btn-sm" onclick="editConductor('${id}')" title="Editar">✏</button>
-      <button class="btn btn-icon btn-sm ${c.activo!==false?'btn-danger-sm':'btn-success-sm'}" onclick="toggleConductor('${id}',${c.activo!==false})" style="margin-left:4px">
-        ${c.activo!==false?'⏸':'▶'}
-      </button>
-    </td>
-  </tr>`).join('');
+  if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="9">Sin conductores registrados</td></tr>'; return; }
+  tb.innerHTML = rows.map(([id, c]) => {
+    const bods = Array.isArray(c.bodegasPermitidas) ? c.bodegasPermitidas : (c.bodegasPermitidas ? Object.values(c.bodegasPermitidas) : []);
+    const bodsCell = bods.length
+      ? bods.map(b => `<span class="badge badge-blue" style="margin:1px 2px 1px 0">${b}</span>`).join('')
+      : '<span style="color:var(--text3);font-size:11px">—</span>';
+    const nomOpcion = c.nombreOpcion
+      ? `<span class="text-mono" style="font-size:11.5px;color:var(--accent2);font-weight:600">${c.nombreOpcion}</span>`
+      : '<span style="color:var(--danger);font-size:11px">⚠ Sin asignar</span>';
+    return `<tr>
+      <td style="font-weight:500">${c.nombre}</td>
+      <td>${nomOpcion}</td>
+      <td>${bodsCell}</td>
+      <td style="font-size:12px">${c.email||'—'}</td>
+      <td>${c.telefono||'—'}</td>
+      <td class="text-mono" style="font-size:11px">${c.licencia||'—'}</td>
+      <td>${fmtDate(c.vencimientoLicencia)}</td>
+      <td>${c.activo!==false ? '<span class="badge badge-success">Activo</span>' : '<span class="badge badge-gray">Inactivo</span>'}</td>
+      <td>
+        <button class="btn btn-icon btn-sm" onclick="editConductor('${id}')" title="Editar">✏</button>
+        <button class="btn btn-icon btn-sm ${c.activo!==false?'btn-danger-sm':'btn-success-sm'}" onclick="toggleConductor('${id}',${c.activo!==false})" style="margin-left:4px">
+          ${c.activo!==false?'⏸':'▶'}
+        </button>
+      </td>
+    </tr>`;
+  }).join('');
 }
 
 function editConductor(id) {
@@ -1158,6 +1210,9 @@ function editConductor(id) {
   document.getElementById('c-tel').value = c.telefono||'';
   document.getElementById('c-licencia').value = c.licencia||'';
   document.getElementById('c-vcto').value = c.vencimientoLicencia||'';
+  document.getElementById('c-nombre-opcion').value = c.nombreOpcion||'';
+  const bods = Array.isArray(c.bodegasPermitidas) ? c.bodegasPermitidas : (c.bodegasPermitidas ? Object.values(c.bodegasPermitidas) : []);
+  _renderConductorBodegas(bods);
   document.getElementById('conductor-err').style.display = 'none';
   document.getElementById('conductor-ok').style.display = 'none';
   openModal('nuevoConductorModal');
@@ -1169,15 +1224,24 @@ function toggleConductor(id, currentlyActive) {
 
 function saveConductor() {
   const nombre = document.getElementById('c-nombre').value.trim();
+  const nombreOpcion = document.getElementById('c-nombre-opcion').value.trim();
+  const bodegasPermitidas = _getConductorBodegasSeleccionadas();
   const errEl = document.getElementById('conductor-err');
   const okEl = document.getElementById('conductor-ok');
   errEl.style.display = 'none'; okEl.style.display = 'none';
   if (!nombre) { errEl.textContent = 'El nombre es obligatorio.'; errEl.style.display='block'; return; }
+  if (!nombreOpcion) { errEl.textContent = 'Debe indicar el nombre que aparecerá en el dropdown "Transportado por".'; errEl.style.display='block'; return; }
+  if (!bodegasPermitidas.length) { errEl.textContent = 'Debe seleccionar al menos una bodega desde la que el conductor puede retirar.'; errEl.style.display='block'; return; }
+  // Garantiza unicidad del nombreOpcion para que el dropdown de Salida pueda mapearlo al conductor.
+  const dupe = Object.entries(data.conductores || {}).find(([k, c]) =>
+      k !== _editConductorId && (c.nombreOpcion || '').trim().toLowerCase() === nombreOpcion.toLowerCase());
+  if (dupe) { errEl.textContent = `El nombre "${nombreOpcion}" ya está asignado a otro conductor. Use un nombre único.`; errEl.style.display='block'; return; }
   const cData = {
     nombre, rut:document.getElementById('c-rut').value.trim(),
     telefono:document.getElementById('c-tel').value.trim(),
     licencia:document.getElementById('c-licencia').value.trim(),
     vencimientoLicencia:document.getElementById('c-vcto').value,
+    nombreOpcion, bodegasPermitidas,
     activo:true
   };
 
