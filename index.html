@@ -616,12 +616,18 @@
         @keyframes doc-open { from { opacity:0; transform: translateY(-4px); } to { opacity:1; transform:none; } }
 
         /* Tabla de Movimientos: fila consolidada por N° Movimiento.
-           Alineación top (en lugar de middle) para que lote/qty/ubicaciones
-           queden en línea con SKU y descripción; padding reducido y nowrap
-           en fecha/sku/vence para mantener los datos en una sola línea. */
-        #tMovimientos td { vertical-align: top; padding: 10px 10px; line-height: 1.45; }
+           Cada par (SKU, Lote) va en su propio <tr>; las columnas comunes
+           del movimiento usan rowspan y se centran verticalmente respecto
+           a todas las líneas. Las columnas por ítem (SKU, Descripción,
+           Lote, Vence, Qty, Ubicación, Status) quedan centradas respecto
+           a su descripción. Los <tr> intermedios de una misma operación
+           ocultan su borde inferior para que el movimiento se vea como
+           un bloque único. */
+        #tMovimientos td { vertical-align: middle; padding: 10px 10px; line-height: 1.4; }
         #tMovimientos td.mov-nowrap { white-space: nowrap; }
-        #tMovimientos td > div { padding: 1px 0; }
+        #tMovimientos tr.mov-row-mid td { border-bottom: none; }
+        #tMovimientos tr.mov-row-start td { border-top: 2px solid var(--border2); }
+        #tMovimientos tr.mov-row-start:first-child td { border-top: none; }
 
         /* Print (Kardex) */
         @media print {
@@ -1024,10 +1030,10 @@
                         <div class="table-wrap">
                             <table><thead><tr>
                                 <th style="width:95px">N° Movimiento</th>
-                                <th style="width:120px">Fecha</th>
+                                <th style="width:85px">Fecha</th>
                                 <th style="width:60px">Tipo</th>
                                 <th style="width:95px">SKU</th>
-                                <th style="min-width:180px">Descripción</th>
+                                <th style="min-width:200px">Descripción</th>
                                 <th style="width:110px">Lote</th>
                                 <th style="width:100px">Vence</th>
                                 <th style="width:55px">Qty</th>
@@ -9002,22 +9008,13 @@ function renderMovimientos(preservePage) {
             ? `<span class="text-mono" style="color:var(--accent);font-weight:600;font-size:11px">${g.numeroMovimiento}</span>`
             : '<span class="text-muted" style="font-size:11px">—</span>';
 
-        const itemList = Object.values(g.items);
-        // Celdas multi-línea: una línea por par (SKU, Lote), alineadas entre columnas.
-        // Fecha vencimiento, SKU y lote se mantienen en una sola línea (nowrap en div).
-        const skuCell   = itemList.map(it => `<div class="text-mono" style="color:var(--accent2);white-space:nowrap">${it.sku || '—'}</div>`).join('');
-        const descCell  = itemList.map(it => `<div>${it.descripcion || '—'}</div>`).join('');
-        const loteCell  = itemList.map(it => `<div class="text-mono" style="font-size:11px;white-space:nowrap">${it.lote || '—'}</div>`).join('');
-        const venceCell = itemList.map(it => `<div style="white-space:nowrap">${it.vence ? fmtDate(it.vence) : '—'}</div>`).join('');
-        const qtyCell   = itemList.map(it => `<div style="font-weight:600;color:var(--text)">${it.cantidad}</div>`).join('');
-        const statusCell = itemList.map(it => `<div>${statusBadgeHTML(it.status || '—')}</div>`).join('');
-        const ubicCell  = itemList.map(it => {
-            const ubicStr = Object.entries(it.ubicaciones)
-                .sort((a, b) => a[0].localeCompare(b[0]))
-                .map(([ubic, qty]) => `${ubic} (${qty})`)
-                .join(', ');
-            return `<div style="font-size:11px">${ubicStr || '—'}</div>`;
-        }).join('');
+        // Fecha → dos líneas: fecha arriba, hora abajo.
+        const fechaFmt = fmtDateTime(g.fecha);
+        const [fechaStr, horaStr] = (fechaFmt && fechaFmt !== '—')
+            ? fechaFmt.split(' ')
+            : ['—', ''];
+        const fechaCell = `<div class="text-mono" style="font-size:11px;white-space:nowrap">${fechaStr}</div>` +
+            (horaStr ? `<div class="text-mono" style="font-size:10.5px;color:var(--text3);white-space:nowrap">${horaStr}</div>` : '');
 
         // Transportado por: muestra «Otros: <detalle>» cuando aplica.
         let transCell = '<span class="text-muted" style="font-size:11px">—</span>';
@@ -9048,28 +9045,67 @@ function renderMovimientos(preservePage) {
         }
 
         const provCell = `${g.proveedor||'—'}${g.clienteRut ? `<br><span class="text-mono" style="font-size:10px;color:var(--text3)">RUT ${g.clienteRut}</span>` : ''}`;
+        const obsCell = `<span title="${(g.observaciones||'').replace(/"/g,'&quot;')}">${g.observaciones||'—'}</span>`;
 
-        return `<tr>
-            <td>${numMovCell}</td>
-            <td class="text-mono mov-nowrap" style="font-size:11px">${fmtDateTime(g.fecha)}</td>
-            <td><span class="badge ${tC}">${tipoLabel}</span></td>
-            <td>${skuCell}</td>
-            <td>${descCell}</td>
-            <td>${loteCell}</td>
-            <td>${venceCell}</td>
-            <td>${qtyCell}</td>
-            <td>${g.bodega||'—'}</td>
-            <td>${ubicCell}</td>
-            <td>${provCell}</td>
-            <td>${g.referencia||'—'}</td>
-            <td>${transCell}</td>
-            <td>${fechaDespCell}</td>
-            <td>${statusCell}</td>
-            <td style="font-size:11px;color:var(--text3)">${g.usuario||'—'}</td>
-            <td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(g.observaciones||'').replace(/"/g,'&quot;')}">${g.observaciones||'—'}</td>
-            <td>${pdfCell}</td>
-            <td>${adjCell}</td>
-        </tr>`;
+        // Renderizar un <tr> por cada par (SKU, Lote). Las columnas comunes
+        // al movimiento usan rowspan=N y vertical-align:middle para centrarse
+        // respecto al conjunto de líneas; las columnas por ítem quedan
+        // alineadas a su propia descripción.
+        const itemList = Object.values(g.items);
+        const n = itemList.length || 1;
+        const rsAttr = n > 1 ? ` rowspan="${n}"` : '';
+
+        return itemList.map((it, idx) => {
+            const isFirst = idx === 0;
+            const isLast = idx === n - 1;
+            const rowClasses = [];
+            if (isFirst) rowClasses.push('mov-row-start');
+            if (!isLast && n > 1) rowClasses.push('mov-row-mid');
+            const trClass = rowClasses.length ? ` class="${rowClasses.join(' ')}"` : '';
+
+            // Columnas por ítem
+            const skuTd   = `<td><span class="text-mono" style="color:var(--accent2);white-space:nowrap">${it.sku || '—'}</span></td>`;
+            const descTd  = `<td>${it.descripcion || '—'}</td>`;
+            const loteTd  = `<td class="text-mono" style="font-size:11px;white-space:nowrap">${it.lote || '—'}</td>`;
+            const venceTd = `<td class="mov-nowrap">${it.vence ? fmtDate(it.vence) : '—'}</td>`;
+            const qtyTd   = `<td style="font-weight:600;color:var(--text)">${it.cantidad}</td>`;
+            const ubicStr = Object.entries(it.ubicaciones)
+                .sort((a, b) => a[0].localeCompare(b[0]))
+                .map(([ubic, qty]) => `${ubic} (${qty})`)
+                .join(', ');
+            const ubicTd  = `<td style="font-size:11px">${ubicStr || '—'}</td>`;
+            const statusTd = `<td>${statusBadgeHTML(it.status || '—')}</td>`;
+
+            if (!isFirst) {
+                // Filas intermedias: solo columnas por ítem (SKU, Descripción,
+                // Lote, Vence, Qty, Ubicación, Status). Las columnas comunes
+                // ya ocuparon el rowspan desde la primera fila.
+                return `<tr${trClass}>${skuTd}${descTd}${loteTd}${venceTd}${qtyTd}${ubicTd}${statusTd}</tr>`;
+            }
+
+            // Primera fila: columnas comunes con rowspan + per-ítem intercaladas.
+            return `<tr${trClass}>
+                <td${rsAttr}>${numMovCell}</td>
+                <td${rsAttr} class="text-mono mov-nowrap">${fechaCell}</td>
+                <td${rsAttr}><span class="badge ${tC}">${tipoLabel}</span></td>
+                ${skuTd}
+                ${descTd}
+                ${loteTd}
+                ${venceTd}
+                ${qtyTd}
+                <td${rsAttr}>${g.bodega||'—'}</td>
+                ${ubicTd}
+                <td${rsAttr}>${provCell}</td>
+                <td${rsAttr}>${g.referencia||'—'}</td>
+                <td${rsAttr}>${transCell}</td>
+                <td${rsAttr}>${fechaDespCell}</td>
+                ${statusTd}
+                <td${rsAttr} style="font-size:11px;color:var(--text3)">${g.usuario||'—'}</td>
+                <td${rsAttr} style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${obsCell}</td>
+                <td${rsAttr}>${pdfCell}</td>
+                <td${rsAttr}>${adjCell}</td>
+            </tr>`;
+        }).join('');
     }).join('');
     if (footer) {
         if (visibles < total) {
