@@ -2053,6 +2053,7 @@
         <div id="movModal-err" class="form-error-banner"></div>
 
         <!-- ── CABECERA DEL DOCUMENTO ── -->
+        <!-- Línea 1: Tipo · Bodega · N° Documento -->
         <div class="form-row">
             <div class="form-group">
                 <label class="form-label">Tipo <span style="color:var(--danger)">*</span></label>
@@ -2066,6 +2067,12 @@
                 </select>
                 <div id="md-nummov-preview" style="display:none;margin-top:6px;font-size:11px;color:var(--text3);font-family:var(--mono,monospace)" title="El número definitivo se asigna al momento de guardar. Este es una estimación."></div>
             </div>
+            <div class="form-group" id="md-bodega-group">
+                <label class="form-label">Bodega <span style="color:var(--danger)">*</span></label>
+                <select class="form-select" id="md-bodega" required onchange="onDocBodegaChange()">
+                    <option value="">Seleccionar...</option>
+                </select>
+            </div>
             <div class="form-group" id="md-numdoc-group">
                 <label class="form-label">N° Documento / Factura <span id="md-numdoc-req-hint"><span style="color:var(--text3);font-weight:normal;font-size:11px">(opcional)</span></span></label>
                 <input type="text" class="form-input" id="md-numdoc" placeholder="Ej: FAC-2024-001" oninput="_checkNumDocDup(); _refreshNumMovPreview()" onblur="_checkNumDocDup(); _autoFillFromFactura(); _refreshNumMovPreview();">
@@ -2074,60 +2081,49 @@
         </div>
         <!-- (campo de estado movido al formulario por ítem — mi-status-group) -->
         <div id="md-status-row" style="display:none"><select id="md-status-prod" style="display:none"></select><div id="md-status-info" style="display:none"><div id="md-status-info-text"></div></div></div>
+        <!-- Línea 2: N° RUT Cliente · Proveedor/Cliente -->
         <div class="form-row" id="md-rutcli-row">
             <div class="form-group" id="md-rutcli-group" style="display:none">
                 <label class="form-label">N° RUT Cliente <span style="color:var(--danger)">*</span></label>
                 <input type="text" class="form-input" id="md-rutcli" placeholder="Ej: 76.039.571-4" oninput="_onRutClienteInput()" onblur="_formatRutInput(this); _onRutClienteInput(true)" autocomplete="off">
                 <div id="md-rutcli-info" style="margin-top:6px;font-size:12px;color:var(--text3);min-height:14px"></div>
             </div>
+            <div class="form-group" id="md-proveedor-group">
+                <label class="form-label">Proveedor / Cliente</label>
+                <input type="text" class="form-input" id="md-proveedor" placeholder="Nombre proveedor o cliente">
+            </div>
+        </div>
+        <!-- Línea 3: Fecha documento · Destino · Fecha de despacho -->
+        <div class="form-row" id="md-fecha-destino-row">
             <div class="form-group" id="md-fechadoc-group">
                 <label class="form-label">Fecha del documento</label>
                 <input type="date" class="form-input" id="md-fecha">
             </div>
-        </div>
-        <div class="form-row" id="md-proveedor-row">
-            <div class="form-group" id="md-proveedor-group">
-                <label class="form-label">Proveedor / Cliente</label>
-                <input type="text" class="form-input" id="md-proveedor" placeholder="Nombre proveedor o cliente">
+            <div class="form-group" id="md-destino-group" style="display:none">
+                <label class="form-label">Destino <span id="md-destino-req" style="color:var(--danger);display:none">*</span></label>
+                <div id="md-destino-wrap"><input type="text" class="form-input" id="md-destino" placeholder="Ej: Santiago, Concepción..."></div>
             </div>
             <div class="form-group" id="md-despacho-group" style="display:none">
                 <label class="form-label">Fecha de despacho <span style="color:var(--danger)">*</span></label>
                 <input type="date" class="form-input" id="md-fecha-despacho">
             </div>
         </div>
-        <div class="form-row" id="md-destino-row">
-            <div class="form-group" id="md-destino-group" style="display:none">
-                <label class="form-label">Destino <span id="md-destino-req" style="color:var(--danger);display:none">*</span></label>
-                <div id="md-destino-wrap"><input type="text" class="form-input" id="md-destino" placeholder="Ej: Santiago, Concepción..."></div>
-            </div>
+        <!-- Línea 4: Transportado por · [Detalle, si Otros] · Observaciones -->
+        <div class="form-row" id="md-transportado-row">
             <div class="form-group" id="md-transportado-group" style="display:none">
                 <label class="form-label">Transportado por <span style="color:var(--danger)">*</span></label>
                 <select class="form-select" id="md-transportado" onchange="_onTransportadoChange()">
                     <option value="">Seleccionar...</option>
-                    <option value="Carlos Arcos">Carlos Arcos</option>
-                    <option value="Mauricio Gonzalez">Mauricio Gonzalez</option>
-                    <option value="Thomas Briones">Thomas Briones</option>
-                    <option value="Externo">Externo</option>
-                    <option value="Pendiente de asignación">Pendiente de asignación</option>
-                    <option value="Otros">Otros</option>
                 </select>
             </div>
-            <div class="form-group" id="md-bodega-group">
-                <label class="form-label">Bodega <span style="color:var(--danger)">*</span></label>
-                <select class="form-select" id="md-bodega" required onchange="onDocBodegaChange()">
-                    <option value="">Seleccionar...</option>
-                </select>
-            </div>
-        </div>
-        <div class="form-row" id="md-transportado-detalle-row" style="display:none">
-            <div class="form-group" id="md-transportado-detalle-group">
+            <div class="form-group" id="md-transportado-detalle-group" style="display:none">
                 <label class="form-label">Detalle de transportista <span style="color:var(--danger)">*</span></label>
                 <input type="text" class="form-input" id="md-transportado-detalle" placeholder="Nombre o entidad del transportista">
             </div>
-        </div>
-        <div class="form-group">
-            <label class="form-label">Observaciones generales</label>
-            <textarea class="form-textarea" id="md-obs" placeholder="Notas adicionales..." rows="2"></textarea>
+            <div class="form-group" id="md-obs-group">
+                <label class="form-label">Observaciones generales</label>
+                <textarea class="form-textarea" id="md-obs" placeholder="Notas adicionales..." rows="2"></textarea>
+            </div>
         </div>
 
         <!-- ── AGREGAR PRODUCTO ── -->
@@ -4726,6 +4722,7 @@ function openMovModal() {
             '<option value="CambioUbicacion">Cambio de Ubicación</option>' +
             '<option value="Devolución">Devolución</option>';
     }
+    _poblarTransportadoSelect();
     openModal('movModal');
 }
 
@@ -4790,12 +4787,41 @@ function _canOperadorAprobar(sku) {
 // Muestra/oculta el detalle libre del transportista cuando se elige "Otros".
 function _onTransportadoChange() {
     const sel = document.getElementById('md-transportado');
-    const row = document.getElementById('md-transportado-detalle-row');
+    const grp = document.getElementById('md-transportado-detalle-group');
     const inp = document.getElementById('md-transportado-detalle');
-    if (!sel || !row) return;
+    if (!sel || !grp) return;
     const esOtros = sel.value === 'Otros';
-    row.style.display = esOtros ? '' : 'none';
+    grp.style.display = esOtros ? '' : 'none';
     if (!esOtros && inp) inp.value = '';
+}
+
+// Opciones del select "Transportado por" según el perfil del usuario.
+// - Operador Los Angeles: Thomas Briones, Externo, Retira Cliente, Otros
+// - Operario Santiago:    Carlos Arcos, Mauricio Gonzalez, Externo, Retira Cliente
+// - Resto (Maestro, Farmacéutico, Operador base): lista completa.
+function _opcionesTransportadoPorPerfil(perfil) {
+    if (perfil === 'Operador Los Angeles') {
+        return ['Thomas Briones', 'Externo', 'Retira Cliente', 'Otros'];
+    }
+    if (perfil === 'Operario Santiago') {
+        return ['Carlos Arcos', 'Mauricio Gonzalez', 'Externo', 'Retira Cliente'];
+    }
+    return [
+        'Carlos Arcos',
+        'Mauricio Gonzalez',
+        'Thomas Briones',
+        'Externo',
+        'Pendiente de asignación',
+        'Retira Cliente',
+        'Otros'
+    ];
+}
+function _poblarTransportadoSelect() {
+    const sel = document.getElementById('md-transportado');
+    if (!sel) return;
+    const opts = _opcionesTransportadoPorPerfil(userPerfil);
+    sel.innerHTML = '<option value="">Seleccionar...</option>' +
+        opts.map(o => `<option value="${o}">${o}</option>`).join('');
 }
 
 // Actualiza opciones y visibilidad del campo Estatus por ítem
@@ -4809,7 +4835,6 @@ function _refreshMiStatusField(tipo) {
     // Cabecera: mostrar/ocultar N° Documento y Proveedor según tipo.
     const numdocGroup    = document.getElementById('md-numdoc-group');
     const proveedorGroup = document.getElementById('md-proveedor-group');
-    const proveedorRow   = document.getElementById('md-proveedor-row');
     const miPrecioGroup  = document.getElementById('mi-precio-group');
     const miVenceGroup   = document.getElementById('mi-vence-group');
     const miPalletGroup  = document.getElementById('mi-pallet-qty-group');
@@ -4818,20 +4843,18 @@ function _refreshMiStatusField(tipo) {
     const esSalida = (tipo === 'Salida');
     if (numdocGroup)    numdocGroup.style.display    = isCambioUbic ? 'none' : '';
     if (proveedorGroup) proveedorGroup.style.display = isCambioUbic ? 'none' : '';
-    // Fecha de despacho: sólo Salida. Comparte fila con Proveedor.
+    // Fecha de despacho: sólo Salida. Comparte fila con Fecha doc y Destino.
     const despachoGroup = document.getElementById('md-despacho-group');
     if (despachoGroup) despachoGroup.style.display = esSalida ? '' : 'none';
-    // Toda la fila Proveedor+Despacho se oculta en CambioUbicacion (ambos ocultos).
-    if (proveedorRow) proveedorRow.style.display = isCambioUbic ? 'none' : '';
-    // Destino: solo Salida. Comparte fila con Bodega (Bodega siempre visible).
+    // Destino: solo Salida.
     const destinoGroup = document.getElementById('md-destino-group');
     if (destinoGroup) destinoGroup.style.display = esSalida ? '' : 'none';
-    // Transportado por: solo Salida. Comparte fila con Destino y Bodega.
+    // Transportado por: solo Salida. Comparte fila con Observaciones y Detalle.
     const transGroup = document.getElementById('md-transportado-group');
     if (transGroup) transGroup.style.display = esSalida ? '' : 'none';
-    const transDetRow = document.getElementById('md-transportado-detalle-row');
-    if (transDetRow && !esSalida) transDetRow.style.display = 'none';
-    // N° RUT Cliente: solo Salida. Comparte fila con Fecha del documento.
+    const transDetGroup = document.getElementById('md-transportado-detalle-group');
+    if (transDetGroup && !esSalida) transDetGroup.style.display = 'none';
+    // N° RUT Cliente: solo Salida. Comparte fila con Proveedor/Cliente.
     const rutcliGroup = document.getElementById('md-rutcli-group');
     if (rutcliGroup) rutcliGroup.style.display = esSalida ? '' : 'none';
     const destReq = document.getElementById('md-destino-req');
@@ -11435,7 +11458,7 @@ function closeModal(id) {
 function resetMovModal() {
     movDocItems = [];
     _clearFields('md-tipo','md-numdoc','md-proveedor','md-destino','md-obs','md-rutcli','md-transportado','md-transportado-detalle');
-    const transDetRow = document.getElementById('md-transportado-detalle-row'); if (transDetRow) transDetRow.style.display = 'none';
+    const transDetGroup = document.getElementById('md-transportado-detalle-group'); if (transDetGroup) transDetGroup.style.display = 'none';
     const transGroup = document.getElementById('md-transportado-group'); if (transGroup) transGroup.style.display = 'none';
     // El destino puede haber quedado transformado en <select> de una salida previa: restaurar a input libre
     const destWrap = document.getElementById('md-destino-wrap');
