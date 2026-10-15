@@ -1015,8 +1015,8 @@
                         </div>
                         <div class="table-wrap">
                             <table><thead><tr>
-                                <th>N° Movimiento</th><th>Fecha</th><th>Tipo</th><th>SKU</th><th>Descripción</th><th>Lote</th><th>Vence</th><th>Qty</th><th>Bodega</th><th>Ubicación</th><th>Proveedor/Cliente</th><th>Referencia</th><th>Status</th><th>Usuario</th><th>Obs.</th><th>PDF</th><th>Adjuntos</th>
-                            </tr></thead><tbody id="tMovimientos"><tr class="empty-row"><td colspan="17">No hay movimientos registrados</td></tr></tbody></table>
+                                <th>N° Movimiento</th><th>Fecha</th><th>Tipo</th><th>SKU</th><th>Descripción</th><th>Lote</th><th>Vence</th><th>Qty</th><th>Bodega</th><th>Ubicación</th><th>Proveedor/Cliente</th><th>Referencia</th><th>Despachado por</th><th>Fecha despacho</th><th>Status</th><th>Usuario</th><th>Obs.</th><th>PDF</th><th>Adjuntos</th>
+                            </tr></thead><tbody id="tMovimientos"><tr class="empty-row"><td colspan="19">No hay movimientos registrados</td></tr></tbody></table>
                         </div>
                         <div id="movPaginacionFooter"></div>
                     </div>
@@ -2068,11 +2068,28 @@
                 <label class="form-label">Destino <span id="md-destino-req" style="color:var(--danger);display:none">*</span></label>
                 <div id="md-destino-wrap"><input type="text" class="form-input" id="md-destino" placeholder="Ej: Santiago, Concepción..."></div>
             </div>
+            <div class="form-group" id="md-transportado-group" style="display:none">
+                <label class="form-label">Transportado por <span style="color:var(--danger)">*</span></label>
+                <select class="form-select" id="md-transportado" onchange="_onTransportadoChange()">
+                    <option value="">Seleccionar...</option>
+                    <option value="Carlos Arcos">Carlos Arcos</option>
+                    <option value="Mauricio Gonzalez">Mauricio Gonzalez</option>
+                    <option value="Externo">Externo</option>
+                    <option value="Pendiente de asignación">Pendiente de asignación</option>
+                    <option value="Otros">Otros</option>
+                </select>
+            </div>
             <div class="form-group" id="md-bodega-group">
                 <label class="form-label">Bodega <span style="color:var(--danger)">*</span></label>
                 <select class="form-select" id="md-bodega" required onchange="onDocBodegaChange()">
                     <option value="">Seleccionar...</option>
                 </select>
+            </div>
+        </div>
+        <div class="form-row" id="md-transportado-detalle-row" style="display:none">
+            <div class="form-group" id="md-transportado-detalle-group">
+                <label class="form-label">Detalle de transportista <span style="color:var(--danger)">*</span></label>
+                <input type="text" class="form-input" id="md-transportado-detalle" placeholder="Nombre o entidad del transportista">
             </div>
         </div>
         <div class="form-group">
@@ -4737,6 +4754,17 @@ function _canOperadorAprobar(sku) {
     return false;
 }
 
+// Muestra/oculta el detalle libre del transportista cuando se elige "Otros".
+function _onTransportadoChange() {
+    const sel = document.getElementById('md-transportado');
+    const row = document.getElementById('md-transportado-detalle-row');
+    const inp = document.getElementById('md-transportado-detalle');
+    if (!sel || !row) return;
+    const esOtros = sel.value === 'Otros';
+    row.style.display = esOtros ? '' : 'none';
+    if (!esOtros && inp) inp.value = '';
+}
+
 // Actualiza opciones y visibilidad del campo Estatus por ítem
 function _refreshMiStatusField(tipo) {
     const miStatusGroup = document.getElementById('mi-status-group');
@@ -4765,6 +4793,11 @@ function _refreshMiStatusField(tipo) {
     // Destino: solo Salida. Comparte fila con Bodega (Bodega siempre visible).
     const destinoGroup = document.getElementById('md-destino-group');
     if (destinoGroup) destinoGroup.style.display = esSalida ? '' : 'none';
+    // Transportado por: solo Salida. Comparte fila con Destino y Bodega.
+    const transGroup = document.getElementById('md-transportado-group');
+    if (transGroup) transGroup.style.display = esSalida ? '' : 'none';
+    const transDetRow = document.getElementById('md-transportado-detalle-row');
+    if (transDetRow && !esSalida) transDetRow.style.display = 'none';
     // N° RUT Cliente: solo Salida. Comparte fila con Fecha del documento.
     const rutcliGroup = document.getElementById('md-rutcli-group');
     if (rutcliGroup) rutcliGroup.style.display = esSalida ? '' : 'none';
@@ -6835,6 +6868,8 @@ function saveDocumento() {
     const numDoc = document.getElementById('md-numdoc').value.trim();
     let proveedor = document.getElementById('md-proveedor').value.trim();
     const destino = (document.getElementById('md-destino')?.value || '').trim();
+    const transportadoPor = (document.getElementById('md-transportado')?.value || '').trim();
+    const transportadoPorDetalle = (document.getElementById('md-transportado-detalle')?.value || '').trim();
     const rutClienteRaw = (document.getElementById('md-rutcli')?.value || '').trim();
     const fechaDoc = document.getElementById('md-fecha').value;
     const fechaDespacho = (document.getElementById('md-fecha-despacho')?.value || '').trim();
@@ -6866,6 +6901,16 @@ function saveDocumento() {
         proveedor = clienteNombre; // forzar a que quede el nombre canónico del maestro
         if (!destino) {
             showFormError('movModal-err', 'Seleccione el destino asociado al RUT del cliente.');
+            return;
+        }
+        if (!transportadoPor) {
+            showFormError('movModal-err', 'Seleccione quién transportará la mercadería.');
+            try { document.getElementById('md-transportado')?.focus(); } catch(_){}
+            return;
+        }
+        if (transportadoPor === 'Otros' && !transportadoPorDetalle) {
+            showFormError('movModal-err', 'Debe indicar el detalle del transportista cuando selecciona «Otros».');
+            try { document.getElementById('md-transportado-detalle')?.focus(); } catch(_){}
             return;
         }
     }
@@ -6982,6 +7027,7 @@ function saveDocumento() {
         ${isCambioUbic ? '' : `<span style="color:var(--text3)">Proveedor/Cliente:</span> ${proveedor||'—'}<br>`}
         ${tipo === 'Salida' && clienteRutFmt ? `<span style="color:var(--text3)">RUT Cliente:</span> <strong>${clienteRutFmt}</strong><br>` : ''}
         ${tipo === 'Salida' && destino ? `<span style="color:var(--text3)">Destino:</span> ${destino}<br>` : ''}
+        ${tipo === 'Salida' && transportadoPor ? `<span style="color:var(--text3)">Transportado por:</span> <strong>${transportadoPor === 'Otros' && transportadoPorDetalle ? transportadoPor + ': ' + transportadoPorDetalle : transportadoPor}</strong><br>` : ''}
         ${tipo === 'Salida' && fechaDespacho ? `<span style="color:var(--text3)">Fecha de despacho:</span> <strong>${fmtDate(fechaDespacho)}</strong><br>` : ''}
         <span style="color:var(--text3)">Total unidades:</span> <strong>${totalUnidades}</strong>`;
 
@@ -7061,6 +7107,8 @@ function saveDocumento() {
                     proveedor, referencia: numDoc,
                     destino: tipo === 'Salida' ? destino : '',
                     clienteRut: tipo === 'Salida' ? clienteRutFmt : '',
+                    transportadoPor: tipo === 'Salida' ? transportadoPor : '',
+                    transportadoPorDetalle: tipo === 'Salida' && transportadoPor === 'Otros' ? transportadoPorDetalle : '',
                     observaciones: obs,
                     fecha: fechaISO,
                     usuario,
@@ -7148,6 +7196,8 @@ function saveDocumento() {
                         fechaDespacho: tipo === 'Salida' ? fechaDespacho : '',
                         proveedor, destino: tipo === 'Salida' ? destino : '',
                         clienteRut: tipo === 'Salida' ? clienteRutFmt : '',
+                        transportadoPor: tipo === 'Salida' ? transportadoPor : '',
+                        transportadoPorDetalle: tipo === 'Salida' && transportadoPor === 'Otros' ? transportadoPorDetalle : '',
                         bodega, ubic, obs,
                         items: [...movDocItems], usuario,
                         usuarioPerfil: userPerfil || '',
@@ -8845,70 +8895,151 @@ function renderMovimientos(preservePage) {
     if (fReferencia) rows = rows.filter(m => (m.referencia||'').toLowerCase().includes(fReferencia));
     if (fDesde) rows = rows.filter(m => m.fecha && m.fecha.slice(0,10) >= fDesde);
     if (fHasta) rows = rows.filter(m => m.fecha && m.fecha.slice(0,10) <= fHasta);
-    rows.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
-    const total = rows.length;
     const footer = document.getElementById('movPaginacionFooter');
     const tb = document.getElementById('tMovimientos');
-    if (!total) {
-        tb.innerHTML = '<tr class="empty-row"><td colspan="17">No hay movimientos</td></tr>';
+    if (!rows.length) {
+        tb.innerHTML = '<tr class="empty-row"><td colspan="19">No hay movimientos</td></tr>';
         if (footer) footer.innerHTML = '';
         return;
     }
-    const visibles = Math.min(_movVisibleCount, total);
-    const shown = rows.slice(0, visibles);
-    // Un botón PDF por operación única (N° movimiento). Dos movimientos con la
-    // misma referencia/documentoId pero diferentes N° movimiento son operaciones
-    // distintas y deben tener su propio PDF. Fallback a documentoId sólo para
-    // movimientos históricos sin N° movimiento.
-    const pdfRendered = new Set();
-    tb.innerHTML = shown.map(m => {
-        const tC = m.tipo === 'Entrada' ? 'badge-success' : m.tipo === 'Salida' ? 'badge-danger' : m.tipo === 'Destrucción' ? 'badge-danger' : m.tipo === 'CambioEstado' ? 'badge-gray' : m.tipo === 'CambioUbicacion' ? 'badge-gray' : 'badge-warning';
-        const tipoLabel = m.tipo === 'CambioUbicacion' ? 'Cambio de Ubicación' : m.tipo;
-        const ubicCell = m.ubicacionOrigen
-            ? `<span style="color:var(--text3)">${m.ubicacionOrigen}</span> → <strong>${m.ubicacion||'—'}</strong>`
-            : (m.ubicacion||'—');
-        let pdfCell = '—';
-        const pdfKey = m.numeroMovimiento || m.documentoId || '';
-        if (pdfKey) {
-            if (!pdfRendered.has(pdfKey)) {
-                pdfRendered.add(pdfKey);
-                pdfCell = `<button class="btn btn-sm btn-icon" style="font-size:10px;white-space:nowrap" onclick="regenerarPDF('${pdfKey.replace(/'/g,"\\'")}')">PDF</button>`;
-            } else {
-                pdfCell = `<span style="color:var(--text3);font-size:10px">${pdfKey}</span>`;
-            }
+    // ── Consolidación por N° Movimiento ──
+    // Agrupa todos los items de un mismo documento/operación en una sola fila.
+    // Fallback: documentoId para movimientos históricos sin N° movimiento;
+    // si tampoco existe, cada movimiento queda como grupo propio (su índice).
+    const groups = {};
+    const prods = data.productos || {};
+    rows.forEach((m, idx) => {
+        const groupKey = m.numeroMovimiento || m.documentoId || `__single_${idx}`;
+        if (!groups[groupKey]) {
+            groups[groupKey] = {
+                key: groupKey,
+                fecha: m.fecha,
+                tipo: m.tipo,
+                numeroMovimiento: m.numeroMovimiento || '',
+                documentoId: m.documentoId || '',
+                bodega: m.bodega || '',
+                proveedor: m.proveedor || '',
+                clienteRut: m.clienteRut || '',
+                referencia: m.referencia || '',
+                transportadoPor: m.transportadoPor || '',
+                transportadoPorDetalle: m.transportadoPorDetalle || '',
+                fechaDespacho: m.fechaDespacho || '',
+                usuario: m.usuario || '',
+                observaciones: m.observaciones || '',
+                adjuntos: Array.isArray(m.adjuntos) ? m.adjuntos : (m.adjuntos ? Object.values(m.adjuntos) : []),
+                items: {}
+            };
         }
-        const numMovCell = m.numeroMovimiento
-            ? `<span class="text-mono" style="color:var(--accent);font-weight:600;font-size:11px">${m.numeroMovimiento}</span>`
+        const g = groups[groupKey];
+        // Mantener fecha mínima del grupo (todas suelen coincidir)
+        if (m.fecha && (!g.fecha || m.fecha < g.fecha)) g.fecha = m.fecha;
+        // Preservar primer valor no-vacío de campos de cabecera
+        if (!g.transportadoPor && m.transportadoPor) g.transportadoPor = m.transportadoPor;
+        if (!g.transportadoPorDetalle && m.transportadoPorDetalle) g.transportadoPorDetalle = m.transportadoPorDetalle;
+        if (!g.fechaDespacho && m.fechaDespacho) g.fechaDespacho = m.fechaDespacho;
+        if (!g.clienteRut && m.clienteRut) g.clienteRut = m.clienteRut;
+        if (!g.proveedor && m.proveedor) g.proveedor = m.proveedor;
+        if (!g.referencia && m.referencia) g.referencia = m.referencia;
+
+        // Agregación por (sku, lote) dentro del grupo
+        const itemKey = `${m.sku||''}|${m.lote||''}`;
+        if (!g.items[itemKey]) {
+            g.items[itemKey] = {
+                sku: m.sku || '',
+                lote: m.lote || '',
+                descripcion: m.descripcion || prods[m.sku]?.descripcion || '',
+                vence: m.vence || '',
+                status: m.status || '',
+                cantidad: 0,
+                ubicaciones: {}
+            };
+        }
+        const it = g.items[itemKey];
+        it.cantidad += parseFloat(m.cantidad) || 0;
+        // Para Cambio de Ubicación la ubicación "efectiva" en la fila es origen → destino.
+        const ubicLabel = m.ubicacionOrigen
+            ? `${m.ubicacionOrigen} → ${m.ubicacion || '—'}`
+            : (m.ubicacion || '—');
+        it.ubicaciones[ubicLabel] = (it.ubicaciones[ubicLabel] || 0) + (parseFloat(m.cantidad) || 0);
+    });
+
+    // Ordenar grupos por fecha descendente
+    const groupList = Object.values(groups).sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+    const total = groupList.length;
+    const visibles = Math.min(_movVisibleCount, total);
+    const shownGroups = groupList.slice(0, visibles);
+
+    tb.innerHTML = shownGroups.map(g => {
+        const tC = g.tipo === 'Entrada' ? 'badge-success' : g.tipo === 'Salida' ? 'badge-danger' : g.tipo === 'Destrucción' ? 'badge-danger' : g.tipo === 'CambioEstado' ? 'badge-gray' : g.tipo === 'CambioUbicacion' ? 'badge-gray' : 'badge-warning';
+        const tipoLabel = g.tipo === 'CambioUbicacion' ? 'Cambio de Ubicación' : g.tipo;
+        const numMovCell = g.numeroMovimiento
+            ? `<span class="text-mono" style="color:var(--accent);font-weight:600;font-size:11px">${g.numeroMovimiento}</span>`
             : '<span class="text-muted" style="font-size:11px">—</span>';
-        // Adjuntos: uno o varios documentos base64 guardados en RTDB al registrar
-        // el movimiento (por ahora usados en Cambio de Estado desde Cuarentena).
-        // Firebase puede deserializar el array como objeto → normalizamos.
-        const adjArr = Array.isArray(m.adjuntos) ? m.adjuntos : (m.adjuntos ? Object.values(m.adjuntos) : []);
+
+        const itemList = Object.values(g.items);
+        // Celdas multi-línea: una línea por par (SKU, Lote), alineadas entre columnas.
+        const skuCell   = itemList.map(it => `<div class="text-mono" style="color:var(--accent2)">${it.sku || '—'}</div>`).join('');
+        const descCell  = itemList.map(it => `<div>${it.descripcion || '—'}</div>`).join('');
+        const loteCell  = itemList.map(it => `<div class="text-mono" style="font-size:11px">${it.lote || '—'}</div>`).join('');
+        const venceCell = itemList.map(it => `<div>${it.vence ? fmtDate(it.vence) : '—'}</div>`).join('');
+        const qtyCell   = itemList.map(it => `<div style="font-weight:600;color:var(--text)">${it.cantidad}</div>`).join('');
+        const statusCell = itemList.map(it => `<div>${statusBadgeHTML(it.status || '—')}</div>`).join('');
+        const ubicCell  = itemList.map(it => {
+            const ubicStr = Object.entries(it.ubicaciones)
+                .sort((a, b) => a[0].localeCompare(b[0]))
+                .map(([ubic, qty]) => `${ubic} (${qty})`)
+                .join(', ');
+            return `<div style="font-size:11px">${ubicStr || '—'}</div>`;
+        }).join('');
+
+        // Transportado por: muestra «Otros: <detalle>» cuando aplica.
+        let transCell = '<span class="text-muted" style="font-size:11px">—</span>';
+        if (g.transportadoPor) {
+            const texto = g.transportadoPor === 'Otros' && g.transportadoPorDetalle
+                ? `${g.transportadoPor}: ${g.transportadoPorDetalle}`
+                : g.transportadoPor;
+            transCell = `<span style="font-size:11px">${texto}</span>`;
+        }
+        const fechaDespCell = g.fechaDespacho
+            ? `<span class="text-mono" style="font-size:11px">${fmtDate(g.fechaDespacho)}</span>`
+            : '<span class="text-muted" style="font-size:11px">—</span>';
+
+        // Un botón PDF por operación (N° movimiento o documentoId).
+        const pdfKey = g.numeroMovimiento || g.documentoId || '';
+        const pdfCell = pdfKey
+            ? `<button class="btn btn-sm btn-icon" style="font-size:10px;white-space:nowrap" onclick="regenerarPDF('${pdfKey.replace(/'/g,"\\'")}')">PDF</button>`
+            : '—';
+
         let adjCell = '<span style="color:var(--text3);font-size:11px">—</span>';
-        if (adjArr.length) {
-            adjCell = adjArr.map(a => {
+        if (g.adjuntos.length) {
+            adjCell = g.adjuntos.map(a => {
                 const safeId = (a.id||'').replace(/'/g,"\\'");
                 const safeName = (a.nombre||'documento').replace(/"/g,'&quot;').replace(/'/g,"\\'");
                 const label = a.tipo ? `${a.tipo}` : 'Doc';
                 return `<button class="btn btn-sm btn-icon" title="${safeName}" style="font-size:10px;white-space:nowrap" onclick="downloadAdjuntoRTDB('${safeId}','${safeName}')">📎 ${label}</button>`;
             }).join('<br>');
         }
-        return `<tr>
+
+        const provCell = `${g.proveedor||'—'}${g.clienteRut ? `<br><span class="text-mono" style="font-size:10px;color:var(--text3)">RUT ${g.clienteRut}</span>` : ''}`;
+
+        return `<tr style="vertical-align:top">
             <td>${numMovCell}</td>
-            <td class="text-mono" style="font-size:11px">${fmtDateTime(m.fecha)}</td>
+            <td class="text-mono" style="font-size:11px">${fmtDateTime(g.fecha)}</td>
             <td><span class="badge ${tC}">${tipoLabel}</span></td>
-            <td class="text-mono" style="color:var(--accent2)">${m.sku}</td>
-            <td>${m.descripcion||'—'}</td>
-            <td class="text-mono" style="font-size:11px">${m.lote||'—'}</td>
-            <td>${m.vence ? fmtDate(m.vence) : '—'}</td>
-            <td style="font-weight:600;color:var(--text)">${m.cantidad}</td>
-            <td>${m.bodega||'—'}</td>
-            <td style="font-size:11px">${ubicCell}</td>
-            <td>${m.proveedor||'—'}${m.clienteRut ? `<br><span class="text-mono" style="font-size:10px;color:var(--text3)">RUT ${m.clienteRut}</span>` : ''}</td>
-            <td>${m.referencia||'—'}</td>
-            <td>${statusBadgeHTML(m.status||'—')}</td>
-            <td style="font-size:11px;color:var(--text3)">${m.usuario||'—'}</td>
-            <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.observaciones||'—'}</td>
+            <td>${skuCell}</td>
+            <td>${descCell}</td>
+            <td>${loteCell}</td>
+            <td>${venceCell}</td>
+            <td>${qtyCell}</td>
+            <td>${g.bodega||'—'}</td>
+            <td>${ubicCell}</td>
+            <td>${provCell}</td>
+            <td>${g.referencia||'—'}</td>
+            <td>${transCell}</td>
+            <td>${fechaDespCell}</td>
+            <td>${statusCell}</td>
+            <td style="font-size:11px;color:var(--text3)">${g.usuario||'—'}</td>
+            <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${g.observaciones||'—'}</td>
             <td>${pdfCell}</td>
             <td>${adjCell}</td>
         </tr>`;
@@ -11239,7 +11370,9 @@ function closeModal(id) {
 
 function resetMovModal() {
     movDocItems = [];
-    _clearFields('md-tipo','md-numdoc','md-proveedor','md-destino','md-obs','md-rutcli');
+    _clearFields('md-tipo','md-numdoc','md-proveedor','md-destino','md-obs','md-rutcli','md-transportado','md-transportado-detalle');
+    const transDetRow = document.getElementById('md-transportado-detalle-row'); if (transDetRow) transDetRow.style.display = 'none';
+    const transGroup = document.getElementById('md-transportado-group'); if (transGroup) transGroup.style.display = 'none';
     // El destino puede haber quedado transformado en <select> de una salida previa: restaurar a input libre
     const destWrap = document.getElementById('md-destino-wrap');
     if (destWrap) destWrap.innerHTML = '<input type="text" class="form-input" id="md-destino" placeholder="Ej: Santiago, Concepción...">';
