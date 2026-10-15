@@ -151,6 +151,44 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 
 /* PENDING QUEUE INDICATOR */
 .queue-pill{position:fixed;bottom:20px;right:20px;background:var(--warning);color:white;border-radius:20px;padding:8px 14px;font-size:12px;font-weight:600;display:none;align-items:center;gap:6px;z-index:500;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.2);}
+
+/* TABS */
+.tabs-row{display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;scrollbar-width:none;}
+.tabs-row::-webkit-scrollbar{display:none;}
+.tab-btn{flex:1;min-width:120px;background:var(--surface);border:1px solid var(--border);color:var(--text2);font-size:13px;font-weight:600;padding:10px 12px;border-radius:var(--radius);cursor:pointer;font-family:var(--font);display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s;white-space:nowrap;}
+.tab-btn:hover{border-color:var(--border2);}
+.tab-btn.active{background:var(--accent);color:white;border-color:var(--accent);}
+.tab-count{background:rgba(255,255,255,.25);padding:1px 7px;border-radius:10px;font-size:11px;font-weight:700;min-width:20px;display:inline-block;text-align:center;}
+.tab-btn:not(.active) .tab-count{background:var(--bg3);color:var(--text2);}
+
+/* SEARCH */
+.search-row{position:relative;margin-bottom:12px;}
+.search-row input{padding-left:38px;}
+.search-row::before{content:'🔍';position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:14px;pointer-events:none;}
+
+/* OT CARD ACTION BUTTONS */
+.action-btn-tomar{background:var(--accent-dim);color:var(--accent);border:1px solid rgba(0,112,242,.3);}
+.action-btn-tomar:hover,.action-btn-tomar:active{background:var(--accent);color:white;}
+
+/* VOICE INPUT */
+.voice-row{display:flex;gap:8px;align-items:flex-start;margin-top:4px;}
+.voice-row .form-textarea{flex:1;margin:0;}
+.btn-voice{flex-shrink:0;width:48px;height:48px;border-radius:var(--radius);background:var(--accent-dim);color:var(--accent);border:1px solid rgba(0,112,242,.3);font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;}
+.btn-voice:hover{background:var(--accent);color:white;}
+.btn-voice.recording{background:var(--danger);color:white;border-color:var(--danger);animation:pulse 1.1s infinite;}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(187,0,0,.5);}50%{box-shadow:0 0 0 10px rgba(187,0,0,0);}}
+.voice-status{font-size:11px;color:var(--text3);margin-top:4px;min-height:14px;}
+.voice-status.recording{color:var(--danger);font-weight:600;}
+.voice-status.error{color:var(--danger);}
+
+/* MANDATORY FIELD HINT */
+.hint-required{font-size:11px;color:var(--danger);margin-top:4px;}
+
+/* ITEM TABLE EN DETALLE */
+.items-table{width:100%;border-collapse:collapse;font-size:12.5px;}
+.items-table th{background:var(--bg);text-align:left;padding:6px 8px;color:var(--text3);text-transform:uppercase;font-size:10px;letter-spacing:.4px;}
+.items-table td{padding:6px 8px;border-bottom:1px solid var(--border);}
+.items-table tr:last-child td{border-bottom:none;}
 </style>
 </head>
 <body>
@@ -201,13 +239,25 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
       ⏳ <span id="syncMsg">Sincronizando cambios offline...</span>
     </div>
 
-    <!-- OTs LIST -->
-    <div id="otsList"></div>
+    <!-- SEARCH -->
+    <div class="search-row">
+      <input type="search" id="searchDoc" class="form-input" placeholder="Buscar por N° factura / guía..." oninput="renderDespachos()">
+    </div>
+
+    <!-- SECTION TABS -->
+    <div class="tabs-row" id="tabsRow">
+      <button class="tab-btn active" data-tab="asignados" onclick="setTab('asignados')">Mis despachos <span class="tab-count" id="cntAsignados">0</span></button>
+      <button class="tab-btn" data-tab="pendientes" onclick="setTab('pendientes')">Pendientes <span class="tab-count" id="cntPendientes">0</span></button>
+      <button class="tab-btn" data-tab="entregados" onclick="setTab('entregados')">Entregados hoy <span class="tab-count" id="cntEntregados">0</span></button>
+    </div>
+
+    <!-- DESPACHOS LIST -->
+    <div id="despachosList"></div>
 
     <div id="emptyState" class="empty-state" style="display:none;">
       <div class="empty-state-icon">📭</div>
-      <div class="empty-state-title">Sin despachos asignados</div>
-      <div class="empty-state-sub">Los despachos asignados a usted aparecerán aquí.</div>
+      <div class="empty-state-title">Sin despachos</div>
+      <div class="empty-state-sub">Los despachos aparecerán aquí cuando sean asignados a usted o estén pendientes de asignar en sus bodegas.</div>
     </div>
   </div>
 </div>
@@ -217,35 +267,48 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
   ⏳ <span id="queueCount">0</span> pendiente(s) — Sincronizar
 </div>
 
-<!-- ═══ MODAL: ACCIÓN OT ═══ -->
-<div id="accionModal" class="modal">
+<!-- ═══ MODAL: TOMAR DESPACHO ═══ -->
+<div id="tomarModal" class="modal">
   <div class="modal-sheet">
     <div class="modal-handle"></div>
-    <div id="accionOTId" class="modal-title">Actualizar Despacho</div>
+    <div class="modal-title">Tomar despacho</div>
+    <div id="tomar-info" style="background:#F5F5F5;border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;line-height:1.8;color:var(--text2);"></div>
+    <div style="font-size:12.5px;color:var(--text2);margin-bottom:12px;">
+      Al confirmar, este despacho queda asignado a usted y <strong>deja de estar disponible para otros conductores</strong>. Podrá marcarlo "En Ruta" cuando salga a entregar.
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="closeModal('tomarModal')">Cancelar</button>
+      <button class="btn btn-primary" id="btn-tomar-confirm" onclick="confirmarTomar()">Tomar despacho</button>
+    </div>
+  </div>
+</div>
 
-    <div id="accion-sync-warn" class="sync-banner" style="display:none">
+<!-- ═══ MODAL: ENTREGAR DESPACHO ═══ -->
+<div id="entregarModal" class="modal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Marcar como Entregada</div>
+    <div id="entregar-info" style="background:#F5F5F5;border-radius:8px;padding:12px;margin-bottom:14px;font-size:12.5px;line-height:1.6;color:var(--text2);"></div>
+
+    <div id="entregar-sync-warn" class="sync-banner" style="display:none">
       ⚠ Sin conexión. El cambio se guardará localmente y se enviará cuando se restablezca la conexión.
     </div>
 
     <div class="form-group">
-      <label class="form-label">Nuevo estado *</label>
-      <select class="form-select" id="ac-estado">
-        <option value="En Ruta">🚛 En Ruta — Saliendo a entregar</option>
-        <option value="Entregada">✓ Entregada — Entrega exitosa</option>
-        <option value="Con Novedad">⚠ Con Novedad — Problema en entrega</option>
-      </select>
-    </div>
-
-    <div class="form-group">
-      <label class="form-label">Foto (factura firmada / novedad)</label>
-      <input type="file" id="ac-foto" accept="image/*" capture="environment" onchange="previewPhoto(this)" style="display:none">
-      <button type="button" onclick="document.getElementById('ac-foto').click()" class="btn btn-ghost" style="margin-bottom:8px;">📷 Tomar / Seleccionar foto</button>
-      <img id="ac-foto-preview" class="photo-preview" src="" style="display:none;max-height:200px;object-fit:cover;">
+      <label class="form-label">Foto del cedible firmado <span style="color:var(--danger)">*</span></label>
+      <input type="file" id="ent-foto" accept="image/*" capture="environment" onchange="previewEntFoto(this)" style="display:none">
+      <button type="button" onclick="document.getElementById('ent-foto').click()" class="btn btn-ghost" style="margin-bottom:4px;">📷 Tomar foto del cedible</button>
+      <img id="ent-foto-preview" class="photo-preview" src="" style="display:none;max-height:220px;object-fit:cover;">
+      <div id="ent-foto-hint" class="hint-required" style="display:none">La foto del cedible firmado es obligatoria para marcar como entregada.</div>
     </div>
 
     <div class="form-group">
       <label class="form-label">Observaciones</label>
-      <textarea class="form-textarea" id="ac-obs" placeholder="Describa la situación..."></textarea>
+      <div class="voice-row">
+        <textarea class="form-textarea" id="ent-obs" placeholder="Observaciones del cierre (opcional)..." rows="3"></textarea>
+        <button type="button" class="btn-voice" id="btn-voice" onclick="toggleVoice()" title="Dictar observaciones">🎤</button>
+      </div>
+      <div class="voice-status" id="voice-status"></div>
     </div>
 
     <div style="margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
@@ -254,27 +317,25 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
     </div>
 
     <div class="btn-row">
-      <button class="btn btn-ghost" onclick="closeAccionModal()">Cancelar</button>
-      <button class="btn btn-primary" id="btn-enviar" onclick="enviarActualizacion()">
-        Enviar actualización
-      </button>
+      <button class="btn btn-ghost" onclick="closeModal('entregarModal')">Cancelar</button>
+      <button class="btn btn-primary" id="btn-entregar-confirm" onclick="confirmarEntrega()">Confirmar entrega</button>
     </div>
   </div>
 </div>
 
-<!-- ═══ MODAL: DETALLE OT ═══ -->
+<!-- ═══ MODAL: DETALLE DESPACHO ═══ -->
 <div id="detalleModal" class="modal">
   <div class="modal-sheet">
     <div class="modal-handle"></div>
-    <div id="detOTTitle" class="modal-title">Detalle OT</div>
-    <div id="detOTInfo" style="background:#F5F5F5;border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;line-height:1.8;color:var(--text2);"></div>
-    <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Ítems</div>
-    <div id="detOTItems" style="margin-bottom:16px;font-size:13px;color:var(--text2);"></div>
+    <div id="detTitle" class="modal-title">Detalle Despacho</div>
+    <div id="detInfo" style="background:#F5F5F5;border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;line-height:1.8;color:var(--text2);"></div>
+    <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Productos</div>
+    <div id="detItems" style="margin-bottom:16px;overflow-x:auto"></div>
     <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Historial</div>
-    <ul class="timeline" id="detOTTimeline"></ul>
+    <ul class="timeline" id="detTimeline"></ul>
     <div class="btn-row" style="margin-top:20px;">
       <button class="btn btn-ghost" onclick="closeModal('detalleModal')">Cerrar</button>
-      <button class="btn btn-primary" id="detOTActionBtn">Actualizar estado</button>
+      <button class="btn btn-primary" id="detActionBtn">—</button>
     </div>
   </div>
 </div>
@@ -296,10 +357,17 @@ const db = firebase.database();
 const storage = firebase.storage();
 
 let currentUser = null, maestroUid = null, conductorId = null, conductorNombre = '';
-let myOTs = {}, trazabilidad = {};
+// Datos del conductor logueado (nombreOpcion debe coincidir con la opción
+// del dropdown "Transportado por" del WMS; bodegasPermitidas define qué
+// pendientes verá).
+let conductorInfo = { nombreOpcion: '', bodegasPermitidas: [], activo: true };
+let misMovimientos = {};   // Salidas visibles al chofer (tipo=Salida ∩ filtro perfil)
+let misDespachos   = {};   // Estado/hitos de despachos ya tomados (/organizaciones/.../despachos/)
 let currentGPS = null;
-let _activeOT = null;
+let activeDocId = null;    // documentoId del despacho activo en algún modal
+let activeTab = 'asignados';
 let isOnline = navigator.onLine;
+let speech = null, speechActive = false;  // Web Speech API — observaciones por voz
 
 // ══ INDEXEDDB (OFFLINE QUEUE) ══
 let idb = null;
@@ -362,9 +430,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (perfil !== 'Transportista') { window.location.href = 'transporte.html'; return; }
     maestroUid = (await db.ref(`usuarios/${u.uid}/maestroUid`).once('value')).val();
     conductorId = (await db.ref(`usuarios/${u.uid}/conductorId`).once('value')).val();
-    if (!maestroUid) { alert('Cuenta no configurada correctamente. Contacte al administrador.'); auth.signOut(); return; }
+    if (!maestroUid || !conductorId) {
+      alert('Cuenta no configurada correctamente. Contacte al administrador.');
+      auth.signOut();
+      return;
+    }
+    // Carga la ficha del conductor: nombreOpcion y bodegasPermitidas son
+    // críticos para filtrar los despachos visibles.
     const cSnap = await db.ref(`organizaciones/${maestroUid}/conductores/${conductorId}`).once('value');
-    conductorNombre = cSnap.val()?.nombre || u.email;
+    const c = cSnap.val() || {};
+    conductorNombre = c.nombre || u.email;
+    conductorInfo.nombreOpcion = (c.nombreOpcion || '').trim();
+    conductorInfo.bodegasPermitidas = Array.isArray(c.bodegasPermitidas)
+      ? c.bodegasPermitidas
+      : (c.bodegasPermitidas ? Object.values(c.bodegasPermitidas) : []);
+    conductorInfo.activo = c.activo !== false;
+    if (!conductorInfo.nombreOpcion) {
+      alert('Su ficha de conductor no tiene configurado el "Nombre en Transportado por". Pida al administrador que lo complete en el panel de Transporte.');
+    }
+    if (!conductorInfo.bodegasPermitidas.length) {
+      alert('Su ficha de conductor no tiene bodegas asignadas. Pida al administrador que configure las bodegas desde las que puede retirar.');
+    }
     document.getElementById('topbarSub').textContent = conductorNombre;
     showApp();
     attachListeners();
@@ -408,170 +494,509 @@ function handleLogin(e) {
 function handleLogout() { auth.signOut(); showLogin(); }
 
 // ══ LISTENERS ══
+// Escucha salidas del WMS (sólo tipo="Salida", vía índice) y el estado de los
+// despachos ya tomados. El chofer sólo ve lo que le corresponde según su
+// nombreOpcion y bodegasPermitidas — el filtro se aplica client-side.
 function attachListeners() {
-  db.ref(`organizaciones/${maestroUid}/ordenesTransporte`).on('value', s => {
-    const all = s.val() || {};
-    myOTs = Object.fromEntries(Object.entries(all).filter(([k,o]) => o.conductorId === conductorId && o.estado !== 'Cancelada'));
-    renderOTs();
+  db.ref(`usuarios/${maestroUid}/movimientos`)
+    .orderByChild('tipo').equalTo('Salida')
+    .on('value', s => {
+      misMovimientos = s.val() || {};
+      renderDespachos();
+    });
+  db.ref(`organizaciones/${maestroUid}/despachos`).on('value', s => {
+    misDespachos = s.val() || {};
+    renderDespachos();
   });
-  db.ref(`organizaciones/${maestroUid}/trazabilidadTransporte`).on('value', s => { trazabilidad = s.val() || {}; });
+  // Si el admin actualiza la ficha del conductor en vivo (p.ej. agrega una
+  // bodega), reflejamos el cambio sin requerir re-login.
+  db.ref(`organizaciones/${maestroUid}/conductores/${conductorId}`).on('value', s => {
+    const c = s.val() || {};
+    conductorInfo.nombreOpcion = (c.nombreOpcion || '').trim();
+    conductorInfo.bodegasPermitidas = Array.isArray(c.bodegasPermitidas)
+      ? c.bodegasPermitidas
+      : (c.bodegasPermitidas ? Object.values(c.bodegasPermitidas) : []);
+    conductorInfo.activo = c.activo !== false;
+    renderDespachos();
+  });
 }
 
-// ══ RENDER OTs ══
-function renderOTs() {
-  const list = document.getElementById('otsList');
+// ══ MODELO DE DATOS DERIVADO ══
+// Agrupa salidas por documentoId y clasifica cada "despacho" en:
+//   - "Pendiente"  : disponible para tomar (transportadoPor = "Pendiente de
+//                    asignación" y la bodega está en bodegasPermitidas)
+//   - "Asignada"   : asignada al chofer, no iniciada aún
+//   - "En Ruta"    : el chofer la marcó En Ruta
+//   - "Entregada"  : entregada (con foto de cedible)
+function _construirDespachos() {
+  const resultado = {}; // documentoId → { ... }
+  const porDocumento = {};
+  Object.entries(misMovimientos || {}).forEach(([movId, m]) => {
+    if (!m || m.tipo !== 'Salida') return;
+    const docId = m.documentoId || m.referencia || movId;
+    if (!porDocumento[docId]) porDocumento[docId] = [];
+    porDocumento[docId].push({ movId, ...m });
+  });
+
+  const miNombre = conductorInfo.nombreOpcion;
+  const misBodegas = new Set(conductorInfo.bodegasPermitidas || []);
+  const PENDIENTE_LITERAL = 'Pendiente de asignación';
+
+  Object.entries(porDocumento).forEach(([docId, movs]) => {
+    const first = movs[0];
+    const transporte = (first.transportadoPor || '').trim();
+    const bodega = first.bodega || '';
+    const esMio = miNombre && transporte === miNombre;
+    const esPendiente = transporte === PENDIENTE_LITERAL && misBodegas.has(bodega);
+    if (!esMio && !esPendiente) return;
+
+    // Estado base: viene de /despachos/{docId}/estado, o inferido:
+    //   - mío sin registro → "Asignada"
+    //   - pendiente sin registro → "Pendiente"
+    const regDesp = (misDespachos || {})[docId] || null;
+    let estado = regDesp?.estado;
+    if (!estado) estado = esMio ? 'Asignada' : 'Pendiente';
+
+    // Agrega items por SKU/lote
+    const items = {};
+    movs.forEach(m => {
+      const k = `${m.sku||''}|${m.lote||''}`;
+      if (!items[k]) items[k] = {
+        sku: m.sku || '',
+        lote: m.lote || '',
+        descripcion: m.descripcion || '',
+        vence: m.vence || '',
+        cantidad: 0,
+        ubicaciones: {}
+      };
+      items[k].cantidad += parseFloat(m.cantidad) || 0;
+      const ubic = m.ubicacion || '—';
+      items[k].ubicaciones[ubic] = (items[k].ubicaciones[ubic] || 0) + (parseFloat(m.cantidad) || 0);
+    });
+
+    resultado[docId] = {
+      documentoId: docId,
+      estado,
+      bodega,
+      cliente: first.proveedor || '',
+      clienteRut: first.clienteRut || '',
+      destino: first.destino || '',
+      fechaDespacho: first.fechaDespacho || '',
+      fecha: first.fecha || '',
+      referencia: first.referencia || '',
+      transportadoPor: transporte,
+      items: Object.values(items),
+      numeroMovimiento: first.numeroMovimiento || '',
+      regDespacho: regDesp,
+      esPendiente,
+      esMio
+    };
+  });
+  return resultado;
+}
+
+// ══ RENDER ══
+function setTab(tab) {
+  activeTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  renderDespachos();
+}
+
+function renderDespachos() {
+  const list = document.getElementById('despachosList');
   const empty = document.getElementById('emptyState');
-  const rows = Object.values(myOTs).sort((a,b) => {
-    const order = {'En Ruta':0,'Asignada':1,'Con Novedad':2,'Entregada':3};
-    return (order[a.estado]??9) - (order[b.estado]??9);
+  const search = (document.getElementById('searchDoc')?.value || '').trim().toLowerCase();
+  const todos = _construirDespachos();
+  const hoy = new Date().toISOString().split('T')[0];
+
+  // Clasifica por tabs
+  const asignados = [], pendientes = [], entregados = [];
+  Object.values(todos).forEach(d => {
+    const matchDoc = !search ||
+      d.documentoId.toLowerCase().includes(search) ||
+      (d.referencia||'').toLowerCase().includes(search) ||
+      (d.numeroMovimiento||'').toLowerCase().includes(search);
+    if (!matchDoc) return;
+    if (d.estado === 'Pendiente') pendientes.push(d);
+    else if (d.estado === 'Entregada') {
+      // Sólo entregados HOY se muestran — el histórico se consulta desde el admin.
+      const f = (d.regDespacho?.entregadoEn || '').slice(0,10);
+      if (f === hoy) entregados.push(d);
+    }
+    else asignados.push(d);
   });
 
-  if (!rows.length) { list.innerHTML = ''; empty.style.display='block'; return; }
+  // Ordena: en ruta primero, luego asignados por fecha
+  asignados.sort((a,b) => {
+    const ord = { 'En Ruta':0, 'Asignada':1 };
+    const d = (ord[a.estado]??9) - (ord[b.estado]??9);
+    if (d) return d;
+    return (b.fechaDespacho||'').localeCompare(a.fechaDespacho||'');
+  });
+  pendientes.sort((a,b) => (b.fechaDespacho||'').localeCompare(a.fechaDespacho||''));
+  entregados.sort((a,b) => (b.regDespacho?.entregadoEn||'').localeCompare(a.regDespacho?.entregadoEn||''));
+
+  // Actualiza contadores de las tabs
+  document.getElementById('cntAsignados').textContent = asignados.length;
+  document.getElementById('cntPendientes').textContent = pendientes.length;
+  document.getElementById('cntEntregados').textContent = entregados.length;
+
+  const dataActiva = { asignados, pendientes, entregados }[activeTab] || [];
+  if (!dataActiva.length) {
+    list.innerHTML = '';
+    empty.style.display = 'block';
+    empty.querySelector('.empty-state-title').textContent =
+      activeTab === 'pendientes' ? 'Sin despachos pendientes' :
+      activeTab === 'entregados' ? 'Sin entregas hoy' :
+      'Sin despachos asignados';
+    return;
+  }
   empty.style.display = 'none';
-
-  const hoy = new Date().toISOString().split('T')[0];
-  const hoyOTs = rows.filter(o => o.fechaDespacho === hoy);
-  const otrasFechas = rows.filter(o => o.fechaDespacho !== hoy);
-
-  let html = '';
-  if (hoyOTs.length) { html += `<div class="card-title" style="margin-bottom:8px;">Hoy — ${fmtDate(hoy)}</div>`; html += hoyOTs.map(otCard).join(''); }
-  if (otrasFechas.length) { html += `<div class="card-title" style="margin:16px 0 8px;">Próximos / Anteriores</div>`; html += otrasFechas.map(otCard).join(''); }
-  list.innerHTML = html;
+  list.innerHTML = dataActiva.map(_despCardHtml).join('');
 }
 
-function otCard(o) {
-  const badgeMap = {'Asignada':'badge-blue','En Ruta':'badge-warning','Entregada':'badge-success','Con Novedad':'badge-danger'};
-  const items = (o.items||[]).map(i => `<span class="ot-item-pill">${i.sku} ×${i.cantidadDespacho}</span>`).join('');
-  const canAct = ['Asignada','En Ruta','Con Novedad'].includes(o.estado);
+function _despCardHtml(d) {
+  const badgeMap = { 'Asignada':'badge-blue', 'En Ruta':'badge-warning', 'Entregada':'badge-success', 'Pendiente':'badge-gray' };
+  const totalUd = d.items.reduce((s,i) => s + (i.cantidad||0), 0);
+  const skusLabel = d.items.length === 1 ? '1 SKU' : `${d.items.length} SKUs`;
+  const pills = d.items.slice(0, 3).map(i => `<span class="ot-item-pill">${i.sku} ×${i.cantidad}</span>`).join('')
+      + (d.items.length > 3 ? `<span class="ot-item-pill" style="background:var(--bg3);color:var(--text3)">+${d.items.length-3} más</span>` : '');
+  const safe = d.documentoId.replace(/'/g, "\\'");
+
+  let acciones = '';
+  if (d.estado === 'Pendiente') {
+    acciones = `<button class="action-btn action-btn-tomar" onclick="openTomar('${safe}')"><span class="icon">📥</span>Tomar</button>`;
+  } else if (d.estado === 'Asignada') {
+    acciones = `<button class="action-btn action-btn-ruta" onclick="marcarEnRuta('${safe}')"><span class="icon">🚛</span>En Ruta</button>`;
+  } else if (d.estado === 'En Ruta') {
+    acciones = `<button class="action-btn action-btn-entregada" onclick="openEntregar('${safe}')"><span class="icon">✓</span>Entregada</button>`;
+  }
+
   return `
     <div class="ot-card">
-      <div class="ot-card-header" onclick="openDetalle('${o.otId}')">
+      <div class="ot-card-header" onclick="openDetalle('${safe}')">
         <div>
-          <div class="ot-id">${o.otId}</div>
-          <div class="ot-cliente">${o.cliente||'—'}</div>
-          <div class="ot-meta">📅 ${fmtDate(o.fechaDespacho)} · 📍 ${o.zona||'—'}</div>
+          <div class="ot-id">${d.documentoId}</div>
+          <div class="ot-cliente">${d.cliente || '—'}</div>
+          <div class="ot-meta">📅 ${fmtDate(d.fechaDespacho || d.fecha)} · 🏢 ${d.bodega || '—'}${d.destino ? ' · 📍 '+d.destino : ''}</div>
+          <div class="ot-meta" style="margin-top:2px">${skusLabel} · ${totalUd} unidades</div>
         </div>
-        <span class="badge ${badgeMap[o.estado]||'badge-gray'}">${o.estado}</span>
+        <span class="badge ${badgeMap[d.estado]||'badge-gray'}">${d.estado}</span>
       </div>
       <div class="ot-body">
-        <div style="margin-bottom:10px;">${items || '<span style="color:var(--text3);font-size:12px;">Sin ítems</span>'}</div>
-        ${canAct ? `<div class="action-btns">${actionBtns(o)}</div>` : ''}
+        <div style="margin-bottom:10px;">${pills}</div>
+        ${acciones ? `<div class="action-btns" style="grid-template-columns:1fr">${acciones}</div>` : ''}
       </div>
     </div>`;
 }
 
-function actionBtns(o) {
-  const en = o.estado === 'Asignada' || o.estado === 'Con Novedad';
-  const ent = o.estado === 'En Ruta' || o.estado === 'Con Novedad';
-  const nov = o.estado === 'En Ruta';
-  return `
-    ${en ? `<button class="action-btn action-btn-ruta" onclick="openAccion('${o.otId}','En Ruta')"><span class="icon">🚛</span>En Ruta</button>` : ''}
-    ${ent ? `<button class="action-btn action-btn-entregada" onclick="openAccion('${o.otId}','Entregada')"><span class="icon">✓</span>Entregada</button>` : ''}
-    ${nov ? `<button class="action-btn action-btn-novedad" onclick="openAccion('${o.otId}','Con Novedad')"><span class="icon">⚠</span>Novedad</button>` : ''}
+// ══ DETALLE ══
+function openDetalle(docId) {
+  const d = _construirDespachos()[docId];
+  if (!d) return;
+  activeDocId = docId;
+  document.getElementById('detTitle').textContent = `Despacho ${docId}`;
+  document.getElementById('detInfo').innerHTML = `
+    <strong>Cliente:</strong> ${d.cliente||'—'}${d.clienteRut ? ' · RUT '+d.clienteRut : ''}<br>
+    <strong>Bodega origen:</strong> ${d.bodega||'—'}<br>
+    <strong>Destino:</strong> ${d.destino||'—'}<br>
+    <strong>Fecha de despacho:</strong> ${fmtDate(d.fechaDespacho||d.fecha)}<br>
+    <strong>Transportado por:</strong> ${d.transportadoPor||'—'}<br>
+    <strong>Estado:</strong> ${d.estado}
   `;
-}
-
-// ══ DETALLE OT ══
-function openDetalle(otId) {
-  const o = myOTs[otId];
-  if (!o) return;
-  _activeOT = o;
-  document.getElementById('detOTTitle').textContent = o.otId;
-  document.getElementById('detOTInfo').innerHTML = `
-    <strong>Cliente:</strong> ${o.cliente||'—'}<br>
-    <strong>Fecha:</strong> ${fmtDate(o.fechaDespacho)}<br>
-    <strong>Zona:</strong> ${o.zona||'—'}<br>
-    <strong>Estado:</strong> ${o.estado}<br>
-    ${o.observaciones ? `<strong>Obs:</strong> ${o.observaciones}` : ''}`;
-  document.getElementById('detOTItems').innerHTML = (o.items||[]).map(i => `<div style="padding:6px 0;border-bottom:1px solid var(--border)"><strong>${i.sku}</strong> — ${i.descripcion||''} <span style="font-family:var(--mono);font-size:12px;float:right">×${i.cantidadDespacho}</span></div>`).join('') || '<span style="color:var(--text3)">Sin ítems</span>';
-  const hitos = Object.values(trazabilidad).filter(h => h.otId === otId).sort((a,b) => new Date(a.fecha)-new Date(b.fecha));
-  const dotMap = {'En Ruta':'warning','Entregada':'green','Con Novedad':'danger'};
-  document.getElementById('detOTTimeline').innerHTML = hitos.map(h => `<li class="tl-item"><div class="tl-dot ${dotMap[h.estado]||''}"></div><div class="tl-date">${fmtDateTime(h.fecha)}</div><div class="tl-title">${h.estado}</div><div class="tl-meta">${h.observaciones||''}</div></li>`).join('') || '<li style="color:var(--text3);font-size:13px;">Sin eventos</li>';
-  const canAct = ['Asignada','En Ruta','Con Novedad'].includes(o.estado);
-  const btn = document.getElementById('detOTActionBtn');
-  btn.style.display = canAct ? '' : 'none';
-  btn.onclick = () => { closeModal('detalleModal'); openAccion(otId, null); };
+  // Items
+  const items = d.items.slice().sort((a,b) => a.sku.localeCompare(b.sku));
+  const itemsHtml = `<table class="items-table"><thead><tr><th>SKU</th><th>Descripción</th><th>Lote</th><th>Qty</th><th>Ubicación</th></tr></thead><tbody>` +
+    items.map(i => {
+      const ubicStr = Object.entries(i.ubicaciones).sort((a,b)=>a[0].localeCompare(b[0])).map(([u,q])=>`${u} (${q})`).join(', ');
+      return `<tr><td class="text-mono" style="color:var(--accent)">${i.sku}</td><td>${i.descripcion||'—'}</td><td class="text-mono" style="font-size:11px">${i.lote||'—'}</td><td style="font-weight:600">${i.cantidad}</td><td style="font-size:11px">${ubicStr || '—'}</td></tr>`;
+    }).join('') + `</tbody></table>`;
+  document.getElementById('detItems').innerHTML = itemsHtml;
+  // Timeline
+  const hitos = (d.regDespacho && d.regDespacho.hitos)
+    ? Object.values(d.regDespacho.hitos).sort((a,b) => new Date(a.fecha)-new Date(b.fecha))
+    : [];
+  const dotMap = { 'En Ruta':'warning', 'Entregada':'green', 'Asignada':'', 'Pendiente':'' };
+  document.getElementById('detTimeline').innerHTML = hitos.length
+    ? hitos.map(h => {
+        const foto = h.fotoCedibleUrl ? `<div style="margin-top:6px"><img src="${h.fotoCedibleUrl}" style="max-width:100%;max-height:180px;border-radius:6px;cursor:pointer" onclick="window.open('${h.fotoCedibleUrl}','_blank')"></div>` : '';
+        return `<li class="tl-item"><div class="tl-dot ${dotMap[h.estado]||''}"></div><div class="tl-date">${fmtDateTime(h.fecha)}</div><div class="tl-title">${h.estado}</div><div class="tl-meta">${h.observaciones||''}</div>${foto}</li>`;
+      }).join('')
+    : '<li style="color:var(--text3);font-size:13px;">Sin eventos registrados</li>';
+  // Botón de acción contextual
+  const btn = document.getElementById('detActionBtn');
+  if (d.estado === 'Pendiente')      { btn.textContent = '📥 Tomar despacho'; btn.style.display=''; btn.onclick = () => { closeModal('detalleModal'); openTomar(docId); }; }
+  else if (d.estado === 'Asignada')  { btn.textContent = '🚛 Marcar En Ruta'; btn.style.display=''; btn.onclick = () => { closeModal('detalleModal'); marcarEnRuta(docId); }; }
+  else if (d.estado === 'En Ruta')   { btn.textContent = '✓ Marcar Entregada'; btn.style.display=''; btn.onclick = () => { closeModal('detalleModal'); openEntregar(docId); }; }
+  else                                { btn.style.display='none'; }
   openModal('detalleModal');
 }
 
-// ══ ACCIÓN OT ══
-function openAccion(otId, estadoDefault) {
-  _activeOT = myOTs[otId];
-  if (!_activeOT) return;
-  document.getElementById('accionOTId').textContent = `Actualizar: ${otId}`;
-  document.getElementById('ac-obs').value = '';
-  document.getElementById('ac-foto').value = '';
-  document.getElementById('ac-foto-preview').style.display = 'none';
-  document.getElementById('ac-foto-preview').src = '';
-  const warnEl = document.getElementById('accion-sync-warn');
-  warnEl.style.display = isOnline ? 'none' : 'flex';
-  if (estadoDefault) document.getElementById('ac-estado').value = estadoDefault;
-  openModal('accionModal');
+// ══ TOMAR DESPACHO (transacción) ══
+function openTomar(docId) {
+  const d = _construirDespachos()[docId];
+  if (!d) return;
+  activeDocId = docId;
+  document.getElementById('tomar-info').innerHTML = `
+    <strong>${d.documentoId}</strong> — ${d.cliente||'—'}<br>
+    <strong>Bodega:</strong> ${d.bodega||'—'} · <strong>Destino:</strong> ${d.destino||'—'}<br>
+    <strong>Fecha:</strong> ${fmtDate(d.fechaDespacho||d.fecha)}<br>
+    ${d.items.length} SKU(s), ${d.items.reduce((s,i)=>s+(i.cantidad||0),0)} unidades.
+  `;
+  openModal('tomarModal');
+}
+
+async function confirmarTomar() {
+  if (!activeDocId) return;
+  if (!isOnline) {
+    alert('Para tomar un despacho pendiente se requiere conexión a internet (transacción con el servidor para evitar que otro conductor lo tome al mismo tiempo).');
+    return;
+  }
+  const btn = document.getElementById('btn-tomar-confirm');
+  btn.innerHTML = '<span class="spinner"></span> Tomando...';
+  btn.disabled = true;
+  try {
+    const docId = activeDocId;
+    // Transacción atómica en /despachos/{docId}: si otro chofer lo tomó antes,
+    // la transacción retorna el valor existente y aquí lanzamos error.
+    const txRef = db.ref(`organizaciones/${maestroUid}/despachos/${docId}`);
+    const now = new Date().toISOString();
+    const txResult = await txRef.transaction(cur => {
+      if (cur && cur.conductorId && cur.conductorId !== conductorId) {
+        // Alguien más ya lo tomó — abortamos.
+        return; // abort
+      }
+      if (!cur) {
+        return {
+          documentoId: docId,
+          estado: 'Asignada',
+          conductorId,
+          conductorNombre: conductorInfo.nombreOpcion,
+          tomadoEn: now,
+          hitos: {
+            ['H-' + Date.now()]: { estado:'Asignada', fecha:now, observaciones:'Despacho tomado desde "Pendiente de asignación".', usuario: currentUser.email }
+          }
+        };
+      }
+      return cur;
+    });
+    if (!txResult.committed) {
+      alert('Este despacho fue tomado por otro conductor antes de que confirmaras. Vuelve a la lista — ya no aparecerá en Pendientes.');
+      closeModal('tomarModal');
+      return;
+    }
+    // Actualiza transportadoPor en TODAS las líneas del documento (multi-location update).
+    const updates = {};
+    Object.entries(misMovimientos || {}).forEach(([movId, m]) => {
+      if (m && m.tipo === 'Salida' && (m.documentoId === docId) && m.transportadoPor === 'Pendiente de asignación') {
+        updates[`usuarios/${maestroUid}/movimientos/${movId}/transportadoPor`] = conductorInfo.nombreOpcion;
+      }
+    });
+    // Audit log — para dejar rastro del cambio desde Pendiente→chofer.
+    const auditId = Date.now();
+    updates[`usuarios/${maestroUid}/auditoria/${auditId}`] = {
+      fecha: now,
+      accion: 'TomarDespacho',
+      modulo: 'Transporte',
+      detalle: `Chofer ${conductorInfo.nombreOpcion} tomó el despacho ${docId}. transportadoPor cambiado de "Pendiente de asignación" al chofer.`,
+      usuario: currentUser.email
+    };
+    if (Object.keys(updates).length) await db.ref().update(updates);
+    showSnack(`Despacho ${docId} asignado a ti. Marca "En Ruta" cuando salgas.`);
+    closeModal('tomarModal');
+  } catch(e) {
+    alert('Error al tomar el despacho: ' + e.message);
+  } finally {
+    btn.innerHTML = 'Tomar despacho'; btn.disabled = false;
+  }
+}
+
+// ══ EN RUTA (rápido, sin modal) ══
+async function marcarEnRuta(docId) {
+  if (!docId) return;
+  const d = _construirDespachos()[docId];
+  if (!d) return;
+  if (!confirm(`Marcar despacho ${docId} como "En Ruta"?\n\nSe registrará la hora y la ubicación GPS.`)) return;
+  const now = new Date().toISOString();
+  const hitoId = 'H-' + Date.now();
+  const hito = {
+    estado:'En Ruta', fecha:now,
+    lat: currentGPS?.lat || null, lng: currentGPS?.lng || null,
+    observaciones:'', usuario: currentUser.email
+  };
+  const updates = {
+    [`organizaciones/${maestroUid}/despachos/${docId}/estado`]: 'En Ruta',
+    [`organizaciones/${maestroUid}/despachos/${docId}/enRutaEn`]: now,
+    [`organizaciones/${maestroUid}/despachos/${docId}/hitos/${hitoId}`]: hito
+  };
+  if (isOnline) {
+    try {
+      await db.ref().update(updates);
+      showSnack(`Despacho ${docId} marcado "En Ruta".`);
+    } catch(e) { alert('Error: '+e.message); }
+  } else {
+    await queueAction({ tipo:'patch', updates, ts:Date.now() });
+    await updateQueueBadge();
+    showSnack('Guardado localmente. Se enviará cuando haya conexión.');
+  }
+  getGPS(); // refresca GPS para la próxima acción
+}
+
+// ══ ENTREGAR (foto cedible obligatoria + obs texto/voz) ══
+function openEntregar(docId) {
+  const d = _construirDespachos()[docId];
+  if (!d) return;
+  activeDocId = docId;
+  document.getElementById('entregar-info').innerHTML = `
+    <strong>${d.documentoId}</strong> — ${d.cliente||'—'}<br>
+    <strong>Destino:</strong> ${d.destino||'—'}
+  `;
+  document.getElementById('ent-obs').value = '';
+  document.getElementById('ent-foto').value = '';
+  document.getElementById('ent-foto-preview').style.display = 'none';
+  document.getElementById('ent-foto-preview').src = '';
+  document.getElementById('ent-foto-hint').style.display = 'none';
+  document.getElementById('voice-status').textContent = '';
+  document.getElementById('entregar-sync-warn').style.display = isOnline ? 'none' : 'flex';
+  openModal('entregarModal');
   getGPS();
 }
 
-function closeAccionModal() { closeModal('accionModal'); }
-
-function previewPhoto(input) {
+function previewEntFoto(input) {
   if (!input.files.length) return;
   const reader = new FileReader();
-  reader.onload = e => { const img = document.getElementById('ac-foto-preview'); img.src=e.target.result; img.style.display='block'; };
+  reader.onload = e => {
+    const img = document.getElementById('ent-foto-preview');
+    img.src = e.target.result; img.style.display = 'block';
+    document.getElementById('ent-foto-hint').style.display = 'none';
+  };
   reader.readAsDataURL(input.files[0]);
 }
 
-async function enviarActualizacion() {
-  const estado = document.getElementById('ac-estado').value;
-  const obs = document.getElementById('ac-obs').value.trim();
-  const foto = document.getElementById('ac-foto').files[0];
-  const btn = document.getElementById('btn-enviar');
+async function confirmarEntrega() {
+  if (!activeDocId) return;
+  const foto = document.getElementById('ent-foto').files[0];
+  if (!foto) {
+    document.getElementById('ent-foto-hint').style.display = 'block';
+    return;
+  }
+  const obs = document.getElementById('ent-obs').value.trim();
+  const btn = document.getElementById('btn-entregar-confirm');
   btn.innerHTML = '<span class="spinner"></span> Enviando...';
   btn.disabled = true;
-
   try {
+    const docId = activeDocId;
     const now = new Date().toISOString();
     let fotoUrl = null;
-    if (foto && isOnline) {
-      const path = `despachos/${maestroUid}/${_activeOT.otId}/foto_${Date.now()}.jpg`;
+    if (isOnline) {
+      const path = `despachos/${maestroUid}/${docId}/cedible_${Date.now()}.jpg`;
       const ref = storage.ref(path);
       await ref.put(foto);
       fotoUrl = await ref.getDownloadURL();
+    } else {
+      // Offline: guardamos la foto como data URL en IndexedDB para subirla al volver.
+      fotoUrl = await _fileToDataUrl(foto);
     }
-    const hitoData = {
-      otId: _activeOT.otId, estado, fecha: now,
-      observaciones: obs || '',
+    const hitoId = 'H-' + Date.now();
+    const hito = {
+      estado:'Entregada', fecha:now,
       lat: currentGPS?.lat || null, lng: currentGPS?.lng || null,
-      fotoUrl, usuario: currentUser.email
+      observaciones: obs,
+      fotoCedibleUrl: fotoUrl,
+      usuario: currentUser.email
+    };
+    const updates = {
+      [`organizaciones/${maestroUid}/despachos/${docId}/estado`]: 'Entregada',
+      [`organizaciones/${maestroUid}/despachos/${docId}/entregadoEn`]: now,
+      [`organizaciones/${maestroUid}/despachos/${docId}/fotoCedibleUrl`]: fotoUrl,
+      [`organizaciones/${maestroUid}/despachos/${docId}/observacionesCierre`]: obs,
+      [`organizaciones/${maestroUid}/despachos/${docId}/hitos/${hitoId}`]: hito
     };
     if (isOnline) {
-      await submitActualizacion(hitoData);
+      await db.ref().update(updates);
+      showSnack(`Despacho ${docId} marcado como "Entregada".`);
     } else {
-      await queueAction({ tipo:'actualizacion', hitoData, maestroUid, otId:_activeOT.otId, token:_activeOT.tokenPublico, ts:Date.now() });
+      await queueAction({ tipo:'entrega', docId, updates, hitoId, fotoDataUrl: fotoUrl, ts: Date.now() });
       await updateQueueBadge();
-      showSnack('Guardado localmente. Se enviará cuando haya conexión.');
+      showSnack('Entrega guardada localmente. Se enviará cuando haya conexión.');
     }
-    closeModal('accionModal');
+    closeModal('entregarModal');
   } catch(e) {
-    alert('Error: ' + e.message);
+    alert('Error al confirmar entrega: ' + e.message);
   } finally {
-    btn.innerHTML = 'Enviar actualización'; btn.disabled = false;
+    btn.innerHTML = 'Confirmar entrega'; btn.disabled = false;
   }
 }
 
-async function submitActualizacion(hitoData) {
-  const hitoId = `H-${Date.now()}`;
-  const updates = {};
-  updates[`organizaciones/${maestroUid}/trazabilidadTransporte/${hitoId}`] = hitoData;
-  updates[`organizaciones/${maestroUid}/ordenesTransporte/${hitoData.otId}/estado`] = hitoData.estado;
-  updates[`tracking/${_activeOT.tokenPublico}/estado`] = hitoData.estado;
-  updates[`tracking/${_activeOT.tokenPublico}/hitos/${hitoId}`] = hitoData;
-  if (hitoData.lat) {
-    updates[`tracking/${_activeOT.tokenPublico}/ultimaLat`] = hitoData.lat;
-    updates[`tracking/${_activeOT.tokenPublico}/ultimaLng`] = hitoData.lng;
-  }
-  await db.ref().update(updates);
-  showSnack(`Estado "${hitoData.estado}" enviado correctamente.`);
+function _fileToDataUrl(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = e => res(e.target.result);
+    r.onerror = () => rej(r.error);
+    r.readAsDataURL(file);
+  });
 }
 
+async function _dataUrlToBlob(dataUrl) {
+  const resp = await fetch(dataUrl);
+  return await resp.blob();
+}
+
+// ══ VOICE INPUT (Web Speech API) ══
+// Dicta observaciones hablando. Reconocimiento en español-CL.
+function toggleVoice() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const statusEl = document.getElementById('voice-status');
+  const btn = document.getElementById('btn-voice');
+  if (!SR) {
+    statusEl.className = 'voice-status error';
+    statusEl.textContent = 'Reconocimiento de voz no disponible en este navegador. Usa Chrome para esta función.';
+    return;
+  }
+  if (speechActive && speech) {
+    try { speech.stop(); } catch(_){}
+    return; // onend se encarga de limpiar el estado
+  }
+  speech = new SR();
+  speech.lang = 'es-CL';
+  speech.interimResults = true;
+  speech.continuous = true;
+  const textarea = document.getElementById('ent-obs');
+  const baseText = textarea.value;
+  speech.onstart = () => {
+    speechActive = true;
+    btn.classList.add('recording');
+    statusEl.className = 'voice-status recording';
+    statusEl.textContent = '🔴 Grabando — habla ahora. Toca el micrófono para detener.';
+  };
+  speech.onresult = e => {
+    let interim = '', finalText = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const t = e.results[i][0].transcript;
+      if (e.results[i].isFinal) finalText += t + ' ';
+      else interim += t;
+    }
+    textarea.value = (baseText ? baseText + ' ' : '') + finalText + interim;
+  };
+  speech.onerror = e => {
+    statusEl.className = 'voice-status error';
+    statusEl.textContent = 'Error: ' + (e.error || 'desconocido') + '. Puedes seguir escribiendo manualmente.';
+    speechActive = false;
+    btn.classList.remove('recording');
+  };
+  speech.onend = () => {
+    speechActive = false;
+    btn.classList.remove('recording');
+    if (!statusEl.className.includes('error')) {
+      statusEl.className = 'voice-status';
+      statusEl.textContent = textarea.value ? 'Dictado detenido. Puedes editar el texto manualmente antes de confirmar.' : '';
+    }
+  };
+  try { speech.start(); }
+  catch(e) { statusEl.className = 'voice-status error'; statusEl.textContent = 'No se pudo iniciar: ' + e.message; }
+}
+
+// ══ SYNC QUEUE ══
 async function syncQueue() {
   const q = await getQueue();
   if (!q.length || !isOnline) return;
@@ -580,9 +1005,22 @@ async function syncQueue() {
   document.getElementById('syncMsg').textContent = `Sincronizando ${q.length} cambio(s)...`;
   for (const item of q) {
     try {
-      if (item.tipo === 'actualizacion') {
-        _activeOT = { tokenPublico: item.token };
-        await submitActualizacion(item.hitoData);
+      if (item.tipo === 'patch') {
+        await db.ref().update(item.updates);
+      } else if (item.tipo === 'entrega') {
+        // Si la foto se guardó como data URL offline, subimos primero.
+        let updates = item.updates;
+        if (item.fotoDataUrl && item.fotoDataUrl.startsWith('data:')) {
+          const blob = await _dataUrlToBlob(item.fotoDataUrl);
+          const path = `despachos/${maestroUid}/${item.docId}/cedible_${Date.now()}.jpg`;
+          const ref = storage.ref(path);
+          await ref.put(blob);
+          const url = await ref.getDownloadURL();
+          updates = { ...updates };
+          updates[`organizaciones/${maestroUid}/despachos/${item.docId}/fotoCedibleUrl`] = url;
+          if (item.hitoId) updates[`organizaciones/${maestroUid}/despachos/${item.docId}/hitos/${item.hitoId}/fotoCedibleUrl`] = url;
+        }
+        await db.ref().update(updates);
       }
       await clearQueueItem(item.id);
     } catch(e) { console.warn('Sync error:', e); }
