@@ -8152,6 +8152,56 @@ function confirmGuardarAjusteMov() {
         try { document.getElementById('ajm-h-motivo')?.focus(); } catch(_){}
         return;
     }
+    // ── Protección contra el bug HC-003 (stock fantasma por AJM) ──
+    // Si el movimiento ajustado es una Entrada o Devolución y el ajuste
+    // cambia lote/ubicación/bodega de alguna línea, verificar que no haya
+    // salidas posteriores que estén consumiendo stock de esa clave. Si las
+    // hay, bloquear: calcStock() identifica el stock por SKU|lote|bodega|ubic
+    // y un cambio en esos campos deja a esas salidas "huérfanas" (apuntan a
+    // una key sin saldo positivo), creando stock fantasma en la nueva key.
+    // Solución correcta: anular primero las salidas, luego ajustar.
+    const ref0ValIdent = _ajMovItems[0]?.original || {};
+    const esEntradaIdent = ref0ValIdent.tipo === 'Entrada' || ref0ValIdent.tipo === 'Devolución';
+    if (esEntradaIdent) {
+        const bodegaOriginal = ref0ValIdent.bodega || '';
+        const cambioBodega   = (_ajMovHeader.bodega || '') !== bodegaOriginal;
+        const camposIdentChange = [];
+        _ajMovItems.forEach(it => {
+            const o = it.original, e = it.editado;
+            const chLote = (o.lote || '') !== (e.lote || '');
+            const chUbic = (o.ubicacion || '') !== (e.ubicacion || '');
+            if (chLote || chUbic || cambioBodega) {
+                camposIdentChange.push({ sku: o.sku, lote: o.lote, chLote, chUbic, chBodega: cambioBodega });
+            }
+        });
+        if (camposIdentChange.length) {
+            const bloqueos = _salidasAsociadasEntrada(_ajMovItems, _ajMovHeader.fecha);
+            if (bloqueos.length) {
+                const detalleBloq = bloqueos.map(b => {
+                    const topSal = b.salidas.slice(0, 5).map(s => {
+                        const n = s.numeroMovimiento ? `N° ${s.numeroMovimiento}` : (s.documentoId ? 'Doc '+s.documentoId : 'sin ref');
+                        return `  · ${fmtDate((s.fecha||'').slice(0,10))} · ${n} · ${Math.abs(parseFloat(s.cantidad)||0)} ud.`;
+                    }).join('\n');
+                    const extra = b.salidas.length > 5 ? `\n  · ... y ${b.salidas.length - 5} más` : '';
+                    return `• ${b.sku} · Lote ${b.lote || '—'} → ${b.salidas.length} salida(s), ${b.salidasTot} ud. consumidas:\n${topSal}${extra}`;
+                }).join('\n\n');
+                alert(
+                    '❌ No se puede guardar este ajuste.\n\n' +
+                    'Está intentando cambiar lote, ubicación o bodega de una Entrada/Devolución ' +
+                    'que ya tiene salidas posteriores consumiendo ese stock. Si se guarda el cambio, ' +
+                    'esas salidas quedan huérfanas y el stock se duplica (bug conocido HC-003).\n\n' +
+                    'Salidas asociadas detectadas:\n\n' + detalleBloq + '\n\n' +
+                    'Procedimiento correcto:\n' +
+                    '1) Anule primero las salidas listadas (desde cada salida → Ajuste de Movimiento → "Anular salida").\n' +
+                    '2) Vuelva a este AJM y aplique el cambio.\n' +
+                    '3) Vuelva a crear las salidas con el lote/ubicación correctos.\n\n' +
+                    'Si sólo cambia observaciones, cantidad, fechas o datos del documento (sin tocar lote/ubicación/bodega), ' +
+                    'puede guardar sin este paso.'
+                );
+                return;
+            }
+        }
+    }
     if (lineasEliminadas.length === _ajMovItems.length) {
         // Todas las líneas en 0 → el documento queda sin efecto. Confirmar explícito.
         if (!confirm(`Todas las ${_ajMovItems.length} líneas quedarán en cantidad 0. El documento no tendrá efecto sobre el stock.\n\n¿Continúa de todos modos?`)) return;
