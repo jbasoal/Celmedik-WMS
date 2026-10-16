@@ -505,6 +505,15 @@ const auth = firebase.auth();
 const db = firebase.database();
 const storage = firebase.storage();
 
+// Persistencia de sesión: SESSION (no LOCAL) para que cada vez que el chofer
+// cierre completamente el navegador o la PWA, al reabrirla aparezca la
+// pantalla de login. Evita que si otro chofer toma el celular quede logueado
+// con el usuario anterior. En producción puede subirse a LOCAL si se prefiere
+// que un mismo celular mantenga la sesión durante días.
+auth.setPersistence(firebase.auth.Auth.Persistence.SESSION).catch(e => {
+  console.warn('[Auth] No se pudo configurar persistencia SESSION:', e && e.message);
+});
+
 let currentUser = null, maestroUid = null, conductorId = null, conductorNombre = '';
 // Datos del conductor logueado (nombreOpcion debe coincidir con la opción
 // del dropdown "Transportado por" del WMS; bodegasPermitidas define qué
@@ -1178,16 +1187,21 @@ async function confirmarEntrega() {
   try {
     const docId = activeDocId;
     const now = new Date().toISOString();
-    const dataUrl = previewEl.dataset.dataUrl;
+    const rawDataUrl = previewEl.dataset.dataUrl;
     let fotoUrl = null;
+    let dataUrlCompr = null;
     if (isOnline) {
-      const blob = await _dataUrlToBlob(dataUrl);
+      _showProgressSnack('Comprimiendo foto...');
+      const blob = await _compressImage(rawDataUrl);
+      _showProgressSnack('Subiendo foto 0%');
       const path = `despachos/${maestroUid}/${docId}/cedible_${Date.now()}.jpg`;
-      const ref = storage.ref(path);
-      await ref.put(blob);
-      fotoUrl = await ref.getDownloadURL();
+      fotoUrl = await _uploadBlob(blob, path, 'Subiendo foto');
+      _clearProgressSnack();
     } else {
-      fotoUrl = dataUrl; // Se sube al sincronizar
+      // Offline: también comprimimos para no explotar la cuota de IndexedDB.
+      const blob = await _compressImage(rawDataUrl);
+      dataUrlCompr = await _blobToDataUrl(blob);
+      fotoUrl = dataUrlCompr;
     }
     const hitoId = 'H-' + Date.now();
     const hito = {
@@ -1210,16 +1224,28 @@ async function confirmarEntrega() {
       await db.ref().update(updates);
       showSnack(`Despacho ${docId} marcado como "Entregada".`);
     } else {
-      await queueAction({ tipo:'entrega', docId, updates, hitoId, fotoDataUrl: dataUrl, ts: Date.now() });
+      await queueAction({ tipo:'entrega', docId, updates, hitoId, fotoDataUrl: dataUrlCompr, ts: Date.now() });
       await updateQueueBadge();
       showSnack('Entrega guardada localmente. Se enviará cuando haya conexión.');
     }
     closeModal('entregarModal');
   } catch(e) {
-    alert('Error al confirmar entrega: ' + e.message);
+    _clearProgressSnack();
+    console.error('[confirmarEntrega] fallo:', e);
+    alert('Error al confirmar entrega: ' + (e && e.message ? e.message : e));
   } finally {
     btn.innerHTML = 'Confirmar entrega'; btn.disabled = false;
+    _clearProgressSnack();
   }
+}
+
+function _blobToDataUrl(blob) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = e => res(e.target.result);
+    r.onerror = () => rej(r.error);
+    r.readAsDataURL(blob);
+  });
 }
 
 // ══ NO ENTREGADO (motivo + fotos adicionales) ══
@@ -1277,19 +1303,28 @@ async function confirmarNoEntregado() {
   try {
     const docId = activeDocId;
     const now = new Date().toISOString();
-    // Subida de fotos adicionales (si hay conexión).
+    // Subida de fotos adicionales con compresión + progreso + timeout por c/u.
     const urls = [];
+    const dataUrlsOffline = []; // para cola si estamos offline
     if (isOnline) {
+      let idx = 0;
       for (const f of fotosAdicionales) {
-        const blob = await _dataUrlToBlob(f.dataUrl);
+        idx++;
+        _showProgressSnack(`Comprimiendo foto ${idx}/${fotosAdicionales.length}...`);
+        const blob = await _compressImage(f.dataUrl);
         const path = `despachos/${maestroUid}/${docId}/noentregado_${Date.now()}_${Math.random().toString(36).slice(2,8)}.jpg`;
-        const ref = storage.ref(path);
-        await ref.put(blob);
-        urls.push(await ref.getDownloadURL());
+        const url = await _uploadBlob(blob, path, `Foto ${idx}/${fotosAdicionales.length}`);
+        urls.push(url);
       }
+      _clearProgressSnack();
     } else {
-      // Offline: subimos al sincronizar; guardamos data URLs mientras.
-      fotosAdicionales.forEach(f => urls.push(f.dataUrl));
+      // Offline: comprimimos y guardamos como data URL para subir luego.
+      for (const f of fotosAdicionales) {
+        const blob = await _compressImage(f.dataUrl);
+        const d = await _blobToDataUrl(blob);
+        urls.push(d);
+        dataUrlsOffline.push(d);
+      }
     }
     const hitoId = 'H-' + Date.now();
     const hito = {
@@ -1315,15 +1350,18 @@ async function confirmarNoEntregado() {
       await db.ref().update(updates);
       showSnack(`Despacho ${docId} marcado como "No Entregado".`);
     } else {
-      await queueAction({ tipo:'noentrega', docId, updates, hitoId, fotosDataUrls: fotosAdicionales.map(f => f.dataUrl), ts: Date.now() });
+      await queueAction({ tipo:'noentrega', docId, updates, hitoId, fotosDataUrls: dataUrlsOffline, ts: Date.now() });
       await updateQueueBadge();
       showSnack('No-entrega guardada localmente. Se enviará al volver la conexión.');
     }
     closeModal('noEntregadoModal');
   } catch(e) {
-    alert('Error: ' + e.message);
+    _clearProgressSnack();
+    console.error('[confirmarNoEntregado] fallo:', e);
+    alert('Error: ' + (e && e.message ? e.message : e));
   } finally {
     btn.innerHTML = 'Confirmar no entregado'; btn.disabled = false;
+    _clearProgressSnack();
   }
 }
 
@@ -1381,6 +1419,76 @@ function _fileToDataUrl(file) {
 async function _dataUrlToBlob(dataUrl) {
   const resp = await fetch(dataUrl);
   return await resp.blob();
+}
+
+// Comprime una imagen (data URL o Blob) a JPEG con tamaño máximo controlado.
+// Las cámaras del celular suelen entregar fotos de 3-10 MB; subir eso en 4G
+// toma minutos y hace parecer que la app "se queda pegada". Comprimimos a
+// ~400-800 KB antes de subir para que la confirmación cierre en segundos.
+async function _compressImage(input, maxDim = 1920, quality = 0.85) {
+  const dataUrl = (typeof input === 'string') ? input : await _fileToDataUrl(input);
+  const img = await new Promise((res, rej) => {
+    const i = new Image();
+    i.onload = () => res(i);
+    i.onerror = () => rej(new Error('No se pudo cargar la imagen para comprimir.'));
+    i.src = dataUrl;
+  });
+  let { width, height } = img;
+  if (width > maxDim || height > maxDim) {
+    const ratio = Math.min(maxDim / width, maxDim / height);
+    width = Math.round(width * ratio);
+    height = Math.round(height * ratio);
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = width; canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0, width, height);
+  return await new Promise((res, rej) => {
+    canvas.toBlob(b => b ? res(b) : rej(new Error('No se pudo comprimir la imagen.')), 'image/jpeg', quality);
+  });
+}
+
+// Sube un blob a Storage con barra de progreso en el snack + timeout de 60s.
+// Si el timeout vence, lanza error para que el llamador caiga al modo offline
+// (encolar) o avise al usuario.
+async function _uploadBlob(blob, path, progressLabel) {
+  const ref = storage.ref(path);
+  const task = ref.put(blob, { contentType: 'image/jpeg' });
+  return await new Promise((res, rej) => {
+    const t0 = Date.now();
+    const timeoutMs = 60000;
+    const timer = setTimeout(() => {
+      try { task.cancel(); } catch(_){}
+      rej(new Error('Timeout — la subida de la foto demoró más de 60s. Revisa la conexión y vuelve a intentar.'));
+    }, timeoutMs);
+    task.on('state_changed',
+      snap => {
+        const pct = Math.round((snap.bytesTransferred / snap.totalBytes) * 100);
+        if (progressLabel) _showProgressSnack(`${progressLabel} ${pct}%`);
+      },
+      err => { clearTimeout(timer); rej(err); },
+      async () => {
+        clearTimeout(timer);
+        try {
+          const url = await ref.getDownloadURL();
+          res(url);
+        } catch(e) { rej(e); }
+      }
+    );
+  });
+}
+
+let _progressSnackEl = null;
+function _showProgressSnack(msg) {
+  if (!_progressSnackEl) {
+    _progressSnackEl = document.createElement('div');
+    _progressSnackEl.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--accent);color:white;padding:10px 20px;border-radius:20px;font-size:13px;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.25);white-space:nowrap;max-width:90vw;text-align:center;font-weight:600;';
+    document.body.appendChild(_progressSnackEl);
+  }
+  _progressSnackEl.textContent = msg;
+}
+function _clearProgressSnack() {
+  if (_progressSnackEl) { _progressSnackEl.remove(); _progressSnackEl = null; }
 }
 
 // ══ VOICE INPUT (Web Speech API) ══
@@ -1454,26 +1562,24 @@ async function syncQueue() {
         if (item.fotoDataUrl && item.fotoDataUrl.startsWith('data:')) {
           const blob = await _dataUrlToBlob(item.fotoDataUrl);
           const path = `despachos/${maestroUid}/${item.docId}/cedible_${Date.now()}.jpg`;
-          const ref = storage.ref(path);
-          await ref.put(blob);
-          const url = await ref.getDownloadURL();
+          const url = await _uploadBlob(blob, path, 'Sincronizando cedible');
           updates = { ...updates };
           updates[`organizaciones/${maestroUid}/despachos/${item.docId}/fotoCedibleUrl`] = url;
           if (item.hitoId) updates[`organizaciones/${maestroUid}/despachos/${item.docId}/hitos/${item.hitoId}/fotoCedibleUrl`] = url;
         }
         await db.ref().update(updates);
       } else if (item.tipo === 'noentrega') {
-        // Sube fotos adicionales guardadas como data URLs; luego aplica el update.
         let updates = { ...item.updates };
         if (Array.isArray(item.fotosDataUrls) && item.fotosDataUrls.length) {
           const urls = [];
+          let idx = 0;
           for (const d of item.fotosDataUrls) {
+            idx++;
             if (d && d.startsWith('data:')) {
               const blob = await _dataUrlToBlob(d);
               const path = `despachos/${maestroUid}/${item.docId}/noentregado_${Date.now()}_${Math.random().toString(36).slice(2,8)}.jpg`;
-              const ref = storage.ref(path);
-              await ref.put(blob);
-              urls.push(await ref.getDownloadURL());
+              const url = await _uploadBlob(blob, path, `Sincronizando foto ${idx}/${item.fotosDataUrls.length}`);
+              urls.push(url);
             } else { urls.push(d); }
           }
           updates[`organizaciones/${maestroUid}/despachos/${item.docId}/fotosAdicionalesUrls`] = urls;
@@ -1484,6 +1590,7 @@ async function syncQueue() {
       await clearQueueItem(item.id);
     } catch(e) { console.warn('Sync error:', e); }
   }
+  _clearProgressSnack();
   banner.style.display = 'none';
   updateQueueBadge();
 }
