@@ -189,6 +189,60 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .items-table th{background:var(--bg);text-align:left;padding:6px 8px;color:var(--text3);text-transform:uppercase;font-size:10px;letter-spacing:.4px;}
 .items-table td{padding:6px 8px;border-bottom:1px solid var(--border);}
 .items-table tr:last-child td{border-bottom:none;}
+
+/* PENDIENTES — subgroup headers */
+.subgroup-h{font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin:14px 0 8px;padding:0 2px;display:flex;align-items:center;gap:6px;}
+.subgroup-h .sg-count{background:var(--bg3);color:var(--text2);padding:1px 7px;border-radius:10px;font-size:10px;}
+.subgroup-h:first-child{margin-top:4px;}
+
+/* OT CARD distinguishing shared pool from assigned */
+.ot-card.disponible{border-left:3px solid var(--warning);}
+.ot-card.asignada{border-left:3px solid var(--accent);}
+.ot-card.en-transito{border-left:3px solid var(--warning);}
+.ot-card.entregada{border-left:3px solid var(--success);}
+.ot-card.no-entregada{border-left:3px solid var(--danger);}
+
+/* MAPS LINK PILL */
+.maps-link{display:inline-flex;align-items:center;gap:4px;background:var(--accent-dim);color:var(--accent);border:1px solid rgba(0,112,242,.3);border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;text-decoration:none;margin-top:6px;}
+.maps-link:hover{background:var(--accent);color:white;}
+
+/* 3-button stack for action cards */
+.action-btns-stack{display:flex;flex-direction:column;gap:8px;margin-top:12px;}
+.action-btns-stack .action-btn{width:100%;flex-direction:row;justify-content:center;}
+
+/* FULL-SCREEN PHOTO PREVIEW MODAL */
+.photo-fullscreen{display:none;position:fixed;inset:0;background:#000;z-index:2000;flex-direction:column;}
+.photo-fullscreen.active{display:flex;}
+.photo-fullscreen img{flex:1;width:100%;object-fit:contain;max-height:calc(100vh - 80px);}
+.photo-fullscreen .pf-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:16px;background:rgba(0,0,0,.9);}
+.photo-fullscreen .pf-btn{padding:16px;border:none;border-radius:var(--radius);font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font);display:flex;align-items:center;justify-content:center;gap:6px;}
+.pf-btn-ok{background:var(--success);color:white;}
+.pf-btn-retry{background:#555;color:white;}
+
+/* TOGGLE SWITCH (for obs opcional, etc.) */
+.toggle-row{display:flex;align-items:center;gap:10px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:10px;cursor:pointer;user-select:none;}
+.toggle-row:active{background:var(--bg3);}
+.toggle-sw{position:relative;width:40px;height:22px;flex-shrink:0;}
+.toggle-sw input{opacity:0;width:0;height:0;}
+.toggle-sw .track{position:absolute;inset:0;background:var(--border2);border-radius:11px;transition:background .15s;}
+.toggle-sw .thumb{position:absolute;left:2px;top:2px;width:18px;height:18px;background:white;border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:transform .15s;}
+.toggle-sw input:checked ~ .track{background:var(--accent);}
+.toggle-sw input:checked ~ .thumb{transform:translateX(18px);}
+.toggle-label{flex:1;font-size:13px;color:var(--text);}
+
+/* FOTOS ADICIONALES GRID */
+.fotos-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px;}
+.fotos-thumb{position:relative;aspect-ratio:1;border-radius:6px;overflow:hidden;background:var(--bg3);}
+.fotos-thumb img{width:100%;height:100%;object-fit:cover;}
+.fotos-thumb .del{position:absolute;top:2px;right:2px;width:20px;height:20px;background:rgba(187,0,0,.9);color:white;border:none;border-radius:50%;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.foto-add{aspect-ratio:1;border:2px dashed var(--border2);border-radius:6px;background:var(--bg);color:var(--text3);display:flex;align-items:center;justify-content:center;font-size:24px;cursor:pointer;}
+.foto-add:active{background:var(--bg3);}
+
+/* BADGE para no-entregado con motivo */
+.motivo-pill{display:inline-block;background:var(--danger-dim);color:var(--danger);border:1px solid rgba(187,0,0,.3);border-radius:4px;padding:2px 8px;font-size:11px;margin-top:4px;}
+
+/* ENTREGADA con obs — badge */
+.obs-badge{display:inline-block;background:var(--warning-dim);color:#B85700;border:1px solid rgba(233,115,12,.3);border-radius:4px;padding:1px 7px;font-size:10px;font-weight:700;margin-left:6px;}
 </style>
 </head>
 <body>
@@ -246,9 +300,10 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 
     <!-- SECTION TABS -->
     <div class="tabs-row" id="tabsRow">
-      <button class="tab-btn active" data-tab="asignados" onclick="setTab('asignados')">Mis despachos <span class="tab-count" id="cntAsignados">0</span></button>
-      <button class="tab-btn" data-tab="pendientes" onclick="setTab('pendientes')">Pendientes <span class="tab-count" id="cntPendientes">0</span></button>
-      <button class="tab-btn" data-tab="entregados" onclick="setTab('entregados')">Entregados hoy <span class="tab-count" id="cntEntregados">0</span></button>
+      <button class="tab-btn active" data-tab="pendientes" onclick="setTab('pendientes')">Pendientes <span class="tab-count" id="cntPendientes">0</span></button>
+      <button class="tab-btn" data-tab="transito" onclick="setTab('transito')">En tránsito <span class="tab-count" id="cntTransito">0</span></button>
+      <button class="tab-btn" data-tab="entregados" onclick="setTab('entregados')">Entregados <span class="tab-count" id="cntEntregados">0</span></button>
+      <button class="tab-btn" data-tab="noentregados" onclick="setTab('noentregados')">No entregados <span class="tab-count" id="cntNoEntregados">0</span></button>
     </div>
 
     <!-- DESPACHOS LIST -->
@@ -267,14 +322,14 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
   ⏳ <span id="queueCount">0</span> pendiente(s) — Sincronizar
 </div>
 
-<!-- ═══ MODAL: TOMAR DESPACHO ═══ -->
+<!-- ═══ MODAL: TOMAR DESPACHO (pool compartido) ═══ -->
 <div id="tomarModal" class="modal">
   <div class="modal-sheet">
     <div class="modal-handle"></div>
     <div class="modal-title">Tomar despacho</div>
     <div id="tomar-info" style="background:#F5F5F5;border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;line-height:1.8;color:var(--text2);"></div>
     <div style="font-size:12.5px;color:var(--text2);margin-bottom:12px;">
-      Al confirmar, este despacho queda asignado a usted y <strong>deja de estar disponible para otros conductores</strong>. Podrá marcarlo "En Ruta" cuando salga a entregar.
+      Al confirmar, este despacho queda asignado a usted y <strong>deja de estar disponible para otros conductores</strong>.
     </div>
     <div class="btn-row">
       <button class="btn btn-ghost" onclick="closeModal('tomarModal')">Cancelar</button>
@@ -283,11 +338,27 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
   </div>
 </div>
 
-<!-- ═══ MODAL: ENTREGAR DESPACHO ═══ -->
+<!-- ═══ MODAL: INICIAR TRANSPORTE ═══ -->
+<div id="iniciarModal" class="modal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Iniciar transporte</div>
+    <div id="iniciar-info" style="background:#F5F5F5;border-radius:8px;padding:12px;margin-bottom:12px;font-size:12.5px;line-height:1.6;color:var(--text2);"></div>
+    <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Verifique que carga estos productos</div>
+    <div id="iniciar-items" style="margin-bottom:14px;overflow-x:auto;"></div>
+    <div style="font-size:12.5px;color:var(--text2);margin-bottom:12px;">Al confirmar, el despacho pasa a <strong>En tránsito</strong> y se registra la hora + GPS de salida.</div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="closeModal('iniciarModal')">Cancelar</button>
+      <button class="btn btn-primary" id="btn-iniciar-confirm" onclick="confirmarIniciar()">Confirmar inicio</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: ENTREGAR (foto cedible obligatoria + obs opcional) ═══ -->
 <div id="entregarModal" class="modal">
   <div class="modal-sheet">
     <div class="modal-handle"></div>
-    <div class="modal-title">Marcar como Entregada</div>
+    <div class="modal-title">Confirmar entrega</div>
     <div id="entregar-info" style="background:#F5F5F5;border-radius:8px;padding:12px;margin-bottom:14px;font-size:12.5px;line-height:1.6;color:var(--text2);"></div>
 
     <div id="entregar-sync-warn" class="sync-banner" style="display:none">
@@ -296,19 +367,26 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 
     <div class="form-group">
       <label class="form-label">Foto del cedible firmado <span style="color:var(--danger)">*</span></label>
-      <input type="file" id="ent-foto" accept="image/*" capture="environment" onchange="previewEntFoto(this)" style="display:none">
+      <input type="file" id="ent-foto" accept="image/*" capture="environment" onchange="onPhotoChosen(this,'cedible')" style="display:none">
       <button type="button" onclick="document.getElementById('ent-foto').click()" class="btn btn-ghost" style="margin-bottom:4px;">📷 Tomar foto del cedible</button>
       <img id="ent-foto-preview" class="photo-preview" src="" style="display:none;max-height:220px;object-fit:cover;">
-      <div id="ent-foto-hint" class="hint-required" style="display:none">La foto del cedible firmado es obligatoria para marcar como entregada.</div>
+      <div id="ent-foto-hint" class="hint-required" style="display:none">La foto del cedible firmado es obligatoria.</div>
     </div>
 
-    <div class="form-group">
-      <label class="form-label">Observaciones</label>
+    <label class="toggle-row" for="ent-obs-toggle">
+      <span class="toggle-sw">
+        <input type="checkbox" id="ent-obs-toggle" onchange="toggleEntObs(this.checked)">
+        <span class="track"></span><span class="thumb"></span>
+      </span>
+      <span class="toggle-label">Agregar observaciones de la entrega</span>
+    </label>
+
+    <div class="form-group" id="ent-obs-group" style="display:none">
       <div class="voice-row">
-        <textarea class="form-textarea" id="ent-obs" placeholder="Observaciones del cierre (opcional)..." rows="3"></textarea>
-        <button type="button" class="btn-voice" id="btn-voice" onclick="toggleVoice()" title="Dictar observaciones">🎤</button>
+        <textarea class="form-textarea" id="ent-obs" placeholder="Observaciones de la entrega..." rows="3"></textarea>
+        <button type="button" class="btn-voice" id="btn-voice-ent" onclick="toggleVoice('ent-obs','voice-status-ent')" title="Dictar observaciones">🎤</button>
       </div>
-      <div class="voice-status" id="voice-status"></div>
+      <div class="voice-status" id="voice-status-ent"></div>
     </div>
 
     <div style="margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
@@ -320,6 +398,77 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
       <button class="btn btn-ghost" onclick="closeModal('entregarModal')">Cancelar</button>
       <button class="btn btn-primary" id="btn-entregar-confirm" onclick="confirmarEntrega()">Confirmar entrega</button>
     </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: NO ENTREGADO (motivo + fotos adicionales) ═══ -->
+<div id="noEntregadoModal" class="modal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Producto no entregado</div>
+    <div id="no-entregado-info" style="background:#F5F5F5;border-radius:8px;padding:12px;margin-bottom:14px;font-size:12.5px;line-height:1.6;color:var(--text2);"></div>
+
+    <div id="no-ent-sync-warn" class="sync-banner" style="display:none">
+      ⚠ Sin conexión. El cambio se guardará localmente y se enviará cuando se restablezca la conexión.
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Motivo <span style="color:var(--danger)">*</span></label>
+      <select class="form-select" id="ne-motivo" onchange="onMotivoChange(this.value)">
+        <option value="">Seleccionar...</option>
+        <option value="Cerrado">Cerrado</option>
+        <option value="Cliente no quiere recibir">Cliente no quiere recibir</option>
+        <option value="Dirección equivocada">Dirección equivocada</option>
+        <option value="Producto no corresponde a solicitud">Producto no corresponde a solicitud</option>
+        <option value="Producto dañado">Producto dañado</option>
+        <option value="Otro">Otro</option>
+      </select>
+    </div>
+
+    <div class="form-group" id="ne-motivo-detalle-group" style="display:none">
+      <label class="form-label">Detalle del motivo <span style="color:var(--danger)">*</span></label>
+      <div class="voice-row">
+        <textarea class="form-textarea" id="ne-motivo-detalle" placeholder="Describa el motivo..." rows="2"></textarea>
+        <button type="button" class="btn-voice" onclick="toggleVoice('ne-motivo-detalle','voice-status-ne-m')" title="Dictar motivo">🎤</button>
+      </div>
+      <div class="voice-status" id="voice-status-ne-m"></div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Observaciones</label>
+      <div class="voice-row">
+        <textarea class="form-textarea" id="ne-obs" placeholder="Comentario adicional (opcional)..." rows="2"></textarea>
+        <button type="button" class="btn-voice" onclick="toggleVoice('ne-obs','voice-status-ne-o')" title="Dictar">🎤</button>
+      </div>
+      <div class="voice-status" id="voice-status-ne-o"></div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Fotos adicionales <span style="color:var(--text3);font-weight:normal;font-size:11px">(opcional — lugar, producto, puerta, etc.)</span></label>
+      <input type="file" id="ne-foto" accept="image/*" capture="environment" onchange="onPhotoChosen(this,'adicional')" style="display:none">
+      <div class="fotos-grid" id="ne-fotos-grid">
+        <button type="button" class="foto-add" onclick="document.getElementById('ne-foto').click()">+</button>
+      </div>
+    </div>
+
+    <div style="margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <span class="gps-status gps-loading" id="gpsStatus-ne">📍 Obteniendo GPS...</span>
+      <button type="button" class="btn btn-ghost" style="width:auto;padding:6px 12px;font-size:12px;" onclick="refreshGPS()">↻ Actualizar GPS</button>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="closeModal('noEntregadoModal')">Cancelar</button>
+      <button class="btn btn-primary" id="btn-ne-confirm" onclick="confirmarNoEntregado()" style="background:var(--danger)">Confirmar no entregado</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: ¿IMAGEN OK? (full-screen preview post-foto) ═══ -->
+<div id="photoFullscreen" class="photo-fullscreen">
+  <img id="pf-img" src="">
+  <div class="pf-actions">
+    <button class="pf-btn pf-btn-retry" onclick="rejectPhoto()">↻ Repetir</button>
+    <button class="pf-btn pf-btn-ok" onclick="acceptPhoto()">✓ Guardar</button>
   </div>
 </div>
 
@@ -365,9 +514,11 @@ let misMovimientos = {};   // Salidas visibles al chofer (tipo=Salida ∩ filtro
 let misDespachos   = {};   // Estado/hitos de despachos ya tomados (/organizaciones/.../despachos/)
 let currentGPS = null;
 let activeDocId = null;    // documentoId del despacho activo en algún modal
-let activeTab = 'asignados';
+let activeTab = 'pendientes';
 let isOnline = navigator.onLine;
-let speech = null, speechActive = false;  // Web Speech API — observaciones por voz
+let speech = null, speechActive = false, speechTargetId = null;  // Web Speech API
+let fotosAdicionales = [];  // {dataUrl, blob, uploadedUrl?} para No Entregado
+let pendingFotoKind = null; // "cedible" | "adicional" — qué foto está a punto de confirmarse
 
 // ══ INDEXEDDB (OFFLINE QUEUE) ══
 let idb = null;
@@ -557,8 +708,11 @@ function _construirDespachos() {
     let estado = regDesp?.estado;
     if (!estado) estado = esMio ? 'Asignada' : 'Pendiente';
 
-    // Agrega items por SKU/lote
+    // Agrega items por SKU/lote. Si el movimiento viene palletizado
+    // (concentrados), capturamos el total de bultos por palletGroupId
+    // para evitar sumar duplicados de la misma línea de pallet.
     const items = {};
+    const palletGroupsVistos = {}; // k → Set(palletGroupId)
     movs.forEach(m => {
       const k = `${m.sku||''}|${m.lote||''}`;
       if (!items[k]) items[k] = {
@@ -567,11 +721,23 @@ function _construirDespachos() {
         descripcion: m.descripcion || '',
         vence: m.vence || '',
         cantidad: 0,
-        ubicaciones: {}
+        ubicaciones: {},
+        bultos: 0
       };
       items[k].cantidad += parseFloat(m.cantidad) || 0;
       const ubic = m.ubicacion || '—';
       items[k].ubicaciones[ubic] = (items[k].ubicaciones[ubic] || 0) + (parseFloat(m.cantidad) || 0);
+      // Bultos (pallets de concentrado): acumular una sola vez por palletGroupId.
+      if (m.palletTotal && m.palletGroupId) {
+        if (!palletGroupsVistos[k]) palletGroupsVistos[k] = new Set();
+        if (!palletGroupsVistos[k].has(m.palletGroupId)) {
+          palletGroupsVistos[k].add(m.palletGroupId);
+          items[k].bultos += parseFloat(m.palletTotal) || 0;
+        }
+      } else if (m.palletTotal && !m.palletGroupId) {
+        // Fallback: si no hay palletGroupId, cada línea cuenta como 1 bulto.
+        items[k].bultos += 1;
+      }
     });
 
     resultado[docId] = {
@@ -607,85 +773,153 @@ function renderDespachos() {
   const empty = document.getElementById('emptyState');
   const search = (document.getElementById('searchDoc')?.value || '').trim().toLowerCase();
   const todos = _construirDespachos();
-  const hoy = new Date().toISOString().split('T')[0];
 
-  // Clasifica por tabs
-  const asignados = [], pendientes = [], entregados = [];
+  // Clasifica en 4 tabs.
+  // "Pendientes" ahora mezcla:
+  //   (a) mías asignadas y no iniciadas (botón "Iniciar transporte")
+  //   (b) del pool compartido (botón "Tomar")
+  const pendMias = [], pendPool = [], transito = [], entregados = [], noEntregados = [];
   Object.values(todos).forEach(d => {
     const matchDoc = !search ||
       d.documentoId.toLowerCase().includes(search) ||
       (d.referencia||'').toLowerCase().includes(search) ||
       (d.numeroMovimiento||'').toLowerCase().includes(search);
     if (!matchDoc) return;
-    if (d.estado === 'Pendiente') pendientes.push(d);
-    else if (d.estado === 'Entregada') {
-      // Sólo entregados HOY se muestran — el histórico se consulta desde el admin.
-      const f = (d.regDespacho?.entregadoEn || '').slice(0,10);
-      if (f === hoy) entregados.push(d);
-    }
-    else asignados.push(d);
+    if (d.estado === 'Pendiente') pendPool.push(d);
+    else if (d.estado === 'Asignada') pendMias.push(d);
+    else if (d.estado === 'En Ruta' || d.estado === 'En Tránsito') transito.push(d);
+    else if (d.estado === 'Entregada') entregados.push(d);
+    else if (d.estado === 'No Entregada') noEntregados.push(d);
   });
 
-  // Ordena: en ruta primero, luego asignados por fecha
-  asignados.sort((a,b) => {
-    const ord = { 'En Ruta':0, 'Asignada':1 };
-    const d = (ord[a.estado]??9) - (ord[b.estado]??9);
-    if (d) return d;
-    return (b.fechaDespacho||'').localeCompare(a.fechaDespacho||'');
-  });
-  pendientes.sort((a,b) => (b.fechaDespacho||'').localeCompare(a.fechaDespacho||''));
+  // Ordenes
+  const sortByFecha = (a,b) => (b.fechaDespacho||'').localeCompare(a.fechaDespacho||'');
+  pendMias.sort(sortByFecha);
+  pendPool.sort(sortByFecha);
+  transito.sort((a,b) => (b.regDespacho?.enRutaEn||'').localeCompare(a.regDespacho?.enRutaEn||''));
   entregados.sort((a,b) => (b.regDespacho?.entregadoEn||'').localeCompare(a.regDespacho?.entregadoEn||''));
+  noEntregados.sort((a,b) => (b.regDespacho?.noEntregadoEn||'').localeCompare(a.regDespacho?.noEntregadoEn||''));
 
-  // Actualiza contadores de las tabs
-  document.getElementById('cntAsignados').textContent = asignados.length;
-  document.getElementById('cntPendientes').textContent = pendientes.length;
+  // Contadores
+  const cntPendientes = pendMias.length + pendPool.length;
+  document.getElementById('cntPendientes').textContent = cntPendientes;
+  document.getElementById('cntTransito').textContent = transito.length;
   document.getElementById('cntEntregados').textContent = entregados.length;
+  document.getElementById('cntNoEntregados').textContent = noEntregados.length;
 
-  const dataActiva = { asignados, pendientes, entregados }[activeTab] || [];
-  if (!dataActiva.length) {
-    list.innerHTML = '';
-    empty.style.display = 'block';
-    empty.querySelector('.empty-state-title').textContent =
-      activeTab === 'pendientes' ? 'Sin despachos pendientes' :
-      activeTab === 'entregados' ? 'Sin entregas hoy' :
-      'Sin despachos asignados';
-    return;
+  let html = '';
+  if (activeTab === 'pendientes') {
+    if (pendMias.length) {
+      html += `<div class="subgroup-h">Asignados a ti <span class="sg-count">${pendMias.length}</span></div>`;
+      html += pendMias.map(_despCardHtml).join('');
+    }
+    if (pendPool.length) {
+      html += `<div class="subgroup-h">Disponibles para tomar <span class="sg-count">${pendPool.length}</span></div>`;
+      html += pendPool.map(_despCardHtml).join('');
+    }
+    if (!cntPendientes) {
+      empty.style.display = 'block';
+      empty.querySelector('.empty-state-title').textContent = 'Sin despachos pendientes';
+      list.innerHTML = '';
+      return;
+    }
+  } else if (activeTab === 'transito') {
+    if (!transito.length) {
+      empty.style.display = 'block';
+      empty.querySelector('.empty-state-title').textContent = 'Sin despachos en tránsito';
+      list.innerHTML = '';
+      return;
+    }
+    html = transito.map(_despCardHtml).join('');
+  } else if (activeTab === 'entregados') {
+    if (!entregados.length) {
+      empty.style.display = 'block';
+      empty.querySelector('.empty-state-title').textContent = 'Sin entregas confirmadas';
+      list.innerHTML = '';
+      return;
+    }
+    html = entregados.map(_despCardHtml).join('');
+  } else if (activeTab === 'noentregados') {
+    if (!noEntregados.length) {
+      empty.style.display = 'block';
+      empty.querySelector('.empty-state-title').textContent = 'Sin despachos no entregados';
+      list.innerHTML = '';
+      return;
+    }
+    html = noEntregados.map(_despCardHtml).join('');
   }
   empty.style.display = 'none';
-  list.innerHTML = dataActiva.map(_despCardHtml).join('');
+  list.innerHTML = html;
+}
+
+// Suma los pallets (bultos) de un item para concentrados: la UI del WMS
+// guarda palletTotal en los movimientos de Entrada; en Salida no siempre
+// viene. Mostramos sólo cuando hay info.
+function _totalBultosItem(it) {
+  // El item agrupa movimientos — buscamos palletTotal máximo entre ellos.
+  if (!it._bultos && it._bultos !== 0) return null;
+  return it._bultos;
 }
 
 function _despCardHtml(d) {
-  const badgeMap = { 'Asignada':'badge-blue', 'En Ruta':'badge-warning', 'Entregada':'badge-success', 'Pendiente':'badge-gray' };
+  const badgeMap = { 'Asignada':'badge-blue', 'En Ruta':'badge-warning', 'En Tránsito':'badge-warning', 'Entregada':'badge-success', 'Pendiente':'badge-gray', 'No Entregada':'badge-danger' };
+  const estadoLabel = d.estado === 'En Ruta' ? 'En Tránsito' : d.estado;
   const totalUd = d.items.reduce((s,i) => s + (i.cantidad||0), 0);
   const skusLabel = d.items.length === 1 ? '1 SKU' : `${d.items.length} SKUs`;
   const pills = d.items.slice(0, 3).map(i => `<span class="ot-item-pill">${i.sku} ×${i.cantidad}</span>`).join('')
       + (d.items.length > 3 ? `<span class="ot-item-pill" style="background:var(--bg3);color:var(--text3)">+${d.items.length-3} más</span>` : '');
   const safe = d.documentoId.replace(/'/g, "\\'");
 
+  // Clase para el borde izquierdo según estado
+  const cardClass = d.estado === 'Pendiente' ? 'disponible'
+      : d.estado === 'Asignada' ? 'asignada'
+      : (d.estado === 'En Ruta' || d.estado === 'En Tránsito') ? 'en-transito'
+      : d.estado === 'Entregada' ? 'entregada'
+      : d.estado === 'No Entregada' ? 'no-entregada' : '';
+
+  // Enlace a Maps para en-tránsito (destino conocido)
+  const mapsLink = (d.estado === 'En Ruta' || d.estado === 'En Tránsito') && d.destino
+    ? `<a class="maps-link" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(d.destino)}" target="_blank" onclick="event.stopPropagation()">🗺 Abrir en Maps</a>`
+    : '';
+
+  // Botones por estado
   let acciones = '';
   if (d.estado === 'Pendiente') {
-    acciones = `<button class="action-btn action-btn-tomar" onclick="openTomar('${safe}')"><span class="icon">📥</span>Tomar</button>`;
+    acciones = `<button class="action-btn action-btn-tomar" onclick="openTomar('${safe}')"><span class="icon">📥</span>Tomar despacho</button>`;
   } else if (d.estado === 'Asignada') {
-    acciones = `<button class="action-btn action-btn-ruta" onclick="marcarEnRuta('${safe}')"><span class="icon">🚛</span>En Ruta</button>`;
-  } else if (d.estado === 'En Ruta') {
-    acciones = `<button class="action-btn action-btn-entregada" onclick="openEntregar('${safe}')"><span class="icon">✓</span>Entregada</button>`;
+    acciones = `<button class="action-btn action-btn-ruta" onclick="openIniciar('${safe}')"><span class="icon">🚛</span>Iniciar transporte</button>`;
+  } else if (d.estado === 'En Ruta' || d.estado === 'En Tránsito') {
+    acciones = `
+      <button class="action-btn action-btn-entregada" onclick="openEntregar('${safe}')"><span class="icon">✓</span>Entregar</button>
+      <button class="action-btn action-btn-novedad" onclick="openNoEntregado('${safe}')"><span class="icon">✕</span>No entregado</button>`;
+  }
+
+  // Badges adicionales en entregados / no entregados
+  let subBadge = '';
+  if (d.estado === 'Entregada' && d.regDespacho?.entregaConObservaciones) {
+    subBadge = `<span class="obs-badge">CON OBS</span>`;
+  }
+  let motivoLine = '';
+  if (d.estado === 'No Entregada' && d.regDespacho?.motivoNoEntrega) {
+    motivoLine = `<div class="motivo-pill">${d.regDespacho.motivoNoEntrega}${d.regDespacho.motivoNoEntregaDetalle ? ': ' + d.regDespacho.motivoNoEntregaDetalle : ''}</div>`;
   }
 
   return `
-    <div class="ot-card">
+    <div class="ot-card ${cardClass}">
       <div class="ot-card-header" onclick="openDetalle('${safe}')">
         <div>
           <div class="ot-id">${d.documentoId}</div>
-          <div class="ot-cliente">${d.cliente || '—'}</div>
+          <div class="ot-cliente">${d.cliente || '—'}${subBadge}</div>
           <div class="ot-meta">📅 ${fmtDate(d.fechaDespacho || d.fecha)} · 🏢 ${d.bodega || '—'}${d.destino ? ' · 📍 '+d.destino : ''}</div>
           <div class="ot-meta" style="margin-top:2px">${skusLabel} · ${totalUd} unidades</div>
+          ${motivoLine}
+          ${mapsLink}
         </div>
-        <span class="badge ${badgeMap[d.estado]||'badge-gray'}">${d.estado}</span>
+        <span class="badge ${badgeMap[d.estado]||'badge-gray'}">${estadoLabel}</span>
       </div>
       <div class="ot-body">
         <div style="margin-bottom:10px;">${pills}</div>
-        ${acciones ? `<div class="action-btns" style="grid-template-columns:1fr">${acciones}</div>` : ''}
+        ${acciones ? `<div class="action-btns-stack">${acciones}</div>` : ''}
       </div>
     </div>`;
 }
@@ -706,28 +940,56 @@ function openDetalle(docId) {
   `;
   // Items
   const items = d.items.slice().sort((a,b) => a.sku.localeCompare(b.sku));
-  const itemsHtml = `<table class="items-table"><thead><tr><th>SKU</th><th>Descripción</th><th>Lote</th><th>Qty</th><th>Ubicación</th></tr></thead><tbody>` +
+  const anyBultos = items.some(i => i.bultos > 0);
+  const itemsHtml = `<table class="items-table"><thead><tr><th>SKU</th><th>Descripción</th><th>Lote</th><th>Qty</th>${anyBultos?'<th>Bultos</th>':''}<th>Ubicación</th></tr></thead><tbody>` +
     items.map(i => {
       const ubicStr = Object.entries(i.ubicaciones).sort((a,b)=>a[0].localeCompare(b[0])).map(([u,q])=>`${u} (${q})`).join(', ');
-      return `<tr><td class="text-mono" style="color:var(--accent)">${i.sku}</td><td>${i.descripcion||'—'}</td><td class="text-mono" style="font-size:11px">${i.lote||'—'}</td><td style="font-weight:600">${i.cantidad}</td><td style="font-size:11px">${ubicStr || '—'}</td></tr>`;
+      return `<tr><td class="text-mono" style="color:var(--accent)">${i.sku}</td><td>${i.descripcion||'—'}</td><td class="text-mono" style="font-size:11px">${i.lote||'—'}</td><td style="font-weight:600">${i.cantidad}</td>${anyBultos?`<td style="font-weight:600">${i.bultos||'—'}</td>`:''}<td style="font-size:11px">${ubicStr || '—'}</td></tr>`;
     }).join('') + `</tbody></table>`;
   document.getElementById('detItems').innerHTML = itemsHtml;
+  // Resumen del cierre: foto cedible, motivo no-entrega, fotos adicionales,
+  // observaciones. Prominente arriba del timeline cuando aplica.
+  const r = d.regDespacho || {};
+  let cierreHtml = '';
+  if (d.estado === 'Entregada' && r.fotoCedibleUrl) {
+    cierreHtml += `<div style="margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Cedible firmado</div><img src="${r.fotoCedibleUrl}" style="max-width:100%;max-height:280px;border-radius:6px;cursor:pointer" onclick="window.open('${r.fotoCedibleUrl}','_blank')"></div>`;
+  }
+  if (d.estado === 'No Entregada') {
+    const detalle = r.motivoNoEntregaDetalle ? ' — ' + r.motivoNoEntregaDetalle : '';
+    cierreHtml += `<div style="margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:var(--danger);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Motivo</div><div class="motivo-pill" style="font-size:13px">${r.motivoNoEntrega || '—'}${detalle}</div></div>`;
+    const fotos = Array.isArray(r.fotosAdicionalesUrls) ? r.fotosAdicionalesUrls : (r.fotosAdicionalesUrls ? Object.values(r.fotosAdicionalesUrls) : []);
+    if (fotos.length) {
+      cierreHtml += `<div style="margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Fotos adicionales</div><div class="fotos-grid">${
+        fotos.map(url => `<div class="fotos-thumb"><img src="${url}" onclick="window.open('${url}','_blank')"></div>`).join('')
+      }</div></div>`;
+    }
+  }
+  if (r.observacionesCierre) {
+    cierreHtml += `<div style="margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Observaciones</div><div style="font-size:13px;color:var(--text);background:var(--bg);padding:10px;border-radius:6px">${r.observacionesCierre}</div></div>`;
+  }
   // Timeline
   const hitos = (d.regDespacho && d.regDespacho.hitos)
     ? Object.values(d.regDespacho.hitos).sort((a,b) => new Date(a.fecha)-new Date(b.fecha))
     : [];
-  const dotMap = { 'En Ruta':'warning', 'Entregada':'green', 'Asignada':'', 'Pendiente':'' };
-  document.getElementById('detTimeline').innerHTML = hitos.length
+  const dotMap = { 'En Ruta':'warning', 'En Tránsito':'warning', 'Entregada':'green', 'Asignada':'', 'Pendiente':'', 'No Entregada':'danger' };
+  const timelineHtml = hitos.length
     ? hitos.map(h => {
         const foto = h.fotoCedibleUrl ? `<div style="margin-top:6px"><img src="${h.fotoCedibleUrl}" style="max-width:100%;max-height:180px;border-radius:6px;cursor:pointer" onclick="window.open('${h.fotoCedibleUrl}','_blank')"></div>` : '';
         return `<li class="tl-item"><div class="tl-dot ${dotMap[h.estado]||''}"></div><div class="tl-date">${fmtDateTime(h.fecha)}</div><div class="tl-title">${h.estado}</div><div class="tl-meta">${h.observaciones||''}</div>${foto}</li>`;
       }).join('')
     : '<li style="color:var(--text3);font-size:13px;">Sin eventos registrados</li>';
-  // Botón de acción contextual
+  // Inserta el bloque "cierre" entre items y timeline. Primero remueve
+  // cualquier inserción previa para no duplicar al reabrir el modal.
+  document.querySelectorAll('#detCierre').forEach(el => el.remove());
+  document.getElementById('detItems').insertAdjacentHTML('afterend', `<div id="detCierre">${cierreHtml}</div>`);
+  document.getElementById('detTimeline').innerHTML = timelineHtml;
+  // Botón de acción contextual (sólo uno; para "En tránsito" el chofer tiene
+  // dos acciones y las ofrecemos desde el card principal, no desde el detalle).
   const btn = document.getElementById('detActionBtn');
   if (d.estado === 'Pendiente')      { btn.textContent = '📥 Tomar despacho'; btn.style.display=''; btn.onclick = () => { closeModal('detalleModal'); openTomar(docId); }; }
-  else if (d.estado === 'Asignada')  { btn.textContent = '🚛 Marcar En Ruta'; btn.style.display=''; btn.onclick = () => { closeModal('detalleModal'); marcarEnRuta(docId); }; }
-  else if (d.estado === 'En Ruta')   { btn.textContent = '✓ Marcar Entregada'; btn.style.display=''; btn.onclick = () => { closeModal('detalleModal'); openEntregar(docId); }; }
+  else if (d.estado === 'Asignada')  { btn.textContent = '🚛 Iniciar transporte'; btn.style.display=''; btn.onclick = () => { closeModal('detalleModal'); openIniciar(docId); }; }
+  else if (d.estado === 'En Ruta' || d.estado === 'En Tránsito')
+                                      { btn.textContent = '✓ Confirmar entrega'; btn.style.display=''; btn.onclick = () => { closeModal('detalleModal'); openEntregar(docId); }; }
   else                                { btn.style.display='none'; }
   openModal('detalleModal');
 }
@@ -811,91 +1073,121 @@ async function confirmarTomar() {
   }
 }
 
-// ══ EN RUTA (rápido, sin modal) ══
-async function marcarEnRuta(docId) {
-  if (!docId) return;
+// ══ INICIAR TRANSPORTE (modal con lista de productos a verificar) ══
+function openIniciar(docId) {
   const d = _construirDespachos()[docId];
   if (!d) return;
-  if (!confirm(`Marcar despacho ${docId} como "En Ruta"?\n\nSe registrará la hora y la ubicación GPS.`)) return;
-  const now = new Date().toISOString();
-  const hitoId = 'H-' + Date.now();
-  const hito = {
-    estado:'En Ruta', fecha:now,
-    lat: currentGPS?.lat || null, lng: currentGPS?.lng || null,
-    observaciones:'', usuario: currentUser.email
-  };
-  const updates = {
-    [`organizaciones/${maestroUid}/despachos/${docId}/estado`]: 'En Ruta',
-    [`organizaciones/${maestroUid}/despachos/${docId}/enRutaEn`]: now,
-    [`organizaciones/${maestroUid}/despachos/${docId}/hitos/${hitoId}`]: hito
-  };
-  if (isOnline) {
-    try {
-      await db.ref().update(updates);
-      showSnack(`Despacho ${docId} marcado "En Ruta".`);
-    } catch(e) { alert('Error: '+e.message); }
-  } else {
-    await queueAction({ tipo:'patch', updates, ts:Date.now() });
-    await updateQueueBadge();
-    showSnack('Guardado localmente. Se enviará cuando haya conexión.');
-  }
-  getGPS(); // refresca GPS para la próxima acción
+  activeDocId = docId;
+  document.getElementById('iniciar-info').innerHTML = `
+    <strong>${d.documentoId}</strong> — ${d.cliente||'—'}<br>
+    <strong>Bodega origen:</strong> ${d.bodega||'—'}${d.destino ? '<br><strong>Destino:</strong> '+d.destino : ''}
+  `;
+  // Tabla de productos (SKU, Descripción, Lote, Qty, Bultos)
+  const items = d.items.slice().sort((a,b) => a.sku.localeCompare(b.sku));
+  const anyBultos = items.some(i => i.bultos > 0);
+  const headers = `<tr><th>SKU</th><th>Descripción</th><th>Lote</th><th>Qty</th>${anyBultos?'<th>Bultos</th>':''}</tr>`;
+  const body = items.map(i => `
+    <tr>
+      <td class="text-mono" style="color:var(--accent)">${i.sku}</td>
+      <td>${i.descripcion||'—'}</td>
+      <td class="text-mono" style="font-size:11px">${i.lote||'—'}</td>
+      <td style="font-weight:600">${i.cantidad}</td>
+      ${anyBultos ? `<td style="font-weight:600">${i.bultos||'—'}</td>` : ''}
+    </tr>`).join('');
+  document.getElementById('iniciar-items').innerHTML = `<table class="items-table"><thead>${headers}</thead><tbody>${body}</tbody></table>`;
+  openModal('iniciarModal');
+  getGPS();
 }
 
-// ══ ENTREGAR (foto cedible obligatoria + obs texto/voz) ══
+async function confirmarIniciar() {
+  if (!activeDocId) return;
+  const btn = document.getElementById('btn-iniciar-confirm');
+  btn.innerHTML = '<span class="spinner"></span> Confirmando...';
+  btn.disabled = true;
+  try {
+    const docId = activeDocId;
+    const now = new Date().toISOString();
+    const hitoId = 'H-' + Date.now();
+    const hito = {
+      estado:'En Tránsito', fecha:now,
+      lat: currentGPS?.lat || null, lng: currentGPS?.lng || null,
+      observaciones:'Transporte iniciado — productos verificados.', usuario: currentUser.email
+    };
+    const updates = {
+      [`organizaciones/${maestroUid}/despachos/${docId}/estado`]: 'En Tránsito',
+      [`organizaciones/${maestroUid}/despachos/${docId}/enRutaEn`]: now,
+      [`organizaciones/${maestroUid}/despachos/${docId}/hitos/${hitoId}`]: hito
+    };
+    if (isOnline) {
+      await db.ref().update(updates);
+      showSnack(`Despacho ${docId} en tránsito. Buen viaje.`);
+    } else {
+      await queueAction({ tipo:'patch', updates, ts:Date.now() });
+      await updateQueueBadge();
+      showSnack('Inicio guardado localmente. Se enviará al volver la conexión.');
+    }
+    closeModal('iniciarModal');
+    getGPS();
+  } catch(e) {
+    alert('Error: ' + e.message);
+  } finally {
+    btn.innerHTML = 'Confirmar inicio'; btn.disabled = false;
+  }
+}
+
+// ══ ENTREGAR (foto cedible obligatoria + toggle de observaciones) ══
 function openEntregar(docId) {
   const d = _construirDespachos()[docId];
   if (!d) return;
   activeDocId = docId;
   document.getElementById('entregar-info').innerHTML = `
-    <strong>${d.documentoId}</strong> — ${d.cliente||'—'}<br>
-    <strong>Destino:</strong> ${d.destino||'—'}
+    <strong>${d.documentoId}</strong> — ${d.cliente||'—'}${d.destino ? '<br>📍 '+d.destino : ''}
   `;
+  // Reset
   document.getElementById('ent-obs').value = '';
   document.getElementById('ent-foto').value = '';
   document.getElementById('ent-foto-preview').style.display = 'none';
   document.getElementById('ent-foto-preview').src = '';
+  document.getElementById('ent-foto-preview').dataset.dataUrl = '';
   document.getElementById('ent-foto-hint').style.display = 'none';
-  document.getElementById('voice-status').textContent = '';
+  document.getElementById('voice-status-ent').textContent = '';
+  const tog = document.getElementById('ent-obs-toggle');
+  if (tog) tog.checked = false;
+  document.getElementById('ent-obs-group').style.display = 'none';
   document.getElementById('entregar-sync-warn').style.display = isOnline ? 'none' : 'flex';
   openModal('entregarModal');
   getGPS();
 }
 
-function previewEntFoto(input) {
-  if (!input.files.length) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    const img = document.getElementById('ent-foto-preview');
-    img.src = e.target.result; img.style.display = 'block';
-    document.getElementById('ent-foto-hint').style.display = 'none';
-  };
-  reader.readAsDataURL(input.files[0]);
+function toggleEntObs(checked) {
+  document.getElementById('ent-obs-group').style.display = checked ? '' : 'none';
 }
 
 async function confirmarEntrega() {
   if (!activeDocId) return;
-  const foto = document.getElementById('ent-foto').files[0];
-  if (!foto) {
+  const previewEl = document.getElementById('ent-foto-preview');
+  if (!previewEl.dataset.dataUrl) {
     document.getElementById('ent-foto-hint').style.display = 'block';
     return;
   }
-  const obs = document.getElementById('ent-obs').value.trim();
+  const conObs = document.getElementById('ent-obs-toggle').checked;
+  const obs = conObs ? document.getElementById('ent-obs').value.trim() : '';
   const btn = document.getElementById('btn-entregar-confirm');
   btn.innerHTML = '<span class="spinner"></span> Enviando...';
   btn.disabled = true;
   try {
     const docId = activeDocId;
     const now = new Date().toISOString();
+    const dataUrl = previewEl.dataset.dataUrl;
     let fotoUrl = null;
     if (isOnline) {
+      const blob = await _dataUrlToBlob(dataUrl);
       const path = `despachos/${maestroUid}/${docId}/cedible_${Date.now()}.jpg`;
       const ref = storage.ref(path);
-      await ref.put(foto);
+      await ref.put(blob);
       fotoUrl = await ref.getDownloadURL();
     } else {
-      // Offline: guardamos la foto como data URL en IndexedDB para subirla al volver.
-      fotoUrl = await _fileToDataUrl(foto);
+      fotoUrl = dataUrl; // Se sube al sincronizar
     }
     const hitoId = 'H-' + Date.now();
     const hito = {
@@ -903,12 +1195,14 @@ async function confirmarEntrega() {
       lat: currentGPS?.lat || null, lng: currentGPS?.lng || null,
       observaciones: obs,
       fotoCedibleUrl: fotoUrl,
+      entregaConObservaciones: !!conObs && !!obs,
       usuario: currentUser.email
     };
     const updates = {
       [`organizaciones/${maestroUid}/despachos/${docId}/estado`]: 'Entregada',
       [`organizaciones/${maestroUid}/despachos/${docId}/entregadoEn`]: now,
       [`organizaciones/${maestroUid}/despachos/${docId}/fotoCedibleUrl`]: fotoUrl,
+      [`organizaciones/${maestroUid}/despachos/${docId}/entregaConObservaciones`]: !!conObs && !!obs,
       [`organizaciones/${maestroUid}/despachos/${docId}/observacionesCierre`]: obs,
       [`organizaciones/${maestroUid}/despachos/${docId}/hitos/${hitoId}`]: hito
     };
@@ -916,7 +1210,7 @@ async function confirmarEntrega() {
       await db.ref().update(updates);
       showSnack(`Despacho ${docId} marcado como "Entregada".`);
     } else {
-      await queueAction({ tipo:'entrega', docId, updates, hitoId, fotoDataUrl: fotoUrl, ts: Date.now() });
+      await queueAction({ tipo:'entrega', docId, updates, hitoId, fotoDataUrl: dataUrl, ts: Date.now() });
       await updateQueueBadge();
       showSnack('Entrega guardada localmente. Se enviará cuando haya conexión.');
     }
@@ -926,6 +1220,153 @@ async function confirmarEntrega() {
   } finally {
     btn.innerHTML = 'Confirmar entrega'; btn.disabled = false;
   }
+}
+
+// ══ NO ENTREGADO (motivo + fotos adicionales) ══
+function openNoEntregado(docId) {
+  const d = _construirDespachos()[docId];
+  if (!d) return;
+  activeDocId = docId;
+  fotosAdicionales = [];
+  document.getElementById('no-entregado-info').innerHTML = `
+    <strong>${d.documentoId}</strong> — ${d.cliente||'—'}${d.destino ? '<br>📍 '+d.destino : ''}
+  `;
+  document.getElementById('ne-motivo').value = '';
+  document.getElementById('ne-motivo-detalle').value = '';
+  document.getElementById('ne-obs').value = '';
+  document.getElementById('ne-motivo-detalle-group').style.display = 'none';
+  document.getElementById('ne-foto').value = '';
+  _renderFotosGrid();
+  document.getElementById('voice-status-ne-m').textContent = '';
+  document.getElementById('voice-status-ne-o').textContent = '';
+  document.getElementById('no-ent-sync-warn').style.display = isOnline ? 'none' : 'flex';
+  openModal('noEntregadoModal');
+  getGPS();
+}
+
+function onMotivoChange(val) {
+  document.getElementById('ne-motivo-detalle-group').style.display = (val === 'Otro') ? '' : 'none';
+}
+
+function _renderFotosGrid() {
+  const grid = document.getElementById('ne-fotos-grid');
+  const addBtn = `<button type="button" class="foto-add" onclick="document.getElementById('ne-foto').click()">+</button>`;
+  const thumbs = fotosAdicionales.map((f, idx) => `
+    <div class="fotos-thumb">
+      <img src="${f.dataUrl}">
+      <button class="del" onclick="_removeFoto(${idx})">✕</button>
+    </div>`).join('');
+  grid.innerHTML = thumbs + addBtn;
+}
+
+function _removeFoto(idx) {
+  fotosAdicionales.splice(idx, 1);
+  _renderFotosGrid();
+}
+
+async function confirmarNoEntregado() {
+  if (!activeDocId) return;
+  const motivo = document.getElementById('ne-motivo').value;
+  const motivoDet = document.getElementById('ne-motivo-detalle').value.trim();
+  const obs = document.getElementById('ne-obs').value.trim();
+  if (!motivo) { alert('Seleccione un motivo.'); return; }
+  if (motivo === 'Otro' && !motivoDet) { alert('Describa el motivo cuando selecciona "Otro".'); return; }
+  const btn = document.getElementById('btn-ne-confirm');
+  btn.innerHTML = '<span class="spinner"></span> Enviando...';
+  btn.disabled = true;
+  try {
+    const docId = activeDocId;
+    const now = new Date().toISOString();
+    // Subida de fotos adicionales (si hay conexión).
+    const urls = [];
+    if (isOnline) {
+      for (const f of fotosAdicionales) {
+        const blob = await _dataUrlToBlob(f.dataUrl);
+        const path = `despachos/${maestroUid}/${docId}/noentregado_${Date.now()}_${Math.random().toString(36).slice(2,8)}.jpg`;
+        const ref = storage.ref(path);
+        await ref.put(blob);
+        urls.push(await ref.getDownloadURL());
+      }
+    } else {
+      // Offline: subimos al sincronizar; guardamos data URLs mientras.
+      fotosAdicionales.forEach(f => urls.push(f.dataUrl));
+    }
+    const hitoId = 'H-' + Date.now();
+    const hito = {
+      estado:'No Entregada', fecha:now,
+      lat: currentGPS?.lat || null, lng: currentGPS?.lng || null,
+      motivoNoEntrega: motivo,
+      motivoNoEntregaDetalle: motivo === 'Otro' ? motivoDet : '',
+      observaciones: obs,
+      fotosAdicionalesUrls: urls,
+      usuario: currentUser.email
+    };
+    const basePath = `organizaciones/${maestroUid}/despachos/${docId}`;
+    const updates = {
+      [`${basePath}/estado`]: 'No Entregada',
+      [`${basePath}/noEntregadoEn`]: now,
+      [`${basePath}/motivoNoEntrega`]: motivo,
+      [`${basePath}/motivoNoEntregaDetalle`]: motivo === 'Otro' ? motivoDet : '',
+      [`${basePath}/observacionesCierre`]: obs,
+      [`${basePath}/fotosAdicionalesUrls`]: urls,
+      [`${basePath}/hitos/${hitoId}`]: hito
+    };
+    if (isOnline) {
+      await db.ref().update(updates);
+      showSnack(`Despacho ${docId} marcado como "No Entregado".`);
+    } else {
+      await queueAction({ tipo:'noentrega', docId, updates, hitoId, fotosDataUrls: fotosAdicionales.map(f => f.dataUrl), ts: Date.now() });
+      await updateQueueBadge();
+      showSnack('No-entrega guardada localmente. Se enviará al volver la conexión.');
+    }
+    closeModal('noEntregadoModal');
+  } catch(e) {
+    alert('Error: ' + e.message);
+  } finally {
+    btn.innerHTML = 'Confirmar no entregado'; btn.disabled = false;
+  }
+}
+
+// ══ FOTO FLOW (¿imagen ok?) ══
+// Cuando el usuario elige una foto desde cualquier <input type=file capture=environment>
+// mostramos el preview a pantalla completa con dos acciones: Guardar / Repetir.
+let _pendingPhotoDataUrl = null;
+function onPhotoChosen(input, kind) {
+  if (!input.files.length) return;
+  pendingFotoKind = kind;
+  const reader = new FileReader();
+  reader.onload = e => {
+    _pendingPhotoDataUrl = e.target.result;
+    document.getElementById('pf-img').src = _pendingPhotoDataUrl;
+    document.getElementById('photoFullscreen').classList.add('active');
+  };
+  reader.readAsDataURL(input.files[0]);
+  // Limpiar input para permitir que el user vuelva a seleccionar otra con la misma cámara
+  input.value = '';
+}
+
+function acceptPhoto() {
+  if (!_pendingPhotoDataUrl) return;
+  if (pendingFotoKind === 'cedible') {
+    const img = document.getElementById('ent-foto-preview');
+    img.src = _pendingPhotoDataUrl;
+    img.dataset.dataUrl = _pendingPhotoDataUrl;
+    img.style.display = 'block';
+    document.getElementById('ent-foto-hint').style.display = 'none';
+  } else if (pendingFotoKind === 'adicional') {
+    fotosAdicionales.push({ dataUrl: _pendingPhotoDataUrl });
+    _renderFotosGrid();
+  }
+  document.getElementById('photoFullscreen').classList.remove('active');
+  _pendingPhotoDataUrl = null;
+}
+
+function rejectPhoto() {
+  document.getElementById('photoFullscreen').classList.remove('active');
+  _pendingPhotoDataUrl = null;
+  // Re-abre el selector del input apropiado
+  if (pendingFotoKind === 'cedible') document.getElementById('ent-foto').click();
+  else if (pendingFotoKind === 'adicional') document.getElementById('ne-foto').click();
 }
 
 function _fileToDataUrl(file) {
@@ -943,31 +1384,33 @@ async function _dataUrlToBlob(dataUrl) {
 }
 
 // ══ VOICE INPUT (Web Speech API) ══
-// Dicta observaciones hablando. Reconocimiento en español-CL.
-function toggleVoice() {
+// Dicta observaciones hablando. Reconocimiento en español-CL. Reutilizable:
+// recibe el id del textarea destino y el id del elemento de status.
+function toggleVoice(targetId, statusId) {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  const statusEl = document.getElementById('voice-status');
-  const btn = document.getElementById('btn-voice');
+  const statusEl = document.getElementById(statusId);
+  const textarea = document.getElementById(targetId);
+  // El botón del micrófono es el .btn-voice más cercano al textarea.
+  const btn = textarea && textarea.closest('.voice-row') ? textarea.closest('.voice-row').querySelector('.btn-voice') : null;
   if (!SR) {
-    statusEl.className = 'voice-status error';
-    statusEl.textContent = 'Reconocimiento de voz no disponible en este navegador. Usa Chrome para esta función.';
+    if (statusEl) { statusEl.className = 'voice-status error'; statusEl.textContent = 'Reconocimiento de voz no disponible en este navegador. Usa Chrome para esta función.'; }
     return;
   }
+  // Si ya hay un dictado activo (en este o en otro campo), lo cerramos.
   if (speechActive && speech) {
     try { speech.stop(); } catch(_){}
-    return; // onend se encarga de limpiar el estado
+    return;
   }
   speech = new SR();
   speech.lang = 'es-CL';
   speech.interimResults = true;
   speech.continuous = true;
-  const textarea = document.getElementById('ent-obs');
+  speechTargetId = targetId;
   const baseText = textarea.value;
   speech.onstart = () => {
     speechActive = true;
-    btn.classList.add('recording');
-    statusEl.className = 'voice-status recording';
-    statusEl.textContent = '🔴 Grabando — habla ahora. Toca el micrófono para detener.';
+    if (btn) btn.classList.add('recording');
+    if (statusEl) { statusEl.className = 'voice-status recording'; statusEl.textContent = '🔴 Grabando — habla ahora. Toca el micrófono para detener.'; }
   };
   speech.onresult = e => {
     let interim = '', finalText = '';
@@ -979,21 +1422,20 @@ function toggleVoice() {
     textarea.value = (baseText ? baseText + ' ' : '') + finalText + interim;
   };
   speech.onerror = e => {
-    statusEl.className = 'voice-status error';
-    statusEl.textContent = 'Error: ' + (e.error || 'desconocido') + '. Puedes seguir escribiendo manualmente.';
+    if (statusEl) { statusEl.className = 'voice-status error'; statusEl.textContent = 'Error: ' + (e.error || 'desconocido') + '. Puedes seguir escribiendo manualmente.'; }
     speechActive = false;
-    btn.classList.remove('recording');
+    if (btn) btn.classList.remove('recording');
   };
   speech.onend = () => {
     speechActive = false;
-    btn.classList.remove('recording');
-    if (!statusEl.className.includes('error')) {
+    if (btn) btn.classList.remove('recording');
+    if (statusEl && !statusEl.className.includes('error')) {
       statusEl.className = 'voice-status';
-      statusEl.textContent = textarea.value ? 'Dictado detenido. Puedes editar el texto manualmente antes de confirmar.' : '';
+      statusEl.textContent = textarea.value ? 'Dictado detenido. Puedes editar manualmente.' : '';
     }
   };
   try { speech.start(); }
-  catch(e) { statusEl.className = 'voice-status error'; statusEl.textContent = 'No se pudo iniciar: ' + e.message; }
+  catch(e) { if (statusEl) { statusEl.className = 'voice-status error'; statusEl.textContent = 'No se pudo iniciar: ' + e.message; } }
 }
 
 // ══ SYNC QUEUE ══
@@ -1008,7 +1450,6 @@ async function syncQueue() {
       if (item.tipo === 'patch') {
         await db.ref().update(item.updates);
       } else if (item.tipo === 'entrega') {
-        // Si la foto se guardó como data URL offline, subimos primero.
         let updates = item.updates;
         if (item.fotoDataUrl && item.fotoDataUrl.startsWith('data:')) {
           const blob = await _dataUrlToBlob(item.fotoDataUrl);
@@ -1019,6 +1460,24 @@ async function syncQueue() {
           updates = { ...updates };
           updates[`organizaciones/${maestroUid}/despachos/${item.docId}/fotoCedibleUrl`] = url;
           if (item.hitoId) updates[`organizaciones/${maestroUid}/despachos/${item.docId}/hitos/${item.hitoId}/fotoCedibleUrl`] = url;
+        }
+        await db.ref().update(updates);
+      } else if (item.tipo === 'noentrega') {
+        // Sube fotos adicionales guardadas como data URLs; luego aplica el update.
+        let updates = { ...item.updates };
+        if (Array.isArray(item.fotosDataUrls) && item.fotosDataUrls.length) {
+          const urls = [];
+          for (const d of item.fotosDataUrls) {
+            if (d && d.startsWith('data:')) {
+              const blob = await _dataUrlToBlob(d);
+              const path = `despachos/${maestroUid}/${item.docId}/noentregado_${Date.now()}_${Math.random().toString(36).slice(2,8)}.jpg`;
+              const ref = storage.ref(path);
+              await ref.put(blob);
+              urls.push(await ref.getDownloadURL());
+            } else { urls.push(d); }
+          }
+          updates[`organizaciones/${maestroUid}/despachos/${item.docId}/fotosAdicionalesUrls`] = urls;
+          if (item.hitoId) updates[`organizaciones/${maestroUid}/despachos/${item.docId}/hitos/${item.hitoId}/fotosAdicionalesUrls`] = urls;
         }
         await db.ref().update(updates);
       }
