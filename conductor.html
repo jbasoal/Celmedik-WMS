@@ -959,17 +959,21 @@ function openDetalle(docId) {
   // Resumen del cierre: foto cedible, motivo no-entrega, fotos adicionales,
   // observaciones. Prominente arriba del timeline cuando aplica.
   const r = d.regDespacho || {};
+  // Compatibilidad: `fotoCedibleBase64` (nuevo, data URL en RTDB) o
+  // `fotoCedibleUrl` (legacy, URL de Storage). Ambos renderan igual en <img>.
+  const cedibleSrc = r.fotoCedibleBase64 || r.fotoCedibleUrl || '';
   let cierreHtml = '';
-  if (d.estado === 'Entregada' && r.fotoCedibleUrl) {
-    cierreHtml += `<div style="margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Cedible firmado</div><img src="${r.fotoCedibleUrl}" style="max-width:100%;max-height:280px;border-radius:6px;cursor:pointer" onclick="window.open('${r.fotoCedibleUrl}','_blank')"></div>`;
+  if (d.estado === 'Entregada' && cedibleSrc) {
+    cierreHtml += `<div style="margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Cedible firmado</div><img src="${cedibleSrc}" style="max-width:100%;max-height:280px;border-radius:6px;cursor:pointer" onclick="_abrirFotoFull('${encodeURIComponent(cedibleSrc).slice(0,20)}',this.src)"></div>`;
   }
   if (d.estado === 'No Entregada') {
     const detalle = r.motivoNoEntregaDetalle ? ' — ' + r.motivoNoEntregaDetalle : '';
     cierreHtml += `<div style="margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:var(--danger);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Motivo</div><div class="motivo-pill" style="font-size:13px">${r.motivoNoEntrega || '—'}${detalle}</div></div>`;
-    const fotos = Array.isArray(r.fotosAdicionalesUrls) ? r.fotosAdicionalesUrls : (r.fotosAdicionalesUrls ? Object.values(r.fotosAdicionalesUrls) : []);
+    const fotosArr = r.fotosAdicionalesBase64 || r.fotosAdicionalesUrls;
+    const fotos = Array.isArray(fotosArr) ? fotosArr : (fotosArr ? Object.values(fotosArr) : []);
     if (fotos.length) {
       cierreHtml += `<div style="margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Fotos adicionales</div><div class="fotos-grid">${
-        fotos.map(url => `<div class="fotos-thumb"><img src="${url}" onclick="window.open('${url}','_blank')"></div>`).join('')
+        fotos.map((src, i) => `<div class="fotos-thumb"><img src="${src}" onclick="_abrirFotoFull('n${i}',this.src)"></div>`).join('')
       }</div></div>`;
     }
   }
@@ -1188,51 +1192,49 @@ async function confirmarEntrega() {
     const docId = activeDocId;
     const now = new Date().toISOString();
     const rawDataUrl = previewEl.dataset.dataUrl;
-    let fotoUrl = null;
-    let dataUrlCompr = null;
-    if (isOnline) {
-      _showProgressSnack('Comprimiendo foto...');
-      const blob = await _compressImage(rawDataUrl);
-      _showProgressSnack('Subiendo foto 0%');
-      const path = `despachos/${maestroUid}/${docId}/cedible_${Date.now()}.jpg`;
-      fotoUrl = await _uploadBlob(blob, path, 'Subiendo foto');
-      _clearProgressSnack();
-    } else {
-      // Offline: también comprimimos para no explotar la cuota de IndexedDB.
-      const blob = await _compressImage(rawDataUrl);
-      dataUrlCompr = await _blobToDataUrl(blob);
-      fotoUrl = dataUrlCompr;
-    }
+    // La foto del cedible se guarda directamente en Realtime Database como
+    // data URL (base64) para evitar depender de Firebase Storage. La
+    // compresión agresiva garantiza que entre en el límite de 1 MiB por
+    // nodo RTDB. Si en el futuro habilitamos Storage, aquí se podría
+    // reemplazar por upload + url.
+    _showProgressSnack('Comprimiendo foto del cedible...');
+    const blob = await _compressImageForDb(rawDataUrl);
+    const fotoDataUrl = await _blobToDataUrl(blob);
+    _showProgressSnack('Guardando entrega...');
     const hitoId = 'H-' + Date.now();
     const hito = {
       estado:'Entregada', fecha:now,
       lat: currentGPS?.lat || null, lng: currentGPS?.lng || null,
       observaciones: obs,
-      fotoCedibleUrl: fotoUrl,
+      fotoCedibleBase64: fotoDataUrl,
       entregaConObservaciones: !!conObs && !!obs,
       usuario: currentUser.email
     };
+    const basePath = `organizaciones/${maestroUid}/despachos/${docId}`;
     const updates = {
-      [`organizaciones/${maestroUid}/despachos/${docId}/estado`]: 'Entregada',
-      [`organizaciones/${maestroUid}/despachos/${docId}/entregadoEn`]: now,
-      [`organizaciones/${maestroUid}/despachos/${docId}/fotoCedibleUrl`]: fotoUrl,
-      [`organizaciones/${maestroUid}/despachos/${docId}/entregaConObservaciones`]: !!conObs && !!obs,
-      [`organizaciones/${maestroUid}/despachos/${docId}/observacionesCierre`]: obs,
-      [`organizaciones/${maestroUid}/despachos/${docId}/hitos/${hitoId}`]: hito
+      [`${basePath}/estado`]: 'Entregada',
+      [`${basePath}/entregadoEn`]: now,
+      [`${basePath}/fotoCedibleBase64`]: fotoDataUrl,
+      [`${basePath}/entregaConObservaciones`]: !!conObs && !!obs,
+      [`${basePath}/observacionesCierre`]: obs,
+      [`${basePath}/hitos/${hitoId}`]: hito
     };
     if (isOnline) {
       await db.ref().update(updates);
+      _clearProgressSnack();
       showSnack(`Despacho ${docId} marcado como "Entregada".`);
     } else {
-      await queueAction({ tipo:'entrega', docId, updates, hitoId, fotoDataUrl: dataUrlCompr, ts: Date.now() });
+      await queueAction({ tipo:'entrega', docId, updates, hitoId, ts: Date.now() });
       await updateQueueBadge();
+      _clearProgressSnack();
       showSnack('Entrega guardada localmente. Se enviará cuando haya conexión.');
     }
     closeModal('entregarModal');
   } catch(e) {
     _clearProgressSnack();
     console.error('[confirmarEntrega] fallo:', e);
-    alert('Error al confirmar entrega: ' + (e && e.message ? e.message : e));
+    const sz = e && e.message && e.message.includes('too large') ? '\n\nLa foto resultó muy grande incluso tras comprimir. Vuelve a tomarla con menos detalle o mejor iluminación.' : '';
+    alert('Error al confirmar entrega: ' + (e && e.message ? e.message : e) + sz);
   } finally {
     btn.innerHTML = 'Confirmar entrega'; btn.disabled = false;
     _clearProgressSnack();
@@ -1303,29 +1305,17 @@ async function confirmarNoEntregado() {
   try {
     const docId = activeDocId;
     const now = new Date().toISOString();
-    // Subida de fotos adicionales con compresión + progreso + timeout por c/u.
-    const urls = [];
-    const dataUrlsOffline = []; // para cola si estamos offline
-    if (isOnline) {
-      let idx = 0;
-      for (const f of fotosAdicionales) {
-        idx++;
-        _showProgressSnack(`Comprimiendo foto ${idx}/${fotosAdicionales.length}...`);
-        const blob = await _compressImage(f.dataUrl);
-        const path = `despachos/${maestroUid}/${docId}/noentregado_${Date.now()}_${Math.random().toString(36).slice(2,8)}.jpg`;
-        const url = await _uploadBlob(blob, path, `Foto ${idx}/${fotosAdicionales.length}`);
-        urls.push(url);
-      }
-      _clearProgressSnack();
-    } else {
-      // Offline: comprimimos y guardamos como data URL para subir luego.
-      for (const f of fotosAdicionales) {
-        const blob = await _compressImage(f.dataUrl);
-        const d = await _blobToDataUrl(blob);
-        urls.push(d);
-        dataUrlsOffline.push(d);
-      }
+    // Fotos adicionales se guardan como base64 en RTDB (mismo motivo que
+    // la foto del cedible). Comprimimos cada una antes.
+    const fotosBase64 = [];
+    let idx = 0;
+    for (const f of fotosAdicionales) {
+      idx++;
+      _showProgressSnack(`Comprimiendo foto ${idx}/${fotosAdicionales.length}...`);
+      const blob = await _compressImageForDb(f.dataUrl);
+      fotosBase64.push(await _blobToDataUrl(blob));
     }
+    _showProgressSnack('Guardando no-entrega...');
     const hitoId = 'H-' + Date.now();
     const hito = {
       estado:'No Entregada', fecha:now,
@@ -1333,7 +1323,7 @@ async function confirmarNoEntregado() {
       motivoNoEntrega: motivo,
       motivoNoEntregaDetalle: motivo === 'Otro' ? motivoDet : '',
       observaciones: obs,
-      fotosAdicionalesUrls: urls,
+      fotosAdicionalesBase64: fotosBase64,
       usuario: currentUser.email
     };
     const basePath = `organizaciones/${maestroUid}/despachos/${docId}`;
@@ -1343,15 +1333,17 @@ async function confirmarNoEntregado() {
       [`${basePath}/motivoNoEntrega`]: motivo,
       [`${basePath}/motivoNoEntregaDetalle`]: motivo === 'Otro' ? motivoDet : '',
       [`${basePath}/observacionesCierre`]: obs,
-      [`${basePath}/fotosAdicionalesUrls`]: urls,
+      [`${basePath}/fotosAdicionalesBase64`]: fotosBase64,
       [`${basePath}/hitos/${hitoId}`]: hito
     };
     if (isOnline) {
       await db.ref().update(updates);
+      _clearProgressSnack();
       showSnack(`Despacho ${docId} marcado como "No Entregado".`);
     } else {
-      await queueAction({ tipo:'noentrega', docId, updates, hitoId, fotosDataUrls: dataUrlsOffline, ts: Date.now() });
+      await queueAction({ tipo:'noentrega', docId, updates, hitoId, ts: Date.now() });
       await updateQueueBadge();
+      _clearProgressSnack();
       showSnack('No-entrega guardada localmente. Se enviará al volver la conexión.');
     }
     closeModal('noEntregadoModal');
@@ -1407,6 +1399,28 @@ function rejectPhoto() {
   else if (pendingFotoKind === 'adicional') document.getElementById('ne-foto').click();
 }
 
+// Abre una foto ya guardada (del detalle) a pantalla completa, en modo
+// solo-lectura. Reusa el modal #photoFullscreen pero oculta los botones
+// de Guardar/Repetir y agrega uno de Cerrar en su lugar.
+function _abrirFotoFull(_id, src) {
+  const modal = document.getElementById('photoFullscreen');
+  const img = document.getElementById('pf-img');
+  const actions = modal.querySelector('.pf-actions');
+  img.src = src;
+  // Reemplaza los botones por uno de Cerrar.
+  actions.innerHTML = `<button class="pf-btn pf-btn-retry" style="grid-column:span 2" onclick="_cerrarFotoFull()">Cerrar</button>`;
+  modal.classList.add('active');
+}
+function _cerrarFotoFull() {
+  const modal = document.getElementById('photoFullscreen');
+  modal.classList.remove('active');
+  // Restaura los botones por si vuelve a usarse en el flujo "¿imagen ok?".
+  const actions = modal.querySelector('.pf-actions');
+  actions.innerHTML = `
+    <button class="pf-btn pf-btn-retry" onclick="rejectPhoto()">↻ Repetir</button>
+    <button class="pf-btn pf-btn-ok" onclick="acceptPhoto()">✓ Guardar</button>`;
+}
+
 function _fileToDataUrl(file) {
   return new Promise((res, rej) => {
     const r = new FileReader();
@@ -1422,9 +1436,6 @@ async function _dataUrlToBlob(dataUrl) {
 }
 
 // Comprime una imagen (data URL o Blob) a JPEG con tamaño máximo controlado.
-// Las cámaras del celular suelen entregar fotos de 3-10 MB; subir eso en 4G
-// toma minutos y hace parecer que la app "se queda pegada". Comprimimos a
-// ~400-800 KB antes de subir para que la confirmación cierre en segundos.
 async function _compressImage(input, maxDim = 1920, quality = 0.85) {
   const dataUrl = (typeof input === 'string') ? input : await _fileToDataUrl(input);
   const img = await new Promise((res, rej) => {
@@ -1446,6 +1457,32 @@ async function _compressImage(input, maxDim = 1920, quality = 0.85) {
   return await new Promise((res, rej) => {
     canvas.toBlob(b => b ? res(b) : rej(new Error('No se pudo comprimir la imagen.')), 'image/jpeg', quality);
   });
+}
+
+// Comprime hasta que el blob quede bajo ~500 KB — necesario para guardar
+// como base64 en Realtime Database (límite por nodo ~1 MiB; base64 agrega
+// ~33% de overhead, así que apuntamos a ~500 KB raw → ~670 KB base64).
+// Degrada progresivamente dimensión + calidad hasta lograrlo.
+async function _compressImageForDb(input) {
+  const dataUrl = (typeof input === 'string') ? input : await _fileToDataUrl(input);
+  const attempts = [
+    { maxDim: 1280, quality: 0.78 },
+    { maxDim: 1024, quality: 0.70 },
+    { maxDim: 900,  quality: 0.65 },
+    { maxDim: 800,  quality: 0.55 },
+    { maxDim: 640,  quality: 0.50 },
+    { maxDim: 480,  quality: 0.40 }
+  ];
+  const target = 500 * 1024;
+  let lastBlob = null;
+  for (const opts of attempts) {
+    const blob = await _compressImage(dataUrl, opts.maxDim, opts.quality);
+    lastBlob = blob;
+    if (blob.size < target) return blob;
+  }
+  // Último recurso: devolvemos la versión más chica obtenida aunque exceda
+  // el objetivo. _blobToDataUrl luego determinará si cabe o fallará.
+  return lastBlob;
 }
 
 // Sube un blob a Storage con barra de progreso en el snack + timeout de 60s.
@@ -1547,6 +1584,9 @@ function toggleVoice(targetId, statusId) {
 }
 
 // ══ SYNC QUEUE ══
+// Como todas las fotos se guardan como base64 dentro del propio objeto
+// `updates`, al sincronizar sólo hay que aplicar el patch de RTDB — no
+// hay sub-paso de upload a Storage.
 async function syncQueue() {
   const q = await getQueue();
   if (!q.length || !isOnline) return;
@@ -1555,38 +1595,7 @@ async function syncQueue() {
   document.getElementById('syncMsg').textContent = `Sincronizando ${q.length} cambio(s)...`;
   for (const item of q) {
     try {
-      if (item.tipo === 'patch') {
-        await db.ref().update(item.updates);
-      } else if (item.tipo === 'entrega') {
-        let updates = item.updates;
-        if (item.fotoDataUrl && item.fotoDataUrl.startsWith('data:')) {
-          const blob = await _dataUrlToBlob(item.fotoDataUrl);
-          const path = `despachos/${maestroUid}/${item.docId}/cedible_${Date.now()}.jpg`;
-          const url = await _uploadBlob(blob, path, 'Sincronizando cedible');
-          updates = { ...updates };
-          updates[`organizaciones/${maestroUid}/despachos/${item.docId}/fotoCedibleUrl`] = url;
-          if (item.hitoId) updates[`organizaciones/${maestroUid}/despachos/${item.docId}/hitos/${item.hitoId}/fotoCedibleUrl`] = url;
-        }
-        await db.ref().update(updates);
-      } else if (item.tipo === 'noentrega') {
-        let updates = { ...item.updates };
-        if (Array.isArray(item.fotosDataUrls) && item.fotosDataUrls.length) {
-          const urls = [];
-          let idx = 0;
-          for (const d of item.fotosDataUrls) {
-            idx++;
-            if (d && d.startsWith('data:')) {
-              const blob = await _dataUrlToBlob(d);
-              const path = `despachos/${maestroUid}/${item.docId}/noentregado_${Date.now()}_${Math.random().toString(36).slice(2,8)}.jpg`;
-              const url = await _uploadBlob(blob, path, `Sincronizando foto ${idx}/${item.fotosDataUrls.length}`);
-              urls.push(url);
-            } else { urls.push(d); }
-          }
-          updates[`organizaciones/${maestroUid}/despachos/${item.docId}/fotosAdicionalesUrls`] = urls;
-          if (item.hitoId) updates[`organizaciones/${maestroUid}/despachos/${item.docId}/hitos/${item.hitoId}/fotosAdicionalesUrls`] = urls;
-        }
-        await db.ref().update(updates);
-      }
+      await db.ref().update(item.updates);
       await clearQueueItem(item.id);
     } catch(e) { console.warn('Sync error:', e); }
   }
