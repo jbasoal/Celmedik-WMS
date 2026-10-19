@@ -2961,6 +2961,56 @@ function _bodegaPermitida(nombre) {
     return arr.includes(nombre || '');
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// Compatibilidad bodega ↔ patrón de ubicación
+// Convención consolidada (racks físicos):
+//   • CELMEDIK LOS ANGELES usa patrón "L.NN.L" (letra · 2-3 dígitos · letra),
+//     p.ej. "A.001.B", "B.021.A", "E.015.E".
+//   • El resto (CELMEDIK BIODIAL, Bodega Externa, etc.) usa patrón "L-NN"
+//     (letra · guion · dígitos), p.ej. "B-01", "D-14", "A-37", o "PISO".
+// Esta validación evita que un movimiento tome o deposite stock en una
+// ubicación cuyo rack pertenece físicamente a otra bodega (raíz del
+// incidente SAL-2026-01597/01598/01603: stock histórico mal clasificado
+// por carga masiva ENT-2026-00009 que terminó dejando pallets "en"
+// BIODIAL con rótulo de racks de LOS ANGELES).
+function _ubicEsPatronLA(ubic) {
+    return /^[A-Z]\.\d{2,3}\.[A-Z]$/i.test(String(ubic || '').trim());
+}
+function _bodegaEsLA(bodega) {
+    return /CELMEDIK\s+LOS\s*ANGELES/i.test(String(bodega || ''));
+}
+// Devuelve null si (bodega, ubic) es consistente, o un string con el
+// motivo (listo para mostrar al usuario) si no lo es. Ubicación vacía
+// y "PISO" se consideran siempre compatibles (buffer común).
+function _motivoUbicIncompatibleConBodega(bodega, ubic) {
+    const u = String(ubic || '').trim();
+    if (!u) return null;
+    if (u.toUpperCase() === 'PISO') return null;
+    const esLA_ubic = _ubicEsPatronLA(u);
+    const esLA_bod  = _bodegaEsLA(bodega);
+    if (esLA_ubic === esLA_bod) return null;
+    if (esLA_ubic && !esLA_bod) {
+        return `la ubicación «${u}» tiene formato de CELMEDIK LOS ANGELES (letra·dígitos·letra), pero la bodega es «${bodega || '—'}»`;
+    }
+    return `la ubicación «${u}» tiene formato de ${bodega || 'otra bodega'} (letra-dígitos / PISO), pero la bodega es «CELMEDIK LOS ANGELES»`;
+}
+// Recorre un conjunto de ítems (y opcionalmente su ubicacionOrigen) y
+// devuelve el arreglo de incompatibilidades encontradas, con rótulo
+// listo para el usuario. items: [{sku,lote,ubicacion,ubicacionOrigen?}].
+function _detectarUbicIncompatibles(bodega, items, opts) {
+    const incluirOrigen = !!(opts && opts.incluirOrigen);
+    const out = [];
+    (items || []).forEach(it => {
+        const d = _motivoUbicIncompatibleConBodega(bodega, it.ubicacion || '');
+        if (d) out.push(`SKU ${it.sku || '—'} · Lote ${it.lote || '—'}${it.ubicacion ? ' · dest. ' + it.ubicacion : ''} — ${d}`);
+        if (incluirOrigen && it.ubicacionOrigen) {
+            const o = _motivoUbicIncompatibleConBodega(bodega, it.ubicacionOrigen);
+            if (o) out.push(`SKU ${it.sku || '—'} · Lote ${it.lote || '—'} · origen ${it.ubicacionOrigen} — ${o}`);
+        }
+    });
+    return out;
+}
+
 // Cache de pares "SKU|LOTE" presentes en cualquiera de las bodegas permitidas.
 // Se invalida junto con el cache de stock cuando cambian movimientos/devoluciones.
 let _bodegaFijaLoteCache = null;
@@ -5554,7 +5604,10 @@ function _stockDisponibleUbicPorLote(sku, lote, bodega) {
     });
     return Object.values(stock)
         .filter(s => s.sku === sku && s.lote === lote && (s.bodega||'') === bodega
-                  && (parseFloat(s.cantidad)||0) > 0 && getLoteStatus(s) === 'Aprobado')
+                  && (parseFloat(s.cantidad)||0) > 0 && getLoteStatus(s) === 'Aprobado'
+                  // Oculta ubicaciones cuyo patrón no corresponde a la bodega:
+                  // stock mal clasificado histórico no debe ofrecerse en salidas.
+                  && !_motivoUbicIncompatibleConBodega(bodega, s.ubicacion || ''))
         .map(s => {
             const base  = parseFloat(s.cantidad) || 0;
             const enDoc = enDocPorUbic[s.ubicacion || ''] || 0;
@@ -6260,6 +6313,30 @@ function addItemToDoc() {
     if (!sku)   { showFormError('mi-err', 'Ingrese el SKU del producto.'); return; }
     if (!data.productos[sku]) { showFormError('mi-err', `SKU "${sku}" no existe en el maestro de productos.`); return; }
     if (!qty || qty <= 0) { showFormError('mi-err', 'La cantidad debe ser mayor a cero.'); return; }
+
+    // ── Guardrail temprano: ubicación coherente con bodega del documento ──
+    // Se chequea aquí (al agregar la línea al borrador) para que el usuario
+    // vea el error antes de armar el documento completo. El mismo guardrail
+    // vuelve a correr en saveDocumento como barrera final.
+    {
+        const _bodMovDoc = (document.getElementById('md-bodega')?.value || '').trim();
+        if (_bodMovDoc) {
+            const _ubicDest = (document.getElementById('mi-ubic-dest')?.value || miUbic || '').trim();
+            const _motDest = _motivoUbicIncompatibleConBodega(_bodMovDoc, _ubicDest);
+            if (_motDest) {
+                showFormError('mi-err', `❌ No se puede usar esta ubicación: ${_motDest}.`);
+                return;
+            }
+            if (tipo === 'CambioUbicacion') {
+                const _ubicOri = (document.getElementById('mi-ubic')?.value || '').trim();
+                const _motOri = _motivoUbicIncompatibleConBodega(_bodMovDoc, _ubicOri);
+                if (_motOri) {
+                    showFormError('mi-err', `❌ Ubicación origen inválida para esta bodega: ${_motOri}.`);
+                    return;
+                }
+            }
+        }
+    }
 
     // ── MULTI-LOTE (Opción D) — Salida de concentrado con pool activo
     if (_mlPool && _mlPool.activo && _mlPool.sku === sku && _mlPool.items.length) {
@@ -7060,6 +7137,19 @@ function saveDocumento() {
     }
     if (!movDocItems.length) { showFormError('movModal-err', 'Debe agregar al menos un producto al documento.'); return; }
     if (tipo === 'Salida' && !fechaDespacho) { showFormError('movModal-err', 'Debe indicar la fecha de despacho.'); return; }
+    // ── Guardrail de consistencia bodega ↔ patrón de ubicación ──
+    // Evita que un movimiento retire o deposite stock en una ubicación
+    // cuyo rack pertenece físicamente a otra bodega (raíz del incidente
+    // SAL-2026-01597/01598/01603). Aplica a todos los tipos que persisten
+    // stock asociado a una (bodega, ubicacion).
+    if (['Entrada','Salida','Devolución','Ajuste','CambioUbicacion'].includes(tipo)) {
+        const incompat = _detectarUbicIncompatibles(bodega, movDocItems, { incluirOrigen: tipo === 'CambioUbicacion' });
+        if (incompat.length) {
+            showFormError('movModal-err',
+                `❌ Ubicaciones incompatibles con la bodega «${bodega}»:\n\n${incompat.join('\n')}\n\nCorrija cada línea o cambie la bodega del documento. Si el stock está físicamente en una ubicación de otra bodega, primero haga una transferencia (Cambio de Ubicación con bodega destino correcta).`);
+            return;
+        }
+    }
     // Segunda barrera de la restricción CELMEDIK BIODIAL: cubre el caso en que
     // el usuario haya cambiado la bodega después de agregar los ítems.
     if (tipo === 'Entrada' && bodega.trim().toUpperCase() === 'CELMEDIK BIODIAL') {
@@ -8437,6 +8527,25 @@ async function guardarAjusteMov() {
     const ref0 = _ajMovItems[0]?.original || {};
     const fechaAjuste = new Date().toISOString();
     const ajusteId = db.ref(`usuarios/${uid}/ajustesMovimiento`).push().key;
+
+    // Guardrail bodega ↔ patrón de ubicación sobre el estado editado.
+    // Evita que un ajuste de movimiento deje una línea con ubicación
+    // inconsistente respecto a la bodega del documento.
+    {
+        const items = (_ajMovItems || []).map(it => ({
+            sku: it.editado?.sku || it.original?.sku || '',
+            lote: it.editado?.lote || it.original?.lote || '',
+            ubicacion: it.editado?.ubicacion || '',
+            ubicacionOrigen: it.editado?.ubicacionOrigen || ''
+        }));
+        const incluirOrigen = (ref0?.tipo === 'CambioUbicacion');
+        const incompat = _detectarUbicIncompatibles(h.bodega || '', items, { incluirOrigen });
+        if (incompat.length) {
+            try { _setBtnLoading('btn-save-ajmov', false); } catch(_){}
+            alert(`❌ No se puede guardar el ajuste — ubicaciones incompatibles con la bodega «${h.bodega || '—'}»:\n\n${incompat.join('\n')}\n\nCorrija cada línea o cambie la bodega del documento.`);
+            return;
+        }
+    }
 
     // N° de transacción del AJUSTE — distinto del N° Movimiento original.
     // Aparece en el PDF y en el historial para trazabilidad completa.
@@ -11111,6 +11220,11 @@ function saveAjuste() {
     if (!bodega)                 { showFormError('ajusteModal-err','Seleccione la bodega.'); return; }
     if (!qty || qty <= 0)        { showFormError('ajusteModal-err','La cantidad debe ser mayor a cero.'); return; }
     if (!obs)                    { showFormError('ajusteModal-err','Ingrese el motivo del ajuste.'); return; }
+    // Guardrail bodega ↔ patrón de ubicación.
+    {
+        const _mot = _motivoUbicIncompatibleConBodega(bodega, ubic);
+        if (_mot) { showFormError('ajusteModal-err', `❌ ${_mot}. Corrija la ubicación o cambie la bodega.`); return; }
+    }
     if (ajusteTipo === 'Negativo') {
         const stockActual = calcStock();
         // Acotamos a la bodega/ubicación del ajuste — antes se sumaban todas las
