@@ -11221,9 +11221,28 @@ function saveAjuste() {
     if (!qty || qty <= 0)        { showFormError('ajusteModal-err','La cantidad debe ser mayor a cero.'); return; }
     if (!obs)                    { showFormError('ajusteModal-err','Ingrese el motivo del ajuste.'); return; }
     // Guardrail bodega ↔ patrón de ubicación.
+    // - Ajuste POSITIVO: nunca puede crear una nueva combinación cross-pattern.
+    // - Ajuste NEGATIVO: puede REDUCIR stock cross-pattern existente (corrección
+    //   de datos históricos mal clasificados por cargas masivas previas). Si no
+    //   hay stock real en esa combinación, se bloquea igual.
     {
         const _mot = _motivoUbicIncompatibleConBodega(bodega, ubic);
-        if (_mot) { showFormError('ajusteModal-err', `❌ ${_mot}. Corrija la ubicación o cambie la bodega.`); return; }
+        if (_mot) {
+            if (ajusteTipo === 'Negativo') {
+                const _stAct = calcStock();
+                const _disp = Object.values(_stAct)
+                    .filter(s => s.sku === sku && s.lote === lote && (s.bodega||'') === bodega && (s.ubicacion||'') === ubic)
+                    .reduce((a, s) => a + (parseFloat(s.cantidad)||0), 0);
+                if (_disp <= 0) {
+                    showFormError('ajusteModal-err', `❌ ${_mot}. Esta combinación no tiene stock para reducir.`);
+                    return;
+                }
+                // Permitido: es una corrección legítima. Se registra en auditoría.
+            } else {
+                showFormError('ajusteModal-err', `❌ ${_mot}. Corrija la ubicación o cambie la bodega.`);
+                return;
+            }
+        }
     }
     if (ajusteTipo === 'Negativo') {
         const stockActual = calcStock();
