@@ -368,7 +368,15 @@ tbody tr:hover td{background:rgba(0,112,242,0.04);}
 
           <!-- FILTERS -->
           <div class="filter-bar">
-            <input type="date" id="fFecha" class="form-input" onchange="renderDespachos()" title="Fecha despacho">
+            <div style="display:flex;align-items:center;gap:4px;background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);padding:2px 6px;">
+              <span style="font-size:11px;color:var(--text3);font-weight:600;padding:0 4px;">Desde</span>
+              <input type="date" id="fFechaDesde" class="form-input" onchange="renderDespachos()" style="border:none;padding:6px 4px;min-width:130px;font-size:12.5px" title="Fecha desde">
+              <span style="font-size:11px;color:var(--text3);font-weight:600;padding:0 4px;">Hasta</span>
+              <input type="date" id="fFechaHasta" class="form-input" onchange="renderDespachos()" style="border:none;padding:6px 4px;min-width:130px;font-size:12.5px" title="Fecha hasta">
+            </div>
+            <select id="fBodega" class="form-select" onchange="renderDespachos()">
+              <option value="">Todas las bodegas</option>
+            </select>
             <select id="fEstado" class="form-select" onchange="renderDespachos()">
               <option value="">Todos los estados</option>
               <option value="Pendiente">Pendiente (sin asignar)</option>
@@ -839,7 +847,10 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('userEmail').textContent = u.email;
     document.getElementById('userInitial').textContent = u.email[0].toUpperCase();
     document.getElementById('userRole').textContent = `Perfil: ${userPerfil}`;
-    document.getElementById('fFecha').value = new Date().toISOString().split('T')[0];
+    // Rango por defecto: hoy. El usuario puede ampliarlo con los dos inputs.
+    const hoy = new Date().toISOString().split('T')[0];
+    document.getElementById('fFechaDesde').value = hoy;
+    document.getElementById('fFechaHasta').value = hoy;
     attachListeners();
     showScreen('app');
   });
@@ -882,6 +893,7 @@ function attachListeners() {
       if (key === 'conductores') { renderConductores(); populateConductorSelects(); renderDespachos(); renderParciales(); }
       if (key === 'vehiculos') { renderVehiculos(); populateVehiculoSelects(); }
       if (key === 'movimientos') { renderSalidasPendientes(); renderDespachos(); renderParciales(); updateKPIs(); updateBadges(); }
+      if (key === 'bodegas') { populateBodegaFilter(); }
       if (key === 'despachos') { renderDespachos(); renderParciales(); updateKPIs(); updateBadges(); }
       if (key === 'notificaciones') { renderNotificaciones(); updateBadges(); }
     });
@@ -1063,24 +1075,54 @@ function updateBadges() {
 
 // ══ DESPACHOS ══
 function clearFiltros() {
-  document.getElementById('fFecha').value = '';
+  document.getElementById('fFechaDesde').value = '';
+  document.getElementById('fFechaHasta').value = '';
   document.getElementById('fEstado').value = '';
   document.getElementById('fConductor').value = '';
+  const fB = document.getElementById('fBodega'); if (fB) fB.value = '';
   const fZ = document.getElementById('fZona'); if (fZ) fZ.value = '';
   const fD = document.getElementById('fDoc'); if (fD) fD.value = '';
   renderDespachos();
 }
 
+// Pobla el filtro de bodegas con las bodegas registradas en el WMS. Preserva
+// la selección actual si el valor sigue siendo válido tras un refresh.
+function populateBodegaFilter() {
+  const sel = document.getElementById('fBodega');
+  if (!sel) return;
+  const cur = sel.value;
+  const bodegas = Object.values(data.bodegas || {})
+    .map(b => b.nombre)
+    .filter(Boolean)
+    .sort((a,b) => a.localeCompare(b));
+  sel.innerHTML = '<option value="">Todas las bodegas</option>' +
+    bodegas.map(n => `<option value="${n}">${n}</option>`).join('');
+  if (cur && bodegas.includes(cur)) sel.value = cur;
+}
+
 function renderDespachos() {
   const tb = document.getElementById('tDespachos');
   if (!tb) return;
-  const fFecha = document.getElementById('fFecha')?.value || '';
+  const fFechaDesde = document.getElementById('fFechaDesde')?.value || '';
+  const fFechaHasta = document.getElementById('fFechaHasta')?.value || '';
   const fEstado = document.getElementById('fEstado')?.value || '';
   const fConductor = document.getElementById('fConductor')?.value || '';
+  const fBodega = document.getElementById('fBodega')?.value || '';
   const fZona = (document.getElementById('fZona')?.value || '').toLowerCase();
   const fDoc  = (document.getElementById('fDoc')?.value || '').toLowerCase();
   let rows = Object.values(_buildDespachos());
-  if (fFecha) rows = rows.filter(o => (o.fechaDespacho || o.fecha || '').slice(0,10) === fFecha);
+  // Rango de fechas (inclusivo). Si solo se setea un extremo, aplica como
+  // límite abierto por el otro lado.
+  if (fFechaDesde || fFechaHasta) {
+    rows = rows.filter(o => {
+      const f = (o.fechaDespacho || o.fecha || '').slice(0,10);
+      if (!f) return false;
+      if (fFechaDesde && f < fFechaDesde) return false;
+      if (fFechaHasta && f > fFechaHasta) return false;
+      return true;
+    });
+  }
+  if (fBodega) rows = rows.filter(o => (o.bodega||'') === fBodega);
   if (fEstado) rows = rows.filter(o => o.estado === fEstado);
   if (fConductor) {
     // El filtro usa conductorId cuando el despacho se tomó desde la app;
@@ -1098,6 +1140,13 @@ function renderDespachos() {
     const cedibleCell = o.cedibleSrc
       ? `<a class="cedible-link" onclick="viewCedible('${safeDoc}')" title="Ver / descargar cedible">📄 Ver</a>`
       : '<span class="cedible-none">—</span>';
+    // Botón "Reasignar conductor": disponible mientras el despacho no esté
+    // ya cerrado definitivamente. Reutiliza el modal de reasignar/cerrar
+    // forzado al modo "reasignar".
+    const puedeReasignar = o.estado !== 'Cerrada';
+    const btnReasignar = puedeReasignar
+      ? `<button class="btn btn-icon btn-sm btn-warning-sm" onclick="openReasignarConductor('${safeDoc}')" title="Reasignar conductor" style="margin-left:4px">⇄</button>`
+      : '';
     return `<tr>
       <td class="text-mono" style="color:var(--accent2);font-size:11.5px;font-weight:600">${o.documentoId}</td>
       <td style="font-weight:500">${o.cliente||'—'}</td>
@@ -1106,11 +1155,20 @@ function renderDespachos() {
       <td>${estadoBadge(o.estado, o)}</td>
       <td style="font-size:11.5px">${fmtDate(o.fechaDespacho || o.fecha)}</td>
       <td>${cedibleCell}</td>
-      <td>
+      <td style="white-space:nowrap">
         <button class="btn btn-icon btn-sm" onclick="openDetalleDespacho('${safeDoc}')" title="Ver detalle">🔍</button>
+        ${btnReasignar}
       </td>
     </tr>`;
   }).join('');
+}
+
+// Abre el modal de reasignar/cerrar enfocado en reasignación: oculta la
+// opción "cerrar definitivamente" para que la acción desde esta tabla sea
+// únicamente un cambio de conductor (la opción cerrar sigue disponible en
+// la vista Parciales / No entregados).
+function openReasignarConductor(docId) {
+  _rcInit([docId], { soloReasignar: true });
 }
 
 function estadoBadge(estado, o) {
@@ -1542,10 +1600,14 @@ function openReasignarCerrarPorDoc(docId) {
   _rcInit([docId]);
 }
 
-function _rcInit(docIds) {
+function _rcInit(docIds, opts) {
+  const soloReasignar = !!(opts && opts.soloReasignar);
   const todos = _buildDespachos();
   const detalles = docIds.map(d => todos[d]).filter(Boolean);
   if (!detalles.length) { showToast('No se encontraron los despachos seleccionados.', 'danger'); return; }
+  // En modo "solo reasignar" cambiamos el título y escondemos la opción cerrar.
+  document.querySelector('#reasignarCerrarModal .modal-title').textContent = soloReasignar
+    ? 'Reasignar conductor' : 'Reasignar o cerrar despacho(s)';
   document.getElementById('rc-count-sub').textContent = `${detalles.length} despacho${detalles.length>1?'s':''} seleccionado${detalles.length>1?'s':''}`;
   const listHtml = detalles.map(o => `
     <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px dashed var(--border);">
@@ -1561,6 +1623,12 @@ function _rcInit(docIds) {
   document.getElementById('rc-err').style.display = 'none';
   const radioReas = document.querySelector('input[name="rc-accion"][value="reasignar"]');
   if (radioReas) radioReas.checked = true;
+  // En modo "solo reasignar" ocultamos la opción cerrar y el título de la
+  // sección de acción (queda solo el bloque de selección de transportista).
+  const optCerrar = document.getElementById('rc-opt-cerrar');
+  const optReas  = document.getElementById('rc-opt-reasignar');
+  if (optCerrar) optCerrar.style.display = soloReasignar ? 'none' : '';
+  if (optReas)   optReas.style.display   = soloReasignar ? 'none' : '';
   _rcToggleAccion();
   // Pobla el select de transportistas con las mismas opciones del dropdown
   // "Transportado por" al registrar una Salida (conductores + genéricas).
