@@ -215,6 +215,20 @@ tbody tr:hover td{background:rgba(0,112,242,0.04);}
 .chk-cell{width:36px;text-align:center;}
 .row-selected td{background:var(--accent-dim)!important;}
 
+/* MULTI-SELECT FILTER (filter-bar) */
+.ms-filter{position:relative;}
+.ms-filter-btn{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:200px;padding:8px 12px;background:#FFF;border:1px solid var(--border2);border-radius:var(--radius);font-size:12.5px;color:var(--text);font-family:var(--font);cursor:pointer;transition:border-color .15s;}
+.ms-filter-btn:hover{border-color:var(--accent);}
+.ms-filter-panel{display:none;position:absolute;top:calc(100% + 4px);left:0;z-index:60;min-width:240px;max-height:320px;overflow-y:auto;background:#FFF;border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 6px 20px rgba(0,0,0,.14);padding:6px;}
+.ms-filter-panel.active{display:block;}
+.ms-filter-panel .ms-actions{display:flex;gap:6px;padding:4px 2px 8px;margin-bottom:4px;border-bottom:1px solid var(--border);}
+.ms-filter-panel .ms-actions button{flex:1;background:var(--bg2);border:1px solid var(--border);padding:4px 8px;border-radius:4px;font-size:11px;cursor:pointer;color:var(--text2);font-family:var(--font);}
+.ms-filter-panel .ms-actions button:hover{background:var(--bg3);color:var(--text);}
+.ms-filter-panel label{display:flex;align-items:center;gap:8px;padding:6px 10px;cursor:pointer;font-size:13px;color:var(--text);border-radius:4px;}
+.ms-filter-panel label:hover{background:var(--bg2);}
+.ms-filter-panel label input{margin:0;flex-shrink:0;}
+.ms-filter-panel .ms-empty{color:var(--text3);font-size:12px;padding:12px 10px;text-align:center;}
+
 /* MODAL radio opciones */
 .radio-opt{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:8px;cursor:pointer;transition:all .15s;}
 .radio-opt:hover{border-color:var(--accent);background:var(--accent-dim);}
@@ -387,9 +401,13 @@ tbody tr:hover td{background:rgba(0,112,242,0.04);}
               <option value="No Entregada">No Entregada</option>
               <option value="Cerrada">Cerrada</option>
             </select>
-            <select id="fConductor" class="form-select" onchange="renderDespachos()">
-              <option value="">Todos los conductores</option>
-            </select>
+            <div id="fConductorWrap" class="ms-filter">
+              <button type="button" id="fConductorBtn" class="ms-filter-btn" onclick="toggleConductorFilter(event)">
+                <span id="fConductorLabel">Todos los conductores</span>
+                <span style="color:var(--text3);font-size:10px;">▾</span>
+              </button>
+              <div id="fConductorPanel" class="ms-filter-panel"></div>
+            </div>
             <input type="text" id="fDoc" class="form-input" placeholder="N° factura / guía..." oninput="renderDespachos()" style="min-width:160px">
             <input type="text" id="fZona" class="form-input" placeholder="Ubicación..." oninput="renderDespachos()" style="min-width:140px">
             <button class="btn btn-icon btn-sm" onclick="clearFiltros()">✕ Limpiar</button>
@@ -832,6 +850,9 @@ let _selectedSalidaDocId = null;
 let _secondaryApp = null;
 // Selección múltiple en la página Parciales / No entregados.
 let _selectedParciales = new Set();
+// Set de conductorIds seleccionados en el filtro multi-select de Despachos
+// (vacío = "todos los conductores").
+let _conductorFilter = new Set();
 
 // ══ AUTH ══
 document.addEventListener('DOMContentLoaded', () => {
@@ -1078,7 +1099,8 @@ function clearFiltros() {
   document.getElementById('fFechaDesde').value = '';
   document.getElementById('fFechaHasta').value = '';
   document.getElementById('fEstado').value = '';
-  document.getElementById('fConductor').value = '';
+  _conductorFilter = new Set();
+  _renderConductorFilterPanel();
   const fB = document.getElementById('fBodega'); if (fB) fB.value = '';
   const fZ = document.getElementById('fZona'); if (fZ) fZ.value = '';
   const fD = document.getElementById('fDoc'); if (fD) fD.value = '';
@@ -1106,7 +1128,6 @@ function renderDespachos() {
   const fFechaDesde = document.getElementById('fFechaDesde')?.value || '';
   const fFechaHasta = document.getElementById('fFechaHasta')?.value || '';
   const fEstado = document.getElementById('fEstado')?.value || '';
-  const fConductor = document.getElementById('fConductor')?.value || '';
   const fBodega = document.getElementById('fBodega')?.value || '';
   const fZona = (document.getElementById('fZona')?.value || '').toLowerCase();
   const fDoc  = (document.getElementById('fDoc')?.value || '').toLowerCase();
@@ -1124,12 +1145,19 @@ function renderDespachos() {
   }
   if (fBodega) rows = rows.filter(o => (o.bodega||'') === fBodega);
   if (fEstado) rows = rows.filter(o => o.estado === fEstado);
-  if (fConductor) {
-    // El filtro usa conductorId cuando el despacho se tomó desde la app;
-    // fallback: compara contra el nombreOpcion para despachos aún no tomados.
-    const condRef = data.conductores[fConductor];
-    const nomOp = condRef?.nombreOpcion || '';
-    rows = rows.filter(o => o.conductorId === fConductor || (nomOp && o.transportadoPor === nomOp));
+  // Multi-select de conductores (vacío = no filtra). Coincide por conductorId
+  // OR por nombreOpcion (para despachos asignados vía Transportado por aún
+  // no tomados en la app).
+  if (_conductorFilter && _conductorFilter.size) {
+    const nombres = new Set();
+    _conductorFilter.forEach(id => {
+      const c = data.conductores[id];
+      if (c && c.nombreOpcion) nombres.add(c.nombreOpcion.trim());
+    });
+    rows = rows.filter(o =>
+      (o.conductorId && _conductorFilter.has(o.conductorId)) ||
+      (o.transportadoPor && nombres.has((o.transportadoPor || '').trim()))
+    );
   }
   if (fZona) rows = rows.filter(o => (o.destino||'').toLowerCase().includes(fZona));
   if (fDoc)  rows = rows.filter(o => (o.documentoId||'').toLowerCase().includes(fDoc));
@@ -1361,7 +1389,13 @@ function closeModal(id) {
   if (id === 'detalleOTModal' && _detMap) { _detMap.remove(); _detMap = null; }
 }
 
-document.addEventListener('click', e => { if (e.target.classList.contains('modal')) { const id = e.target.id; if(id) closeModal(id); } });
+document.addEventListener('click', e => {
+  if (e.target.classList.contains('modal')) { const id = e.target.id; if(id) closeModal(id); }
+  // Cierra el panel del multi-select de conductores al hacer click afuera.
+  const wrap = document.getElementById('fConductorWrap');
+  const panel = document.getElementById('fConductorPanel');
+  if (wrap && panel && !wrap.contains(e.target)) panel.classList.remove('active');
+});
 
 function crearOT() {
   const errEl = document.getElementById('nuevaOT-err');
@@ -1802,20 +1836,90 @@ async function confirmReasignarCerrar() {
 
 // ══ CONDUCTORES ══
 function populateConductorSelects() {
-  ['ot-conductor','fConductor'].forEach(id => {
-    const sel = document.getElementById(id);
-    if (!sel) return;
+  // ot-conductor: dropdown clásico del modal "Nueva OT" (legacy; se conserva
+  // por compatibilidad). Sólo muestra activos.
+  const sel = document.getElementById('ot-conductor');
+  if (sel) {
     const cur = sel.value;
-    const isFilter = id === 'fConductor';
-    sel.innerHTML = isFilter ? '<option value="">Todos los conductores</option>' : '<option value="">Seleccionar...</option>';
+    sel.innerHTML = '<option value="">Seleccionar...</option>';
     Object.entries(data.conductores).forEach(([k,c]) => {
-      if (!c.activo && !isFilter) return;
+      if (c.activo === false) return;
       const o = document.createElement('option');
-      o.value = k; o.textContent = c.nombre + (c.activo === false ? ' (inactivo)' : '');
+      o.value = k; o.textContent = c.nombre;
       sel.appendChild(o);
     });
     if (cur) sel.value = cur;
-  });
+  }
+  // fConductor: nuevo multi-select con checkboxes (sólo activos).
+  _renderConductorFilterPanel();
+}
+
+// Renderiza el panel del filtro multi-select de conductores. Muestra sólo
+// conductores activos y preserva la selección vigente. Si algún conductor
+// seleccionado dejó de estar activo, lo quitamos del filtro para no dejar
+// IDs huérfanos.
+function _renderConductorFilterPanel() {
+  const panel = document.getElementById('fConductorPanel');
+  if (!panel) return;
+  const activos = Object.entries(data.conductores || {})
+    .filter(([_, c]) => c && c.activo !== false)
+    .sort((a, b) => (a[1].nombre || '').localeCompare(b[1].nombre || ''));
+  const activeIds = new Set(activos.map(([k]) => k));
+  [..._conductorFilter].forEach(id => { if (!activeIds.has(id)) _conductorFilter.delete(id); });
+  if (!activos.length) {
+    panel.innerHTML = '<div class="ms-empty">Sin conductores activos registrados.</div>';
+    _updateConductorFilterBtn();
+    return;
+  }
+  const actions = `
+    <div class="ms-actions">
+      <button type="button" onclick="_conductorFilterSetAll(true)">Todos</button>
+      <button type="button" onclick="_conductorFilterSetAll(false)">Ninguno</button>
+    </div>`;
+  const items = activos.map(([k, c]) => {
+    const checked = _conductorFilter.has(k) ? 'checked' : '';
+    const nameEsc = String(c.nombre || '').replace(/</g, '&lt;');
+    return `<label><input type="checkbox" value="${k}" onchange="_toggleConductorFilter('${k}', this.checked)" ${checked}><span>${nameEsc}</span></label>`;
+  }).join('');
+  panel.innerHTML = actions + items;
+  _updateConductorFilterBtn();
+}
+
+function _toggleConductorFilter(id, checked) {
+  if (checked) _conductorFilter.add(id); else _conductorFilter.delete(id);
+  _updateConductorFilterBtn();
+  renderDespachos();
+}
+
+function _conductorFilterSetAll(allSelected) {
+  _conductorFilter = new Set();
+  if (allSelected) {
+    Object.entries(data.conductores || {})
+      .filter(([_, c]) => c && c.activo !== false)
+      .forEach(([k]) => _conductorFilter.add(k));
+  }
+  _renderConductorFilterPanel();
+  renderDespachos();
+}
+
+function _updateConductorFilterBtn() {
+  const lbl = document.getElementById('fConductorLabel');
+  if (!lbl) return;
+  const n = _conductorFilter.size;
+  const total = Object.values(data.conductores || {}).filter(c => c && c.activo !== false).length;
+  if (!n || n === total) lbl.textContent = 'Todos los conductores';
+  else if (n === 1) {
+    const id = [..._conductorFilter][0];
+    lbl.textContent = (data.conductores[id] && data.conductores[id].nombre) || '1 conductor';
+  } else lbl.textContent = `${n} conductores seleccionados`;
+}
+
+// Abre/cierra el panel. Se cierra al clickear fuera (listener global al final).
+function toggleConductorFilter(e) {
+  if (e) e.stopPropagation();
+  const panel = document.getElementById('fConductorPanel');
+  if (!panel) return;
+  panel.classList.toggle('active');
 }
 
 function renderConductores() {
