@@ -243,6 +243,22 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 
 /* ENTREGADA con obs — badge */
 .obs-badge{display:inline-block;background:var(--warning-dim);color:#B85700;border:1px solid rgba(233,115,12,.3);border-radius:4px;padding:1px 7px;font-size:10px;font-weight:700;margin-left:6px;}
+
+/* ENTREGA PARCIAL — badge */
+.parcial-badge{display:inline-block;background:rgba(0,112,242,0.12);color:#0854A0;border:1px solid rgba(0,112,242,.3);border-radius:4px;padding:1px 7px;font-size:10px;font-weight:700;margin-left:6px;}
+
+/* TIMESTAMPS de cada etapa en la card */
+.ot-timestamps{font-size:11.5px;color:var(--text3);margin-top:8px;line-height:1.6;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px;}
+.ot-timestamps div{display:flex;align-items:center;gap:6px;}
+.ot-timestamps .ts-ico{width:14px;display:inline-block;text-align:center;flex-shrink:0;}
+.ot-timestamps .ts-label{color:var(--text2);font-weight:600;}
+.ot-timestamps .ts-val{color:var(--text);font-family:var(--mono);font-size:11px;}
+
+/* FOTOS DE ENTREGA (grid 2x2, max 4) */
+.ent-fotos-hint{font-size:11.5px;color:var(--text3);margin-bottom:6px;line-height:1.4;}
+.ent-fotos-hint strong{color:var(--text2);}
+.foto-add.cedible{border-color:var(--accent);color:var(--accent);background:var(--accent-dim);}
+.fotos-thumb .ced-tag{position:absolute;bottom:2px;left:2px;background:rgba(0,112,242,.9);color:white;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.3px;}
 </style>
 </head>
 <body>
@@ -354,11 +370,11 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
   </div>
 </div>
 
-<!-- ═══ MODAL: ENTREGAR (foto cedible obligatoria + obs opcional) ═══ -->
+<!-- ═══ MODAL: ENTREGAR (foto cedible obligatoria + hasta 4 fotos + obs opcional/obligatoria según modo) ═══ -->
 <div id="entregarModal" class="modal">
   <div class="modal-sheet">
     <div class="modal-handle"></div>
-    <div class="modal-title">Confirmar entrega</div>
+    <div class="modal-title" id="entregar-title">Confirmar entrega</div>
     <div id="entregar-info" style="background:#F5F5F5;border-radius:8px;padding:12px;margin-bottom:14px;font-size:12.5px;line-height:1.6;color:var(--text2);"></div>
 
     <div id="entregar-sync-warn" class="sync-banner" style="display:none">
@@ -366,14 +382,14 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
     </div>
 
     <div class="form-group">
-      <label class="form-label">Foto del cedible firmado <span style="color:var(--danger)">*</span></label>
-      <input type="file" id="ent-foto" accept="image/*" capture="environment" onchange="onPhotoChosen(this,'cedible')" style="display:none">
-      <button type="button" onclick="document.getElementById('ent-foto').click()" class="btn btn-ghost" style="margin-bottom:4px;">📷 Tomar foto del cedible</button>
-      <img id="ent-foto-preview" class="photo-preview" src="" style="display:none;max-height:220px;object-fit:cover;">
+      <label class="form-label">Fotos de la entrega <span style="color:var(--danger)">*</span></label>
+      <div class="ent-fotos-hint">La <strong>primera foto</strong> debe ser del cedible firmado (obligatoria). Puedes agregar <strong>hasta 4 fotos</strong> en total (producto, lugar, puerta, etc.).</div>
+      <input type="file" id="ent-foto" accept="image/*" capture="environment" onchange="onPhotoChosen(this,'entrega')" style="display:none">
+      <div class="fotos-grid" id="ent-fotos-grid"></div>
       <div id="ent-foto-hint" class="hint-required" style="display:none">La foto del cedible firmado es obligatoria.</div>
     </div>
 
-    <label class="toggle-row" for="ent-obs-toggle">
+    <label class="toggle-row" for="ent-obs-toggle" id="ent-obs-toggle-row">
       <span class="toggle-sw">
         <input type="checkbox" id="ent-obs-toggle" onchange="toggleEntObs(this.checked)">
         <span class="track"></span><span class="thumb"></span>
@@ -382,11 +398,13 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
     </label>
 
     <div class="form-group" id="ent-obs-group" style="display:none">
+      <label class="form-label" id="ent-obs-label" style="display:none">Observaciones <span style="color:var(--danger)">*</span></label>
       <div class="voice-row">
         <textarea class="form-textarea" id="ent-obs" placeholder="Observaciones de la entrega..." rows="3"></textarea>
         <button type="button" class="btn-voice" id="btn-voice-ent" onclick="toggleVoice('ent-obs','voice-status-ent')" title="Dictar observaciones">🎤</button>
       </div>
       <div class="voice-status" id="voice-status-ent"></div>
+      <div id="ent-obs-hint" class="hint-required" style="display:none">Las observaciones son obligatorias para una entrega parcial.</div>
     </div>
 
     <div style="margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
@@ -402,6 +420,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 </div>
 
 <!-- ═══ MODAL: NO ENTREGADO (motivo + fotos adicionales) ═══ -->
+<!-- (sin cambios respecto al bloque original de abajo) -->
 <div id="noEntregadoModal" class="modal">
   <div class="modal-sheet">
     <div class="modal-handle"></div>
@@ -527,7 +546,9 @@ let activeTab = 'pendientes';
 let isOnline = navigator.onLine;
 let speech = null, speechActive = false, speechTargetId = null;  // Web Speech API
 let fotosAdicionales = [];  // {dataUrl, blob, uploadedUrl?} para No Entregado
-let pendingFotoKind = null; // "cedible" | "adicional" — qué foto está a punto de confirmarse
+let fotosEntrega = [];      // {dataUrl} hasta 4; el primer elemento es el cedible firmado
+let pendingFotoKind = null; // "entrega" | "adicional" — qué foto está a punto de confirmarse
+let entregaParcialMode = false; // Modo "Entrega parcial" en modal Entregar — obliga observaciones
 
 // ══ INDEXEDDB (OFFLINE QUEUE) ══
 let idb = null;
@@ -900,18 +921,37 @@ function _despCardHtml(d) {
   } else if (d.estado === 'En Ruta' || d.estado === 'En Tránsito') {
     acciones = `
       <button class="action-btn action-btn-entregada" onclick="openEntregar('${safe}')"><span class="icon">✓</span>Entregar</button>
+      <button class="action-btn action-btn-ubicacion" onclick="openEntregaParcial('${safe}')"><span class="icon">◐</span>Entrega parcial</button>
       <button class="action-btn action-btn-novedad" onclick="openNoEntregado('${safe}')"><span class="icon">✕</span>No entregado</button>`;
   }
 
   // Badges adicionales en entregados / no entregados
   let subBadge = '';
-  if (d.estado === 'Entregada' && d.regDespacho?.entregaConObservaciones) {
+  if (d.estado === 'Entregada' && d.regDespacho?.entregaParcial) {
+    subBadge = `<span class="parcial-badge">PARCIAL</span>`;
+  } else if (d.estado === 'Entregada' && d.regDespacho?.entregaConObservaciones) {
     subBadge = `<span class="obs-badge">CON OBS</span>`;
   }
   let motivoLine = '';
   if (d.estado === 'No Entregada' && d.regDespacho?.motivoNoEntrega) {
     motivoLine = `<div class="motivo-pill">${d.regDespacho.motivoNoEntrega}${d.regDespacho.motivoNoEntregaDetalle ? ': ' + d.regDespacho.motivoNoEntregaDetalle : ''}</div>`;
   }
+
+  // Timestamps de cada etapa del proceso (solicitud / inicio tránsito / entrega / no-entrega)
+  const r = d.regDespacho || {};
+  const tsSolicitud = d.fecha || d.fechaDespacho || '';
+  const tsAsignada  = r.tomadoEn || '';
+  const tsTransito  = r.enRutaEn || '';
+  const tsEntrega   = r.entregadoEn || '';
+  const tsNoEntrega = r.noEntregadoEn || '';
+  const timestampsHtml = `
+    <div class="ot-timestamps">
+      <div><span class="ts-ico">📝</span><span class="ts-label">Solicitud:</span> <span class="ts-val">${tsSolicitud ? fmtDateTime(tsSolicitud) : '—'}</span></div>
+      ${tsAsignada  ? `<div><span class="ts-ico">👤</span><span class="ts-label">Asignada:</span> <span class="ts-val">${fmtDateTime(tsAsignada)}</span></div>` : ''}
+      ${tsTransito  ? `<div><span class="ts-ico">🚛</span><span class="ts-label">Inicio tránsito:</span> <span class="ts-val">${fmtDateTime(tsTransito)}</span></div>` : ''}
+      ${tsEntrega   ? `<div><span class="ts-ico">✓</span><span class="ts-label">Entrega:</span> <span class="ts-val">${fmtDateTime(tsEntrega)}</span></div>` : ''}
+      ${tsNoEntrega ? `<div><span class="ts-ico">✕</span><span class="ts-label">No entregado:</span> <span class="ts-val">${fmtDateTime(tsNoEntrega)}</span></div>` : ''}
+    </div>`;
 
   return `
     <div class="ot-card ${cardClass}">
@@ -928,7 +968,8 @@ function _despCardHtml(d) {
       </div>
       <div class="ot-body">
         <div style="margin-bottom:10px;">${pills}</div>
-        ${acciones ? `<div class="action-btns-stack">${acciones}</div>` : ''}
+        ${timestampsHtml}
+        ${acciones ? `<div class="action-btns-stack" style="margin-top:12px">${acciones}</div>` : ''}
       </div>
     </div>`;
 }
@@ -939,13 +980,22 @@ function openDetalle(docId) {
   if (!d) return;
   activeDocId = docId;
   document.getElementById('detTitle').textContent = `Despacho ${docId}`;
+  const rDet = d.regDespacho || {};
+  const detTsLines = [];
+  const tsSol = d.fecha || d.fechaDespacho;
+  if (tsSol) detTsLines.push(`<strong>📝 Solicitud:</strong> ${fmtDateTime(tsSol)}`);
+  if (rDet.tomadoEn)      detTsLines.push(`<strong>👤 Asignada:</strong> ${fmtDateTime(rDet.tomadoEn)}`);
+  if (rDet.enRutaEn)      detTsLines.push(`<strong>🚛 Inicio tránsito:</strong> ${fmtDateTime(rDet.enRutaEn)}`);
+  if (rDet.entregadoEn)   detTsLines.push(`<strong>✓ Entrega:</strong> ${fmtDateTime(rDet.entregadoEn)}${rDet.entregaParcial ? ' <span class="parcial-badge">PARCIAL</span>' : ''}`);
+  if (rDet.noEntregadoEn) detTsLines.push(`<strong>✕ No entregado:</strong> ${fmtDateTime(rDet.noEntregadoEn)}`);
   document.getElementById('detInfo').innerHTML = `
     <strong>Cliente:</strong> ${d.cliente||'—'}${d.clienteRut ? ' · RUT '+d.clienteRut : ''}<br>
     <strong>Bodega origen:</strong> ${d.bodega||'—'}<br>
     <strong>Destino:</strong> ${d.destino||'—'}<br>
     <strong>Fecha de despacho:</strong> ${fmtDate(d.fechaDespacho||d.fecha)}<br>
     <strong>Transportado por:</strong> ${d.transportadoPor||'—'}<br>
-    <strong>Estado:</strong> ${d.estado}
+    <strong>Estado:</strong> ${d.estado}${rDet.entregaParcial ? ' <span class="parcial-badge">PARCIAL</span>' : ''}
+    ${detTsLines.length ? '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">' + detTsLines.join('<br>') + '</div>' : ''}
   `;
   // Items
   const items = d.items.slice().sort((a,b) => a.sku.localeCompare(b.sku));
@@ -956,15 +1006,24 @@ function openDetalle(docId) {
       return `<tr><td class="text-mono" style="color:var(--accent)">${i.sku}</td><td>${i.descripcion||'—'}</td><td class="text-mono" style="font-size:11px">${i.lote||'—'}</td><td style="font-weight:600">${i.cantidad}</td>${anyBultos?`<td style="font-weight:600">${i.bultos||'—'}</td>`:''}<td style="font-size:11px">${ubicStr || '—'}</td></tr>`;
     }).join('') + `</tbody></table>`;
   document.getElementById('detItems').innerHTML = itemsHtml;
-  // Resumen del cierre: foto cedible, motivo no-entrega, fotos adicionales,
+  // Resumen del cierre: foto(s) cedible, motivo no-entrega, fotos adicionales,
   // observaciones. Prominente arriba del timeline cuando aplica.
   const r = d.regDespacho || {};
-  // Compatibilidad: `fotoCedibleBase64` (nuevo, data URL en RTDB) o
-  // `fotoCedibleUrl` (legacy, URL de Storage). Ambos renderan igual en <img>.
-  const cedibleSrc = r.fotoCedibleBase64 || r.fotoCedibleUrl || '';
+  // Compatibilidad: `fotosEntregaBase64` (nuevo, array hasta 4),
+  // `fotoCedibleBase64` (anterior, data URL única en RTDB) o
+  // `fotoCedibleUrl` (legacy, URL de Storage). Todos se muestran como miniaturas.
+  const fotosEntregaArr = r.fotosEntregaBase64;
+  const fotosEntregaList = Array.isArray(fotosEntregaArr)
+    ? fotosEntregaArr
+    : (fotosEntregaArr ? Object.values(fotosEntregaArr) : []);
+  const cedibleFallback = r.fotoCedibleBase64 || r.fotoCedibleUrl || '';
+  const fotosEntregaFinal = fotosEntregaList.length ? fotosEntregaList : (cedibleFallback ? [cedibleFallback] : []);
   let cierreHtml = '';
-  if (d.estado === 'Entregada' && cedibleSrc) {
-    cierreHtml += `<div style="margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Cedible firmado</div><img src="${cedibleSrc}" style="max-width:100%;max-height:280px;border-radius:6px;cursor:pointer" onclick="_abrirFotoFull('${encodeURIComponent(cedibleSrc).slice(0,20)}',this.src)"></div>`;
+  if (d.estado === 'Entregada' && fotosEntregaFinal.length) {
+    const titulo = fotosEntregaFinal.length > 1 ? `Fotos de la entrega (${fotosEntregaFinal.length})` : 'Cedible firmado';
+    cierreHtml += `<div style="margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">${titulo}</div><div class="fotos-grid">${
+      fotosEntregaFinal.map((src, i) => `<div class="fotos-thumb"><img src="${src}" onclick="_abrirFotoFull('e${i}',this.src)">${i===0 && fotosEntregaFinal.length>1 ? '<span class="ced-tag">CEDIBLE</span>' : ''}</div>`).join('')
+    }</div></div>`;
   }
   if (d.estado === 'No Entregada') {
     const detalle = r.motivoNoEntregaDetalle ? ' — ' + r.motivoNoEntregaDetalle : '';
@@ -1148,81 +1207,148 @@ async function confirmarIniciar() {
   }
 }
 
-// ══ ENTREGAR (foto cedible obligatoria + toggle de observaciones) ══
-function openEntregar(docId) {
+// ══ ENTREGAR (foto cedible + hasta 4 fotos + obs opcional, o Entrega Parcial con obs obligatoria) ══
+function openEntregar(docId, parcial = false) {
   const d = _construirDespachos()[docId];
   if (!d) return;
   activeDocId = docId;
+  entregaParcialMode = !!parcial;
+  // Título y textos según modo
+  document.getElementById('entregar-title').textContent = parcial ? 'Confirmar entrega parcial' : 'Confirmar entrega';
+  const btnConfirm = document.getElementById('btn-entregar-confirm');
+  btnConfirm.textContent = parcial ? 'Confirmar entrega parcial' : 'Confirmar entrega';
+  // En parcial, obs son obligatorias — ocultamos el toggle y mostramos el campo siempre visible.
+  const togRow = document.getElementById('ent-obs-toggle-row');
+  const obsGroup = document.getElementById('ent-obs-group');
+  const obsLabel = document.getElementById('ent-obs-label');
+  const obsHint  = document.getElementById('ent-obs-hint');
+  const tog = document.getElementById('ent-obs-toggle');
+  if (parcial) {
+    togRow.style.display = 'none';
+    obsGroup.style.display = '';
+    obsLabel.style.display = '';
+    if (tog) tog.checked = true;
+  } else {
+    togRow.style.display = '';
+    obsGroup.style.display = 'none';
+    obsLabel.style.display = 'none';
+    if (tog) tog.checked = false;
+  }
+  obsHint.style.display = 'none';
   document.getElementById('entregar-info').innerHTML = `
     <strong>${d.documentoId}</strong> — ${d.cliente||'—'}${d.destino ? '<br>📍 '+d.destino : ''}
+    ${parcial ? '<div style="margin-top:8px;padding:8px;background:rgba(0,112,242,0.08);border-left:3px solid var(--accent);border-radius:4px;font-size:12px;color:var(--text)"><strong>Entrega parcial:</strong> indica en las observaciones qué productos no se entregaron y por qué.</div>' : ''}
   `;
   // Reset
+  fotosEntrega = [];
   document.getElementById('ent-obs').value = '';
   document.getElementById('ent-foto').value = '';
-  document.getElementById('ent-foto-preview').style.display = 'none';
-  document.getElementById('ent-foto-preview').src = '';
-  document.getElementById('ent-foto-preview').dataset.dataUrl = '';
   document.getElementById('ent-foto-hint').style.display = 'none';
   document.getElementById('voice-status-ent').textContent = '';
-  const tog = document.getElementById('ent-obs-toggle');
-  if (tog) tog.checked = false;
-  document.getElementById('ent-obs-group').style.display = 'none';
+  _renderFotosEntregaGrid();
   document.getElementById('entregar-sync-warn').style.display = isOnline ? 'none' : 'flex';
   openModal('entregarModal');
   getGPS();
 }
 
+function openEntregaParcial(docId) {
+  openEntregar(docId, true);
+}
+
 function toggleEntObs(checked) {
+  // Sólo aplicable en modo entrega completa; en modo parcial el toggle está oculto.
+  if (entregaParcialMode) return;
   document.getElementById('ent-obs-group').style.display = checked ? '' : 'none';
+}
+
+function _renderFotosEntregaGrid() {
+  const grid = document.getElementById('ent-fotos-grid');
+  const maxFotos = 4;
+  const addBtnCls = fotosEntrega.length === 0 ? 'foto-add cedible' : 'foto-add';
+  const addBtnLabel = fotosEntrega.length === 0 ? '📷\nCedible' : '+';
+  const addBtn = fotosEntrega.length < maxFotos
+    ? `<button type="button" class="${addBtnCls}" onclick="document.getElementById('ent-foto').click()" style="white-space:pre-line;font-size:${fotosEntrega.length===0?'13':'24'}px;font-weight:${fotosEntrega.length===0?'700':'normal'}">${addBtnLabel}</button>`
+    : '';
+  const thumbs = fotosEntrega.map((f, idx) => `
+    <div class="fotos-thumb">
+      <img src="${f.dataUrl}">
+      <button class="del" onclick="_removeFotoEntrega(${idx})" title="Eliminar foto">✕</button>
+      ${idx === 0 ? '<span class="ced-tag">CEDIBLE</span>' : ''}
+    </div>`).join('');
+  grid.innerHTML = thumbs + addBtn;
+}
+
+function _removeFotoEntrega(idx) {
+  fotosEntrega.splice(idx, 1);
+  _renderFotosEntregaGrid();
 }
 
 async function confirmarEntrega() {
   if (!activeDocId) return;
-  const previewEl = document.getElementById('ent-foto-preview');
-  if (!previewEl.dataset.dataUrl) {
+  // Al menos 1 foto (el cedible firmado)
+  if (!fotosEntrega.length) {
     document.getElementById('ent-foto-hint').style.display = 'block';
     return;
+  } else {
+    document.getElementById('ent-foto-hint').style.display = 'none';
   }
-  const conObs = document.getElementById('ent-obs-toggle').checked;
+  // En modo normal: obs opcional (toggle). En modo parcial: obs obligatoria.
+  const conObs = entregaParcialMode ? true : document.getElementById('ent-obs-toggle').checked;
   const obs = conObs ? document.getElementById('ent-obs').value.trim() : '';
+  if (entregaParcialMode && !obs) {
+    document.getElementById('ent-obs-hint').style.display = 'block';
+    const ta = document.getElementById('ent-obs');
+    if (ta) ta.focus();
+    return;
+  } else {
+    document.getElementById('ent-obs-hint').style.display = 'none';
+  }
   const btn = document.getElementById('btn-entregar-confirm');
+  const btnOriginalText = entregaParcialMode ? 'Confirmar entrega parcial' : 'Confirmar entrega';
   btn.innerHTML = '<span class="spinner"></span> Enviando...';
   btn.disabled = true;
   try {
     const docId = activeDocId;
     const now = new Date().toISOString();
-    const rawDataUrl = previewEl.dataset.dataUrl;
-    // La foto del cedible se guarda directamente en Realtime Database como
-    // data URL (base64) para evitar depender de Firebase Storage. La
-    // compresión agresiva garantiza que entre en el límite de 1 MiB por
-    // nodo RTDB. Si en el futuro habilitamos Storage, aquí se podría
-    // reemplazar por upload + url.
-    _showProgressSnack('Comprimiendo foto del cedible...');
-    const blob = await _compressImageForDb(rawDataUrl);
-    const fotoDataUrl = await _blobToDataUrl(blob);
+    // Las fotos se guardan como data URL (base64) en RTDB para no depender
+    // de Storage. Comprimimos cada una (igual que en No Entregado) antes de
+    // enviar. La primera foto es el cedible firmado.
+    const fotosBase64 = [];
+    for (let i = 0; i < fotosEntrega.length; i++) {
+      _showProgressSnack(`Comprimiendo foto ${i+1}/${fotosEntrega.length}...`);
+      const blob = await _compressImageForDb(fotosEntrega[i].dataUrl);
+      fotosBase64.push(await _blobToDataUrl(blob));
+    }
     _showProgressSnack('Guardando entrega...');
     const hitoId = 'H-' + Date.now();
+    const esParcial = !!entregaParcialMode;
     const hito = {
-      estado:'Entregada', fecha:now,
+      estado: 'Entregada', fecha: now,
       lat: currentGPS?.lat || null, lng: currentGPS?.lng || null,
       observaciones: obs,
-      fotoCedibleBase64: fotoDataUrl,
+      // Compatibilidad: `fotoCedibleBase64` apunta a la primera foto; además
+      // guardamos el array completo en `fotosEntregaBase64`.
+      fotoCedibleBase64: fotosBase64[0],
+      fotosEntregaBase64: fotosBase64,
       entregaConObservaciones: !!conObs && !!obs,
+      entregaParcial: esParcial,
       usuario: currentUser.email
     };
     const basePath = `organizaciones/${maestroUid}/despachos/${docId}`;
     const updates = {
       [`${basePath}/estado`]: 'Entregada',
       [`${basePath}/entregadoEn`]: now,
-      [`${basePath}/fotoCedibleBase64`]: fotoDataUrl,
+      [`${basePath}/fotoCedibleBase64`]: fotosBase64[0],
+      [`${basePath}/fotosEntregaBase64`]: fotosBase64,
       [`${basePath}/entregaConObservaciones`]: !!conObs && !!obs,
+      [`${basePath}/entregaParcial`]: esParcial,
       [`${basePath}/observacionesCierre`]: obs,
       [`${basePath}/hitos/${hitoId}`]: hito
     };
     if (isOnline) {
       await db.ref().update(updates);
       _clearProgressSnack();
-      showSnack(`Despacho ${docId} marcado como "Entregada".`);
+      showSnack(`Despacho ${docId} marcado como "${esParcial ? 'Entregada (parcial)' : 'Entregada'}".`);
     } else {
       await queueAction({ tipo:'entrega', docId, updates, hitoId, ts: Date.now() });
       await updateQueueBadge();
@@ -1233,10 +1359,10 @@ async function confirmarEntrega() {
   } catch(e) {
     _clearProgressSnack();
     console.error('[confirmarEntrega] fallo:', e);
-    const sz = e && e.message && e.message.includes('too large') ? '\n\nLa foto resultó muy grande incluso tras comprimir. Vuelve a tomarla con menos detalle o mejor iluminación.' : '';
+    const sz = e && e.message && e.message.includes('too large') ? '\n\nAlguna foto resultó muy grande incluso tras comprimir. Vuelve a tomarla con menos detalle o mejor iluminación.' : '';
     alert('Error al confirmar entrega: ' + (e && e.message ? e.message : e) + sz);
   } finally {
-    btn.innerHTML = 'Confirmar entrega'; btn.disabled = false;
+    btn.innerHTML = btnOriginalText; btn.disabled = false;
     _clearProgressSnack();
   }
 }
@@ -1377,11 +1503,11 @@ function onPhotoChosen(input, kind) {
 
 function acceptPhoto() {
   if (!_pendingPhotoDataUrl) return;
-  if (pendingFotoKind === 'cedible') {
-    const img = document.getElementById('ent-foto-preview');
-    img.src = _pendingPhotoDataUrl;
-    img.dataset.dataUrl = _pendingPhotoDataUrl;
-    img.style.display = 'block';
+  if (pendingFotoKind === 'entrega') {
+    if (fotosEntrega.length < 4) {
+      fotosEntrega.push({ dataUrl: _pendingPhotoDataUrl });
+    }
+    _renderFotosEntregaGrid();
     document.getElementById('ent-foto-hint').style.display = 'none';
   } else if (pendingFotoKind === 'adicional') {
     fotosAdicionales.push({ dataUrl: _pendingPhotoDataUrl });
@@ -1395,7 +1521,7 @@ function rejectPhoto() {
   document.getElementById('photoFullscreen').classList.remove('active');
   _pendingPhotoDataUrl = null;
   // Re-abre el selector del input apropiado
-  if (pendingFotoKind === 'cedible') document.getElementById('ent-foto').click();
+  if (pendingFotoKind === 'entrega') document.getElementById('ent-foto').click();
   else if (pendingFotoKind === 'adicional') document.getElementById('ne-foto').click();
 }
 
