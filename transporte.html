@@ -197,6 +197,33 @@ tbody tr:hover td{background:rgba(0,112,242,0.04);}
 .img-thumb{width:80px;height:80px;object-fit:cover;border-radius:var(--radius);border:1px solid var(--border);cursor:pointer;transition:opacity .15s;}
 .img-thumb:hover{opacity:.8;}
 
+/* CEDIBLE LINK IN TABLE */
+.cedible-link{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;background:var(--success-dim);color:#107E3E;border:1px solid rgba(16,126,62,.3);border-radius:4px;font-size:11px;font-weight:600;cursor:pointer;text-decoration:none;}
+.cedible-link:hover{background:var(--success);color:white;}
+.cedible-none{color:var(--text3);font-size:11px;font-style:italic;}
+
+/* ESTADOS CONDUCTOR BADGES */
+.badge-pendiente{background:rgba(136,145,154,0.12);color:var(--text2);border:1px solid var(--border2);}
+.badge-asignada{background:rgba(0,112,242,0.09);color:var(--accent2);border:1px solid rgba(0,112,242,0.25);}
+.badge-transito{background:rgba(233,115,12,0.1);color:#B85700;border:1px solid rgba(233,115,12,0.3);}
+.badge-entregada{background:rgba(16,126,62,0.1);color:#107E3E;border:1px solid rgba(16,126,62,0.3);}
+.badge-parcial{background:rgba(107,47,190,0.1);color:var(--purple);border:1px solid rgba(107,47,190,0.3);}
+.badge-no-entregada{background:rgba(187,0,0,0.08);color:#BB0000;border:1px solid rgba(187,0,0,0.25);}
+.badge-cerrada{background:#1D2D3E;color:white;border:1px solid #1D2D3E;}
+
+/* PARCIALES TABLE */
+.chk-cell{width:36px;text-align:center;}
+.row-selected td{background:var(--accent-dim)!important;}
+
+/* MODAL radio opciones */
+.radio-opt{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:8px;cursor:pointer;transition:all .15s;}
+.radio-opt:hover{border-color:var(--accent);background:var(--accent-dim);}
+.radio-opt.active{border-color:var(--accent);background:var(--accent-dim);border-left:3px solid var(--accent);}
+.radio-opt input{margin-top:3px;}
+.radio-opt-content{flex:1;}
+.radio-opt-title{font-size:13.5px;font-weight:600;color:var(--text);}
+.radio-opt-desc{font-size:12px;color:var(--text3);margin-top:2px;}
+
 /* CONFIRM DETAIL */
 .confirm-detail{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:18px;font-size:13.5px;line-height:1.7;}
 
@@ -277,6 +304,10 @@ tbody tr:hover td{background:rgba(0,112,242,0.04);}
         <span>📦</span> Despachos
         <span id="badge-pendientes" class="nav-badge" style="display:none"></span>
       </a>
+      <a class="nav-link" data-page="parciales" onclick="navTo('parciales')">
+        <span>◐</span> Parciales / No entregados
+        <span id="badge-parciales" class="nav-badge" style="display:none"></span>
+      </a>
       <a class="nav-link" data-page="conductores" onclick="navTo('conductores')">
         <span>👤</span> Conductores
       </a>
@@ -323,17 +354,16 @@ tbody tr:hover td{background:rgba(0,112,242,0.04);}
           <div class="page-header">
             <div>
               <div class="page-header-title">Despachos</div>
-              <div class="page-header-sub">Órdenes de transporte generadas desde el WMS</div>
+              <div class="page-header-sub">Estado en tiempo real desde la app del conductor</div>
             </div>
-            <button class="btn btn-primary btn-sm" onclick="openModal('nuevaOTModal')">+ Nueva OT</button>
           </div>
 
           <!-- KPIs -->
           <div class="stats-grid" id="kpiGrid">
             <div class="stat-card blue"><div class="stat-icon">📦</div><div class="stat-value" id="kpiTotal">0</div><div class="stat-label">Despachos hoy</div></div>
-            <div class="stat-card warning"><div class="stat-icon">🚛</div><div class="stat-value" id="kpiEnRuta">0</div><div class="stat-label">En ruta</div></div>
+            <div class="stat-card warning"><div class="stat-icon">🚛</div><div class="stat-value" id="kpiEnRuta">0</div><div class="stat-label">En tránsito</div></div>
             <div class="stat-card green"><div class="stat-icon">✓</div><div class="stat-value" id="kpiEntregados">0</div><div class="stat-label">Entregados</div></div>
-            <div class="stat-card danger"><div class="stat-icon">⚠</div><div class="stat-value" id="kpiNovedad">0</div><div class="stat-label">Con novedad</div></div>
+            <div class="stat-card danger"><div class="stat-icon">⚠</div><div class="stat-value" id="kpiNovedad">0</div><div class="stat-label">Parciales / No entregados</div></div>
           </div>
 
           <!-- FILTERS -->
@@ -341,16 +371,19 @@ tbody tr:hover td{background:rgba(0,112,242,0.04);}
             <input type="date" id="fFecha" class="form-input" onchange="renderDespachos()" title="Fecha despacho">
             <select id="fEstado" class="form-select" onchange="renderDespachos()">
               <option value="">Todos los estados</option>
+              <option value="Pendiente">Pendiente (sin asignar)</option>
               <option value="Asignada">Asignada</option>
-              <option value="En Ruta">En Ruta</option>
+              <option value="En Tránsito">En Tránsito</option>
               <option value="Entregada">Entregada</option>
-              <option value="Con Novedad">Con Novedad</option>
-              <option value="Cancelada">Cancelada</option>
+              <option value="Entregada Parcial">Entregada Parcial</option>
+              <option value="No Entregada">No Entregada</option>
+              <option value="Cerrada">Cerrada</option>
             </select>
             <select id="fConductor" class="form-select" onchange="renderDespachos()">
               <option value="">Todos los conductores</option>
             </select>
-            <input type="text" id="fZona" class="form-input" placeholder="Zona..." oninput="renderDespachos()" style="min-width:110px">
+            <input type="text" id="fDoc" class="form-input" placeholder="N° factura / guía..." oninput="renderDespachos()" style="min-width:160px">
+            <input type="text" id="fZona" class="form-input" placeholder="Ubicación..." oninput="renderDespachos()" style="min-width:140px">
             <button class="btn btn-icon btn-sm" onclick="clearFiltros()">✕ Limpiar</button>
           </div>
 
@@ -360,12 +393,66 @@ tbody tr:hover td{background:rgba(0,112,242,0.04);}
               <table>
                 <thead>
                   <tr>
-                    <th>OT</th><th>Fecha Despacho</th><th>Cliente</th><th>Conductor</th>
-                    <th>Vehículo</th><th>Zona</th><th>Items</th><th>Estado</th><th>Acciones</th>
+                    <th>N° Factura / Guía</th>
+                    <th>Cliente</th>
+                    <th>Ubicación</th>
+                    <th>Conductor</th>
+                    <th>Estado</th>
+                    <th>Fecha</th>
+                    <th>Cedible</th>
+                    <th>Acciones</th>
                   </tr>
                 </thead>
                 <tbody id="tDespachos">
-                  <tr class="empty-row"><td colspan="9">Cargando...</td></tr>
+                  <tr class="empty-row"><td colspan="8">Cargando...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ═══ PAGE: PARCIALES / NO ENTREGADOS ═══ -->
+        <div id="page-parciales" class="page">
+          <div class="page-header">
+            <div>
+              <div class="page-header-title">Despachos parciales / No entregados</div>
+              <div class="page-header-sub">Cerrar definitivamente o reasignar a otro conductor</div>
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-ghost btn-sm" onclick="selectAllParciales(true)">☑ Seleccionar todos</button>
+              <button class="btn btn-ghost btn-sm" onclick="selectAllParciales(false)">☐ Deseleccionar</button>
+              <button class="btn btn-primary btn-sm" onclick="openReasignarCerrar()">⇄ Reasignar o cerrar</button>
+            </div>
+          </div>
+
+          <div class="filter-bar">
+            <select id="fParcTipo" class="form-select" onchange="renderParciales()">
+              <option value="">Todos</option>
+              <option value="parcial">Solo parciales</option>
+              <option value="no-entregada">Solo no entregadas</option>
+            </select>
+            <input type="text" id="fParcDoc" class="form-input" placeholder="N° factura / guía..." oninput="renderParciales()" style="min-width:160px">
+          </div>
+
+          <div class="card" style="padding:0;">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th class="chk-cell"><input type="checkbox" id="chkAllParciales" onchange="selectAllParciales(this.checked)"></th>
+                    <th>N° Factura / Guía</th>
+                    <th>Cliente</th>
+                    <th>Ubicación</th>
+                    <th>Conductor</th>
+                    <th>Estado</th>
+                    <th>Motivo / Obs</th>
+                    <th>Fecha</th>
+                    <th>Cedible</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="tParciales">
+                  <tr class="empty-row"><td colspan="10">Cargando...</td></tr>
                 </tbody>
               </table>
             </div>
@@ -651,11 +738,65 @@ tbody tr:hover td{background:rgba(0,112,242,0.04);}
   </div>
 </div>
 
-<!-- ═══ MODAL: IMAGE VIEWER ═══ -->
+<!-- ═══ MODAL: IMAGE VIEWER (con botón descargar) ═══ -->
 <div id="imgViewerModal" class="modal">
-  <div class="modal-box" style="max-width:90vw;background:transparent;border:none;box-shadow:none;padding:0;display:flex;align-items:center;justify-content:center;">
-    <button onclick="closeModal('imgViewerModal')" style="position:fixed;top:20px;right:20px;background:rgba(0,0,0,0.7);color:white;border:none;border-radius:50%;width:36px;height:36px;font-size:20px;cursor:pointer;z-index:10;">✕</button>
-    <img id="imgViewerSrc" src="" style="max-width:90vw;max-height:90vh;border-radius:8px;object-fit:contain;">
+  <div class="modal-box" style="max-width:90vw;background:transparent;border:none;box-shadow:none;padding:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;">
+    <div style="position:fixed;top:20px;right:20px;display:flex;gap:8px;z-index:10;">
+      <button onclick="downloadImgViewer()" title="Descargar imagen" style="background:rgba(16,126,62,0.9);color:white;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;">⬇ Descargar</button>
+      <button onclick="closeModal('imgViewerModal')" style="background:rgba(0,0,0,0.7);color:white;border:none;border-radius:50%;width:36px;height:36px;font-size:20px;cursor:pointer;">✕</button>
+    </div>
+    <img id="imgViewerSrc" src="" style="max-width:90vw;max-height:85vh;border-radius:8px;object-fit:contain;background:white;">
+  </div>
+</div>
+
+<!-- ═══ MODAL: REASIGNAR O CERRAR DESPACHO(S) ═══ -->
+<div id="reasignarCerrarModal" class="modal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">Reasignar o cerrar despacho(s)</div>
+        <div class="modal-subtitle" id="rc-count-sub">—</div>
+      </div>
+      <button class="modal-close" onclick="closeModal('reasignarCerrarModal')">✕</button>
+    </div>
+
+    <div id="rc-err" style="background:var(--danger-dim);color:#BB0000;border:1px solid rgba(187,0,0,.3);border-radius:var(--radius);padding:10px 14px;margin-bottom:14px;font-size:13px;display:none;"></div>
+
+    <div id="rc-list" style="max-height:160px;overflow-y:auto;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:16px;font-size:12.5px;"></div>
+
+    <div class="form-group">
+      <label class="form-label">Acción a realizar *</label>
+      <label class="radio-opt" id="rc-opt-reasignar">
+        <input type="radio" name="rc-accion" value="reasignar" checked onchange="_rcToggleAccion()">
+        <div class="radio-opt-content">
+          <div class="radio-opt-title">⇄ Reasignar a otro conductor</div>
+          <div class="radio-opt-desc">El despacho vuelve a estar disponible para el nuevo transportista. Se guarda el historial.</div>
+        </div>
+      </label>
+      <label class="radio-opt" id="rc-opt-cerrar">
+        <input type="radio" name="rc-accion" value="cerrar" onchange="_rcToggleAccion()">
+        <div class="radio-opt-content">
+          <div class="radio-opt-title">🔒 Cerrar definitivamente</div>
+          <div class="radio-opt-desc">El despacho queda cerrado y ya no aparece en pendientes del conductor.</div>
+        </div>
+      </label>
+    </div>
+
+    <div class="form-group" id="rc-reasignar-group">
+      <label class="form-label">Nuevo transportista *</label>
+      <select class="form-select" id="rc-transportado"></select>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px">Mismas opciones que el dropdown "Transportado por" al registrar una Salida en el WMS.</div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Observaciones <span id="rc-obs-req" style="color:var(--danger);display:none">*</span></label>
+      <textarea class="form-textarea" id="rc-obs" rows="3" placeholder="Motivo de la reasignación o cierre..."></textarea>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="closeModal('reasignarCerrarModal')">Cancelar</button>
+      <button class="btn btn-primary" id="btn-rc-confirm" onclick="confirmReasignarCerrar()">Confirmar</button>
+    </div>
   </div>
 </div>
 
@@ -676,11 +817,13 @@ const db = firebase.database();
 const storage = firebase.storage();
 
 let currentUser = null, userPerfil = null, orgUid = null;
-let data = { ots:{}, conductores:{}, vehiculos:{}, trazabilidad:{}, movimientos:{}, bodegas:{}, notificaciones:{} };
+let data = { ots:{}, conductores:{}, vehiculos:{}, trazabilidad:{}, movimientos:{}, bodegas:{}, notificaciones:{}, despachos:{} };
 let _detOT = null, _detTrazabilidad = [], _detMap = null;
 let _editConductorId = null, _editVehiculoId = null;
 let _selectedSalidaDocId = null;
 let _secondaryApp = null;
+// Selección múltiple en la página Parciales / No entregados.
+let _selectedParciales = new Set();
 
 // ══ AUTH ══
 document.addEventListener('DOMContentLoaded', () => {
@@ -732,10 +875,14 @@ function attachListeners() {
     const ref = db.ref(path);
     ref.on('value', s => {
       data[key] = s.val() || {};
-      if (key === 'ots') { renderDespachos(); updateKPIs(); updateBadges(); }
-      if (key === 'conductores') { renderConductores(); populateConductorSelects(); }
+      // Cualquier actualización que afecte el estado de los despachos obliga
+      // a re-renderizar las tablas de Despachos y Parciales (ambas se alimentan
+      // de movimientos + despachos + conductores).
+      if (key === 'ots') { /* legacy OTs: aún se escuchan por compatibilidad */ }
+      if (key === 'conductores') { renderConductores(); populateConductorSelects(); renderDespachos(); renderParciales(); }
       if (key === 'vehiculos') { renderVehiculos(); populateVehiculoSelects(); }
-      if (key === 'movimientos') renderSalidasPendientes();
+      if (key === 'movimientos') { renderSalidasPendientes(); renderDespachos(); renderParciales(); updateKPIs(); updateBadges(); }
+      if (key === 'despachos') { renderDespachos(); renderParciales(); updateKPIs(); updateBadges(); }
       if (key === 'notificaciones') { renderNotificaciones(); updateBadges(); }
     });
     _listeners.push(ref);
@@ -747,6 +894,95 @@ function attachListeners() {
   listen(`usuarios/${orgUid}/movimientos`, 'movimientos');
   listen(`usuarios/${orgUid}/bodegas`, 'bodegas');
   listen(`organizaciones/${orgUid}/notificaciones`, 'notificaciones');
+  // Alimenta esta vista desde el mismo nodo que escribe conductor.html:
+  // /organizaciones/{orgUid}/despachos/{documentoId}
+  listen(`organizaciones/${orgUid}/despachos`, 'despachos');
+}
+
+// Construye la lista de despachos agrupando movimientos de Salida por
+// documentoId y uniéndolos con el registro `/despachos/{documentoId}` que
+// escribe conductor.html. Devuelve un objeto { documentoId: {...} } con los
+// campos necesarios para la tabla y la vista de parciales.
+function _buildDespachos() {
+  const porDoc = {};
+  Object.values(data.movimientos || {}).forEach(m => {
+    if (!m || m.tipo !== 'Salida') return;
+    const docId = m.documentoId || m.referencia;
+    if (!docId) return;
+    if (!porDoc[docId]) {
+      porDoc[docId] = {
+        documentoId: docId,
+        cliente: m.proveedor || '',
+        clienteRut: m.clienteRut || '',
+        destino: m.destino || '',
+        bodega: m.bodega || '',
+        fecha: m.fecha || '',
+        fechaDespacho: m.fechaDespacho || '',
+        transportadoPor: (m.transportadoPor || '').trim(),
+        transportadoPorDetalle: m.transportadoPorDetalle || '',
+        items: []
+      };
+    }
+    porDoc[docId].items.push({
+      sku: m.sku || '', lote: m.lote || '', descripcion: m.descripcion || '',
+      cantidad: parseFloat(m.cantidad) || 0, ubicacion: m.ubicacion || ''
+    });
+    // Si distintas líneas tienen distintos valores, el primero gana (ya ocurre
+    // porque el if arriba sólo se evalúa una vez por doc). Guardamos aquí los
+    // movimientos para operaciones de reasignación.
+  });
+  // Une con el registro de despacho que escribe el conductor.
+  const dList = data.despachos || {};
+  const resultado = {};
+  Object.entries(porDoc).forEach(([docId, p]) => {
+    const d = dList[docId] || null;
+    // Estado efectivo (todos los definidos en conductor.html + "Cerrada"
+    // + "Entregada Parcial" para que se filtre por separado en la tabla).
+    let estado;
+    if (d && d.cerradoDefinitivo) estado = 'Cerrada';
+    else if (d && d.estado === 'Entregada' && d.entregaParcial) estado = 'Entregada Parcial';
+    else if (d && d.estado) estado = d.estado === 'En Ruta' ? 'En Tránsito' : d.estado;
+    else {
+      // Sin registro de despacho: inferir desde transportadoPor del movimiento.
+      estado = (p.transportadoPor === 'Pendiente de asignación') ? 'Pendiente' : 'Asignada';
+    }
+    // Conductor efectivo: prioridad al registro de despacho (conductorNombre),
+    // cae en transportadoPor del movimiento como etiqueta libre.
+    const conductorLabel = (d && d.conductorNombre) || p.transportadoPor ||
+      (p.transportadoPorDetalle ? `Otros: ${p.transportadoPorDetalle}` : '—');
+    resultado[docId] = {
+      ...p,
+      estado,
+      conductorLabel,
+      conductorId: d?.conductorId || null,
+      despacho: d,
+      // atajos para la tabla
+      cedibleSrc: (d && (d.fotoCedibleBase64 || d.fotoCedibleUrl)) || '',
+      entregadoEn: d?.entregadoEn || '',
+      enRutaEn: d?.enRutaEn || '',
+      noEntregadoEn: d?.noEntregadoEn || '',
+      cerradoDefinitivo: !!(d && d.cerradoDefinitivo),
+      entregaParcial: !!(d && d.entregaParcial),
+      motivoNoEntrega: d?.motivoNoEntrega || '',
+      motivoNoEntregaDetalle: d?.motivoNoEntregaDetalle || '',
+      observacionesCierre: d?.observacionesCierre || ''
+    };
+  });
+  return resultado;
+}
+
+// Clase CSS del badge según estado consolidado.
+function _badgeClassForEstado(estado) {
+  const map = {
+    'Pendiente':'badge-pendiente',
+    'Asignada':'badge-asignada',
+    'En Tránsito':'badge-transito',
+    'Entregada':'badge-entregada',
+    'Entregada Parcial':'badge-parcial',
+    'No Entregada':'badge-no-entregada',
+    'Cerrada':'badge-cerrada'
+  };
+  return map[estado] || 'badge-gray';
 }
 
 // Renderiza los checkboxes de "Bodegas desde las que puede retirar" en el
@@ -785,9 +1021,10 @@ function navTo(page) {
   document.getElementById(`page-${page}`).classList.add('active');
   const link = document.querySelector(`[data-page="${page}"]`);
   if (link) link.classList.add('active');
-  const titles = {despachos:'Despachos',conductores:'Conductores',vehiculos:'Vehículos',notificaciones:'Alertas Internas'};
+  const titles = {despachos:'Despachos',parciales:'Parciales / No entregados',conductores:'Conductores',vehiculos:'Vehículos',notificaciones:'Alertas Internas'};
   document.getElementById('topbarTitle').textContent = titles[page] || page;
   if (page === 'notificaciones') markNotifRead();
+  if (page === 'parciales') renderParciales();
 }
 
 function toggleSidebar() {
@@ -797,17 +1034,28 @@ function toggleSidebar() {
 // ══ KPIs ══
 function updateKPIs() {
   const hoy = new Date().toISOString().split('T')[0];
-  const hoyOTs = Object.values(data.ots).filter(o => o.fechaDespacho === hoy);
-  document.getElementById('kpiTotal').textContent = hoyOTs.length;
-  document.getElementById('kpiEnRuta').textContent = hoyOTs.filter(o => o.estado === 'En Ruta').length;
-  document.getElementById('kpiEntregados').textContent = hoyOTs.filter(o => o.estado === 'Entregada').length;
-  document.getElementById('kpiNovedad').textContent = hoyOTs.filter(o => o.estado === 'Con Novedad').length;
+  const todos = Object.values(_buildDespachos());
+  const _esHoy = o => {
+    const f = (o.fechaDespacho || o.fecha || '').slice(0,10);
+    return f === hoy;
+  };
+  const hoyRows = todos.filter(_esHoy);
+  document.getElementById('kpiTotal').textContent = hoyRows.length;
+  document.getElementById('kpiEnRuta').textContent = hoyRows.filter(o => o.estado === 'En Tránsito').length;
+  document.getElementById('kpiEntregados').textContent = hoyRows.filter(o => o.estado === 'Entregada' || o.estado === 'Entregada Parcial').length;
+  document.getElementById('kpiNovedad').textContent = hoyRows.filter(o => o.estado === 'Entregada Parcial' || o.estado === 'No Entregada').length;
 }
 
 function updateBadges() {
-  const pendCount = Object.values(data.ots).filter(o => ['Asignada','En Ruta','Con Novedad'].includes(o.estado)).length;
+  const todos = Object.values(_buildDespachos());
+  // Pendientes: todo lo que no está cerrado / entregado completo (ni Cancelada legacy)
+  const pendCount = todos.filter(o => !['Entregada','Cerrada'].includes(o.estado)).length;
   const pb = document.getElementById('badge-pendientes');
   pb.textContent = pendCount; pb.style.display = pendCount > 0 ? '' : 'none';
+  // Parciales / no entregados
+  const parcCount = todos.filter(o => (o.estado === 'Entregada Parcial' || o.estado === 'No Entregada')).length;
+  const pbp = document.getElementById('badge-parciales');
+  if (pbp) { pbp.textContent = parcCount; pbp.style.display = parcCount > 0 ? '' : 'none'; }
   const unread = Object.values(data.notificaciones).filter(n => !n.leida).length;
   const nb = document.getElementById('badge-notif');
   nb.textContent = unread; nb.style.display = unread > 0 ? '' : 'none';
@@ -818,54 +1066,145 @@ function clearFiltros() {
   document.getElementById('fFecha').value = '';
   document.getElementById('fEstado').value = '';
   document.getElementById('fConductor').value = '';
-  document.getElementById('fZona').value = '';
+  const fZ = document.getElementById('fZona'); if (fZ) fZ.value = '';
+  const fD = document.getElementById('fDoc'); if (fD) fD.value = '';
   renderDespachos();
 }
 
 function renderDespachos() {
+  const tb = document.getElementById('tDespachos');
+  if (!tb) return;
   const fFecha = document.getElementById('fFecha')?.value || '';
   const fEstado = document.getElementById('fEstado')?.value || '';
   const fConductor = document.getElementById('fConductor')?.value || '';
   const fZona = (document.getElementById('fZona')?.value || '').toLowerCase();
-  let rows = Object.values(data.ots);
-  if (fFecha) rows = rows.filter(o => o.fechaDespacho === fFecha);
+  const fDoc  = (document.getElementById('fDoc')?.value || '').toLowerCase();
+  let rows = Object.values(_buildDespachos());
+  if (fFecha) rows = rows.filter(o => (o.fechaDespacho || o.fecha || '').slice(0,10) === fFecha);
   if (fEstado) rows = rows.filter(o => o.estado === fEstado);
-  if (fConductor) rows = rows.filter(o => o.conductorId === fConductor);
-  if (fZona) rows = rows.filter(o => (o.zona||'').toLowerCase().includes(fZona));
-  rows.sort((a,b) => new Date(b.fecha) - new Date(a.fecha));
-  const tb = document.getElementById('tDespachos');
-  if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="9">Sin despachos para el filtro seleccionado</td></tr>'; return; }
+  if (fConductor) {
+    // El filtro usa conductorId cuando el despacho se tomó desde la app;
+    // fallback: compara contra el nombreOpcion para despachos aún no tomados.
+    const condRef = data.conductores[fConductor];
+    const nomOp = condRef?.nombreOpcion || '';
+    rows = rows.filter(o => o.conductorId === fConductor || (nomOp && o.transportadoPor === nomOp));
+  }
+  if (fZona) rows = rows.filter(o => (o.destino||'').toLowerCase().includes(fZona));
+  if (fDoc)  rows = rows.filter(o => (o.documentoId||'').toLowerCase().includes(fDoc));
+  rows.sort((a,b) => (b.fecha||'').localeCompare(a.fecha||''));
+  if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="8">Sin despachos para el filtro seleccionado</td></tr>'; return; }
   tb.innerHTML = rows.map(o => {
-    const cond = data.conductores[o.conductorId];
-    const veh = data.vehiculos[o.vehiculoId];
-    const itemCount = (o.items||[]).length;
+    const safeDoc = o.documentoId.replace(/'/g, "\\'");
+    const cedibleCell = o.cedibleSrc
+      ? `<a class="cedible-link" onclick="viewCedible('${safeDoc}')" title="Ver / descargar cedible">📄 Ver</a>`
+      : '<span class="cedible-none">—</span>';
     return `<tr>
-      <td class="text-mono" style="color:var(--accent2);font-size:11px">${o.otId}</td>
-      <td>${fmtDate(o.fechaDespacho)}</td>
+      <td class="text-mono" style="color:var(--accent2);font-size:11.5px;font-weight:600">${o.documentoId}</td>
       <td style="font-weight:500">${o.cliente||'—'}</td>
-      <td>${cond ? cond.nombre : '—'}</td>
-      <td class="text-mono" style="font-size:11px">${veh ? veh.patente : '—'}</td>
-      <td>${o.zona||'—'}</td>
-      <td style="text-align:center">${itemCount}</td>
-      <td>${estadoBadge(o.estado)}</td>
+      <td>${o.destino||'—'}</td>
+      <td>${o.conductorLabel||'—'}</td>
+      <td>${estadoBadge(o.estado, o)}</td>
+      <td style="font-size:11.5px">${fmtDate(o.fechaDespacho || o.fecha)}</td>
+      <td>${cedibleCell}</td>
       <td>
-        <button class="btn btn-icon btn-sm" onclick="openDetalleOT('${o.otId}')" title="Ver detalle">🔍</button>
-        <button class="btn btn-icon btn-sm" onclick="copyLink('${o.tokenPublico}')" title="Copiar link seguimiento" style="margin-left:4px">🔗</button>
+        <button class="btn btn-icon btn-sm" onclick="openDetalleDespacho('${safeDoc}')" title="Ver detalle">🔍</button>
       </td>
     </tr>`;
   }).join('');
 }
 
-function estadoBadge(estado) {
-  const map = {
-    'Asignada':   'badge-blue',
-    'En Ruta':    'badge-warning',
-    'Entregada':  'badge-success',
-    'Con Novedad':'badge-danger',
-    'Cancelada':  'badge-gray',
-    'Borrador':   'badge-gray'
-  };
-  return `<span class="badge ${map[estado]||'badge-gray'}">${estado}</span>`;
+function estadoBadge(estado, o) {
+  const cls = _badgeClassForEstado(estado);
+  return `<span class="badge ${cls}">${estado}</span>`;
+}
+
+// Abre el visor de imágenes con el cedible del despacho + botón de descarga.
+function viewCedible(docId) {
+  const o = _buildDespachos()[docId];
+  if (!o || !o.cedibleSrc) { showToast('Este despacho no tiene cedible registrado.', 'warning'); return; }
+  const el = document.getElementById('imgViewerSrc');
+  el.src = o.cedibleSrc;
+  el.dataset.filename = `cedible-${docId}.jpg`;
+  openModal('imgViewerModal');
+}
+
+// Descarga la imagen actualmente visible en el visor.
+function downloadImgViewer() {
+  const el = document.getElementById('imgViewerSrc');
+  const src = el.src || '';
+  if (!src) return;
+  const filename = el.dataset.filename || 'imagen.jpg';
+  const a = document.createElement('a');
+  a.href = src;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+// ══ PARCIALES / NO ENTREGADOS ══
+function renderParciales() {
+  const tb = document.getElementById('tParciales');
+  if (!tb) return;
+  const fTipo = document.getElementById('fParcTipo')?.value || '';
+  const fDoc  = (document.getElementById('fParcDoc')?.value || '').toLowerCase();
+  let rows = Object.values(_buildDespachos())
+    .filter(o => !o.cerradoDefinitivo && (o.estado === 'Entregada Parcial' || o.estado === 'No Entregada'));
+  if (fTipo === 'parcial') rows = rows.filter(o => o.estado === 'Entregada Parcial');
+  if (fTipo === 'no-entregada') rows = rows.filter(o => o.estado === 'No Entregada');
+  if (fDoc) rows = rows.filter(o => (o.documentoId||'').toLowerCase().includes(fDoc));
+  rows.sort((a,b) => (b.noEntregadoEn || b.entregadoEn || '').localeCompare(a.noEntregadoEn || a.entregadoEn || ''));
+  // Depura la selección por si algún docId ya no está en la lista.
+  const validIds = new Set(rows.map(r => r.documentoId));
+  [..._selectedParciales].forEach(id => { if (!validIds.has(id)) _selectedParciales.delete(id); });
+  if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="10">Sin despachos parciales o no entregados</td></tr>'; _syncSelectAllCheckbox(0); return; }
+  tb.innerHTML = rows.map(o => {
+    const safeDoc = o.documentoId.replace(/'/g, "\\'");
+    const checked = _selectedParciales.has(o.documentoId) ? 'checked' : '';
+    const motivo = o.estado === 'No Entregada'
+      ? `${o.motivoNoEntrega || '—'}${o.motivoNoEntregaDetalle ? ': '+o.motivoNoEntregaDetalle : ''}`
+      : (o.observacionesCierre || '—');
+    const cedibleCell = o.cedibleSrc
+      ? `<a class="cedible-link" onclick="viewCedible('${safeDoc}')">📄 Ver</a>`
+      : '<span class="cedible-none">—</span>';
+    const fechaEst = o.noEntregadoEn || o.entregadoEn || o.fecha;
+    return `<tr class="${checked?'row-selected':''}">
+      <td class="chk-cell"><input type="checkbox" class="chk-parcial" data-doc="${safeDoc}" onchange="_toggleParcial('${safeDoc}',this.checked)" ${checked}></td>
+      <td class="text-mono" style="color:var(--accent2);font-size:11.5px;font-weight:600">${o.documentoId}</td>
+      <td style="font-weight:500">${o.cliente||'—'}</td>
+      <td>${o.destino||'—'}</td>
+      <td>${o.conductorLabel||'—'}</td>
+      <td>${estadoBadge(o.estado, o)}</td>
+      <td style="max-width:220px;font-size:12px">${motivo}</td>
+      <td style="font-size:11.5px">${fmtDateTime(fechaEst)}</td>
+      <td>${cedibleCell}</td>
+      <td>
+        <button class="btn btn-icon btn-sm" onclick="openDetalleDespacho('${safeDoc}')" title="Ver detalle">🔍</button>
+      </td>
+    </tr>`;
+  }).join('');
+  _syncSelectAllCheckbox(rows.length);
+}
+
+function _toggleParcial(docId, checked) {
+  if (checked) _selectedParciales.add(docId); else _selectedParciales.delete(docId);
+  renderParciales();
+}
+
+function selectAllParciales(checked) {
+  const tb = document.getElementById('tParciales');
+  if (!tb) return;
+  const chks = tb.querySelectorAll('.chk-parcial');
+  _selectedParciales = new Set();
+  if (checked) chks.forEach(c => _selectedParciales.add(c.dataset.doc));
+  renderParciales();
+}
+
+function _syncSelectAllCheckbox(total) {
+  const chk = document.getElementById('chkAllParciales');
+  if (!chk) return;
+  chk.checked = total > 0 && _selectedParciales.size === total;
+  chk.indeterminate = _selectedParciales.size > 0 && _selectedParciales.size < total;
 }
 
 // ══ SALIDAS PENDIENTES ══
@@ -1016,39 +1355,104 @@ function crearOT() {
   }).catch(e => { errEl.textContent = 'Error al guardar: ' + e.message; errEl.style.display='block'; });
 }
 
-// ══ DETALLE OT ══
-function openDetalleOT(otId) {
-  _detOT = data.ots[otId];
-  if (!_detOT) return;
-  const cond = data.conductores[_detOT.conductorId];
-  const veh = data.vehiculos[_detOT.vehiculoId];
-  document.getElementById('detOTId').textContent = _detOT.otId;
-  document.getElementById('detOTSub').textContent = `Documento WMS: ${_detOT.documentoId}`;
-  document.getElementById('detCliente').textContent = _detOT.cliente || '—';
-  document.getElementById('detConductor').textContent = cond ? cond.nombre : '—';
-  document.getElementById('detVehiculo').textContent = veh ? `${veh.patente} (${veh.tipo})` : '—';
-  document.getElementById('detZona').textContent = _detOT.zona || '—';
-  document.getElementById('detFecha').textContent = fmtDate(_detOT.fechaDespacho);
-  document.getElementById('detEstado').innerHTML = estadoBadge(_detOT.estado);
+// ══ DETALLE DESPACHO (basado en documentoId del WMS + /despachos) ══
+function openDetalleDespacho(docId) {
+  const o = _buildDespachos()[docId];
+  if (!o) return;
+  _detOT = o; // reutilizamos el estado para reusar el mismo modal
+  document.getElementById('detOTId').textContent = o.documentoId;
+  document.getElementById('detOTSub').textContent = `Despacho desde WMS · Bodega: ${o.bodega||'—'}`;
+  document.getElementById('detCliente').textContent = o.cliente || '—';
+  document.getElementById('detConductor').textContent = o.conductorLabel || '—';
+  // Reutilizamos los campos del modal legacy para encajar la nueva info.
+  document.getElementById('detVehiculo').textContent = o.transportadoPorDetalle || '—';
+  document.getElementById('detZona').textContent = o.destino || '—';
+  document.getElementById('detFecha').textContent = fmtDate(o.fechaDespacho || o.fecha);
+  document.getElementById('detEstado').innerHTML = estadoBadge(o.estado, o);
 
-  // Items
+  // Items (agrupados por SKU+lote)
+  const items = [];
+  const map = {};
+  (o.items || []).forEach(it => {
+    const k = `${it.sku}|${it.lote}`;
+    if (!map[k]) { map[k] = { ...it }; items.push(map[k]); }
+    else map[k].cantidad += it.cantidad;
+  });
   const itemsBody = document.getElementById('detItemsBody');
-  itemsBody.innerHTML = (_detOT.items||[]).map(i => `<tr><td class="text-mono" style="color:var(--accent2)">${i.sku}</td><td class="text-mono" style="font-size:11px">${i.lote}</td><td>${i.descripcion||'—'}</td><td style="text-align:center;font-weight:600">${i.cantidadDespacho}</td></tr>`).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:12px">—</td></tr>';
+  itemsBody.innerHTML = items.map(i => `<tr><td class="text-mono" style="color:var(--accent2)">${i.sku}</td><td class="text-mono" style="font-size:11px">${i.lote}</td><td>${i.descripcion||'—'}</td><td style="text-align:center;font-weight:600">${i.cantidad}</td></tr>`).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:12px">—</td></tr>';
 
-  // Timeline
-  _detTrazabilidad = Object.values(data.trazabilidad).filter(h => h.otId === otId).sort((a,b) => new Date(a.fecha)-new Date(b.fecha));
+  // Timeline: hitos del despacho + fechas de solicitud.
+  const hitos = (o.despacho && o.despacho.hitos)
+    ? Object.values(o.despacho.hitos).sort((a,b) => new Date(a.fecha)-new Date(b.fecha))
+    : [];
+  _detTrazabilidad = hitos.map(h => ({
+    estado: h.estado,
+    fecha: h.fecha,
+    observaciones: h.observaciones || h.motivoNoEntrega || '',
+    usuario: h.usuario || '',
+    lat: h.lat || null, lng: h.lng || null,
+    fotoUrl: h.fotoCedibleBase64 || h.fotoCedibleUrl || null
+  }));
   renderTimeline();
 
-  // Map & images
+  // Map & images (acepta tanto fotoCedibleBase64 como fotoCedibleUrl).
   loadDetalleExtras();
 
-  // Tracking link
-  const trackUrl = `${location.origin}/seguimiento.html?token=${_detOT.tokenPublico}`;
-  const linkEl = document.getElementById('detTrackLink');
-  linkEl.textContent = `seguimiento.html?token=${_detOT.tokenPublico}`;
-  linkEl.href = trackUrl;
+  // Cedible destacado al tope del detalle (reutiliza el bloque de imágenes).
+  _agregarCedibleEnDetalle(o);
 
+  // Oculta el link de tracking público (sólo aplicaba a OT manual legacy).
+  const trackRow = document.getElementById('detTrackLink')?.closest('div');
+  if (trackRow) trackRow.style.display = 'none';
+  // Reemplaza los botones del detalle: en lugar de "Cambiar estado / Cancelar"
+  // ofrecemos "Reasignar o cerrar" cuando aplica.
+  const btnRow = document.querySelector('#detalleOTModal .btn-row');
+  if (btnRow) {
+    const canReasignar = (o.estado === 'Entregada Parcial' || o.estado === 'No Entregada');
+    btnRow.innerHTML = `
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('detalleOTModal')">Cerrar</button>
+      ${canReasignar ? `<button class="btn btn-warning-sm btn-sm" onclick="openReasignarCerrarPorDoc('${o.documentoId.replace(/'/g,"\\'")}')">⇄ Reasignar o cerrar</button>` : ''}
+    `;
+  }
   openModal('detalleOTModal');
+}
+
+// Mantén alias para no romper llamados previos: el único que quedaba era
+// desde la columna de acciones del card de OT manual, ahora removido.
+function openDetalleOT(id) { return openDetalleDespacho(id); }
+
+// Inserta un bloque con el cedible destacado al inicio del cuerpo del detalle.
+function _agregarCedibleEnDetalle(o) {
+  // Elimina cualquier bloque previo para no duplicar al reabrir.
+  document.querySelectorAll('#detCedibleWrap').forEach(el => el.remove());
+  if (!o.cedibleSrc) return;
+  const anchor = document.getElementById('detItemsBody').closest('.table-wrap');
+  if (!anchor) return;
+  const safeDoc = o.documentoId.replace(/'/g, "\\'");
+  const wrap = document.createElement('div');
+  wrap.id = 'detCedibleWrap';
+  wrap.style.cssText = 'margin-bottom:16px';
+  wrap.innerHTML = `
+    <div class="section-div"><div class="section-div-line"></div><div class="section-div-text">Cedible firmado</div><div class="section-div-line"></div></div>
+    <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;">
+      <img src="${o.cedibleSrc}" style="max-width:200px;max-height:200px;border-radius:6px;border:1px solid var(--border);cursor:pointer;object-fit:cover" onclick="viewCedible('${safeDoc}')">
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <button class="btn btn-ghost btn-sm" onclick="viewCedible('${safeDoc}')" style="width:auto">🔍 Ver completo</button>
+        <button class="btn btn-success-sm btn-sm" onclick="_descargarCedibleDirecto('${safeDoc}')" style="width:auto">⬇ Descargar</button>
+      </div>
+    </div>`;
+  anchor.parentNode.insertBefore(wrap, anchor);
+}
+
+function _descargarCedibleDirecto(docId) {
+  const o = _buildDespachos()[docId];
+  if (!o || !o.cedibleSrc) return;
+  const a = document.createElement('a');
+  a.href = o.cedibleSrc;
+  a.download = `cedible-${docId}.jpg`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
 
 function renderTimeline() {
@@ -1107,7 +1511,7 @@ function copyLink(token) {
   navigator.clipboard.writeText(url).then(() => showToast('Link copiado al portapapeles.', 'success')).catch(() => prompt('Copia este link:', url));
 }
 
-// ══ CAMBIO ESTADO ADMIN ══
+// ══ CAMBIO ESTADO ADMIN (legacy OT manual, aún usable) ══
 function openCambioEstado() {
   if (!_detOT) return;
   document.getElementById('ce-estado').value = _detOT.estado;
@@ -1117,37 +1521,215 @@ function openCambioEstado() {
 }
 
 function confirmarCambioEstado() {
-  if (!_detOT) return;
-  const nuevoEstado = document.getElementById('ce-estado').value;
-  const obs = document.getElementById('ce-obs').value.trim();
-  const now = new Date().toISOString();
-  const hitoId = `H-${Date.now()}`;
-  const hito = { otId:_detOT.otId, estado:nuevoEstado, fecha:now, observaciones:obs||`Estado cambiado por ${currentUser.email}`, usuario:currentUser.email };
-  const updates = {};
-  updates[`organizaciones/${orgUid}/ordenesTransporte/${_detOT.otId}/estado`] = nuevoEstado;
-  updates[`organizaciones/${orgUid}/trazabilidadTransporte/${hitoId}`] = hito;
-  updates[`tracking/${_detOT.tokenPublico}/estado`] = nuevoEstado;
-  updates[`tracking/${_detOT.tokenPublico}/hitos/${hitoId}`] = hito;
-  db.ref().update(updates).then(() => {
-    showToast(`Estado cambiado a "${nuevoEstado}".`, 'success');
-    if (['En Ruta','Con Novedad'].includes(nuevoEstado)) {
-      saveNotif(`OT ${_detOT.otId} cambió a "${nuevoEstado}" · ${fmtDateTime(now)}`);
-    }
-    closeModal('cambioEstadoModal');
-    _detOT.estado = nuevoEstado;
-    openDetalleOT(_detOT.otId);
-  }).catch(e => showToast('Error: ' + e.message, 'danger'));
+  // Función conservada por compatibilidad; en el nuevo flujo no se expone
+  // botón "Cambiar estado" en el detalle.
+  closeModal('cambioEstadoModal');
 }
 
-function cancelarOT() {
-  if (!_detOT || _detOT.estado === 'Cancelada') return;
-  if (!confirm(`¿Cancelar OT ${_detOT.otId}?`)) return;
-  const now = new Date().toISOString();
-  const hitoId = `H-${Date.now()}`;
-  const updates = {};
-  updates[`organizaciones/${orgUid}/ordenesTransporte/${_detOT.otId}/estado`] = 'Cancelada';
-  updates[`organizaciones/${orgUid}/trazabilidadTransporte/${hitoId}`] = { otId:_detOT.otId, estado:'Cancelada', fecha:now, observaciones:`Cancelada por ${currentUser.email}`, usuario:currentUser.email };
-  db.ref().update(updates).then(() => { showToast(`OT ${_detOT.otId} cancelada.`, 'warning'); closeModal('detalleOTModal'); }).catch(e => showToast('Error: '+e.message,'danger'));
+function cancelarOT() { /* legacy OT manual: no se expone en el nuevo flujo */ }
+
+// ══ REASIGNAR O CERRAR DESPACHOS (nueva operación) ══
+// Abre el modal con los documentos seleccionados en la tabla Parciales.
+function openReasignarCerrar() {
+  const docs = [..._selectedParciales];
+  if (!docs.length) { showToast('Selecciona al menos un despacho de la tabla.', 'warning'); return; }
+  _rcInit(docs);
+}
+
+// Abre el mismo modal pero para un único docId (desde el botón del detalle).
+function openReasignarCerrarPorDoc(docId) {
+  closeModal('detalleOTModal');
+  _rcInit([docId]);
+}
+
+function _rcInit(docIds) {
+  const todos = _buildDespachos();
+  const detalles = docIds.map(d => todos[d]).filter(Boolean);
+  if (!detalles.length) { showToast('No se encontraron los despachos seleccionados.', 'danger'); return; }
+  document.getElementById('rc-count-sub').textContent = `${detalles.length} despacho${detalles.length>1?'s':''} seleccionado${detalles.length>1?'s':''}`;
+  const listHtml = detalles.map(o => `
+    <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px dashed var(--border);">
+      <span class="text-mono" style="color:var(--accent2);font-weight:600;min-width:120px">${o.documentoId}</span>
+      <span style="flex:1">${o.cliente||'—'} · ${o.destino||'—'}</span>
+      ${estadoBadge(o.estado, o)}
+    </div>`).join('');
+  document.getElementById('rc-list').innerHTML = listHtml;
+  // Guarda la selección vigente en el dataset del botón para que confirm la pueda leer.
+  document.getElementById('btn-rc-confirm').dataset.docs = JSON.stringify(docIds);
+  // Resetea formulario.
+  document.getElementById('rc-obs').value = '';
+  document.getElementById('rc-err').style.display = 'none';
+  const radioReas = document.querySelector('input[name="rc-accion"][value="reasignar"]');
+  if (radioReas) radioReas.checked = true;
+  _rcToggleAccion();
+  // Pobla el select de transportistas con las mismas opciones del dropdown
+  // "Transportado por" al registrar una Salida (conductores + genéricas).
+  _rcPoblarTransportadoSelect(detalles);
+  openModal('reasignarCerrarModal');
+}
+
+function _rcToggleAccion() {
+  const accion = (document.querySelector('input[name="rc-accion"]:checked')?.value) || 'reasignar';
+  document.getElementById('rc-reasignar-group').style.display = (accion === 'reasignar') ? '' : 'none';
+  // Observaciones son obligatorias al cerrar definitivamente (deja trazabilidad del motivo).
+  document.getElementById('rc-obs-req').style.display = (accion === 'cerrar') ? '' : 'none';
+  document.querySelectorAll('.radio-opt').forEach(r => r.classList.remove('active'));
+  document.getElementById(accion === 'cerrar' ? 'rc-opt-cerrar' : 'rc-opt-reasignar').classList.add('active');
+}
+
+// Opciones del dropdown "Transportado por" (reproduce el comportamiento del
+// WMS: conductores asignables ligados a la(s) bodega(s) del despacho +
+// opciones genéricas estándar). Si hay varios despachos, se cruzan las
+// bodegas (muestra conductores habilitados para todas).
+function _rcPoblarTransportadoSelect(detalles) {
+  const sel = document.getElementById('rc-transportado');
+  if (!sel) return;
+  const bodegasSel = [...new Set(detalles.map(d => d.bodega).filter(Boolean))];
+  const todos = Object.values(data.conductores || {}).filter(c => c && c.activo !== false && c.nombreOpcion);
+  const conductores = todos.filter(c => {
+    const bods = Array.isArray(c.bodegasPermitidas)
+      ? c.bodegasPermitidas
+      : (c.bodegasPermitidas ? Object.values(c.bodegasPermitidas) : []);
+    if (!bods.length) return false;
+    // Si todos los despachos coinciden con la misma bodega, filtrar por ella;
+    // si son varias, exigir que el conductor cubra TODAS para evitar errores.
+    return bodegasSel.every(b => bods.includes(b));
+  }).sort((a,b) => (a.nombreOpcion||'').localeCompare(b.nombreOpcion||''));
+  // Mismas opciones genéricas que el perfil "Maestro" en index.html.
+  const genericas = ['Externo', 'Pendiente de asignación', 'Retira Cliente', 'Otros'];
+  const groups = [];
+  if (conductores.length) {
+    groups.push(`<optgroup label="Conductores asignables">${
+      conductores.map(c => `<option value="${c.nombreOpcion}">${c.nombreOpcion}</option>`).join('')
+    }</optgroup>`);
+  }
+  groups.push(`<optgroup label="Otras opciones">${
+    genericas.map(o => `<option value="${o}">${o}</option>`).join('')
+  }</optgroup>`);
+  sel.innerHTML = '<option value="">Seleccionar...</option>' + groups.join('');
+}
+
+async function confirmReasignarCerrar() {
+  const errEl = document.getElementById('rc-err');
+  errEl.style.display = 'none';
+  const docs = JSON.parse(document.getElementById('btn-rc-confirm').dataset.docs || '[]');
+  if (!docs.length) { errEl.textContent = 'No hay despachos seleccionados.'; errEl.style.display='block'; return; }
+  const accion = (document.querySelector('input[name="rc-accion"]:checked')?.value) || 'reasignar';
+  const obs = document.getElementById('rc-obs').value.trim();
+  const nuevoTransp = (document.getElementById('rc-transportado')?.value || '').trim();
+  if (accion === 'reasignar' && !nuevoTransp) { errEl.textContent = 'Seleccione el nuevo transportista.'; errEl.style.display='block'; return; }
+  if (accion === 'cerrar' && !obs) { errEl.textContent = 'Las observaciones son obligatorias al cerrar definitivamente.'; errEl.style.display='block'; return; }
+
+  const btn = document.getElementById('btn-rc-confirm');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner-sm"></span> Guardando...';
+  try {
+    const now = new Date().toISOString();
+    const updates = {};
+    const todos = _buildDespachos();
+    // Si reasignamos a un nombreOpcion que coincide con un conductor, también
+    // actualizamos conductorId/nombre en el despacho para que la app del
+    // chofer lo refleje de inmediato.
+    const condPorNombre = {};
+    Object.entries(data.conductores || {}).forEach(([k, c]) => {
+      if (c && c.nombreOpcion) condPorNombre[c.nombreOpcion.trim()] = { id:k, c };
+    });
+    const esPendiente = (nuevoTransp === 'Pendiente de asignación');
+
+    docs.forEach(docId => {
+      const o = todos[docId];
+      if (!o) return;
+      const basePath = `organizaciones/${orgUid}/despachos/${docId}`;
+      const hitoId = `H-${Date.now()}-${Math.random().toString(36).slice(2,6)}`;
+
+      if (accion === 'cerrar') {
+        updates[`${basePath}/cerradoDefinitivo`] = true;
+        updates[`${basePath}/cerradoDefinitivoEn`] = now;
+        updates[`${basePath}/cerradoDefinitivoPor`] = currentUser.email;
+        updates[`${basePath}/observacionesCierreAdmin`] = obs;
+        updates[`${basePath}/hitos/${hitoId}`] = {
+          estado: 'Cerrada',
+          fecha: now,
+          observaciones: `Cierre definitivo por admin: ${obs}`,
+          usuario: currentUser.email
+        };
+      } else {
+        // Reasignación: actualizamos transportadoPor en TODOS los movimientos
+        // de ese documento (mismo mecanismo que usa index.html). Esto es lo
+        // que la app del conductor usa para filtrar sus despachos.
+        Object.entries(data.movimientos || {}).forEach(([mId, m]) => {
+          if (m && m.tipo === 'Salida' && (m.documentoId === docId)) {
+            updates[`usuarios/${orgUid}/movimientos/${mId}/transportadoPor`] = nuevoTransp;
+            // Si antes era "Otros: X", limpiamos el detalle a menos que la nueva opción también sea Otros.
+            if (nuevoTransp !== 'Otros') {
+              updates[`usuarios/${orgUid}/movimientos/${mId}/transportadoPorDetalle`] = '';
+            }
+          }
+        });
+        // Reinicia el despacho a estado "Asignada" / "Pendiente" y limpia los
+        // campos de cierre para que vuelva a verse como una tarea abierta en
+        // conductor.html. El historial queda en /hitos/ para auditoría.
+        updates[`${basePath}/estado`] = esPendiente ? 'Pendiente' : 'Asignada';
+        updates[`${basePath}/entregadoEn`] = null;
+        updates[`${basePath}/noEntregadoEn`] = null;
+        updates[`${basePath}/entregaConObservaciones`] = null;
+        updates[`${basePath}/entregaParcial`] = null;
+        updates[`${basePath}/motivoNoEntrega`] = null;
+        updates[`${basePath}/motivoNoEntregaDetalle`] = null;
+        updates[`${basePath}/observacionesCierre`] = null;
+        updates[`${basePath}/fotoCedibleBase64`] = null;
+        updates[`${basePath}/fotoCedibleUrl`] = null;
+        updates[`${basePath}/fotosEntregaBase64`] = null;
+        updates[`${basePath}/enRutaEn`] = null;
+        // Reset del conductor en el despacho. Si la nueva opción es un
+        // conductor registrado, lo apuntamos; si es genérica, lo borramos.
+        const cond = condPorNombre[nuevoTransp];
+        if (cond) {
+          updates[`${basePath}/conductorId`] = cond.id;
+          updates[`${basePath}/conductorNombre`] = cond.c.nombreOpcion;
+          updates[`${basePath}/tomadoEn`] = now;
+        } else {
+          updates[`${basePath}/conductorId`] = null;
+          updates[`${basePath}/conductorNombre`] = null;
+          updates[`${basePath}/tomadoEn`] = null;
+        }
+        updates[`${basePath}/hitos/${hitoId}`] = {
+          estado: esPendiente ? 'Pendiente' : 'Asignada',
+          fecha: now,
+          observaciones: `Reasignada a "${nuevoTransp}" por admin.${obs ? ' ' + obs : ''}`,
+          usuario: currentUser.email
+        };
+      }
+
+      // Entrada de auditoría global.
+      const auditId = `${Date.now()}-${Math.random().toString(36).slice(2,6)}`;
+      updates[`usuarios/${orgUid}/auditoria/${auditId}`] = {
+        fecha: now,
+        accion: accion === 'cerrar' ? 'CerrarDespacho' : 'ReasignarDespacho',
+        modulo: 'Transporte',
+        detalle: accion === 'cerrar'
+          ? `Despacho ${docId} cerrado definitivamente por admin. Obs: ${obs}`
+          : `Despacho ${docId} reasignado a "${nuevoTransp}" por admin.${obs ? ' Obs: '+obs : ''}`,
+        usuario: currentUser.email
+      };
+    });
+
+    await db.ref().update(updates);
+    showToast(accion === 'cerrar'
+      ? `${docs.length} despacho${docs.length>1?'s cerrados':' cerrado'} definitivamente.`
+      : `${docs.length} despacho${docs.length>1?'s reasignados':' reasignado'} a "${nuevoTransp}".`,
+      'success');
+    saveNotif(accion === 'cerrar'
+      ? `Admin cerró ${docs.length} despacho(s) definitivamente.`
+      : `Admin reasignó ${docs.length} despacho(s) a ${nuevoTransp}.`);
+    _selectedParciales = new Set();
+    closeModal('reasignarCerrarModal');
+  } catch (e) {
+    console.error('[confirmReasignarCerrar] fallo:', e);
+    errEl.textContent = 'Error al guardar: ' + (e && e.message ? e.message : e);
+    errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.innerHTML = 'Confirmar';
+  }
 }
 
 // ══ CONDUCTORES ══
