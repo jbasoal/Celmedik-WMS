@@ -891,6 +891,27 @@ function _totalBultosItem(it) {
   return it._bultos;
 }
 
+// Resuelve la fecha+hora que corresponde al estado actual del despacho:
+//   Pendiente / Asignada → cuando se creó la solicitud (fecha del WMS)
+//   Asignada (ya tomado) → cuando el chofer la tomó (tomadoEn)
+//   En Tránsito          → cuando se inició tránsito (enRutaEn)
+//   Entregada            → cuando se entregó (entregadoEn)
+//   No Entregada         → cuando se marcó no entregado (noEntregadoEn)
+// Devuelve el HTML listo (ícono + fecha formateada) para la línea meta de
+// la card. Si el timestamp del estado aún no existe, cae a la fecha de
+// creación para no dejar la línea vacía.
+function _fechaEstadoLabel(d) {
+  const r = d.regDespacho || {};
+  const creacion = d.fecha || d.fechaDespacho || '';
+  let ts = creacion, ico = '📅';
+  if (d.estado === 'Asignada' && r.tomadoEn)       { ts = r.tomadoEn;      ico = '👤'; }
+  else if ((d.estado === 'En Ruta' || d.estado === 'En Tránsito') && r.enRutaEn) { ts = r.enRutaEn; ico = '🚛'; }
+  else if (d.estado === 'Entregada' && r.entregadoEn) { ts = r.entregadoEn; ico = '✓'; }
+  else if (d.estado === 'No Entregada' && r.noEntregadoEn) { ts = r.noEntregadoEn; ico = '✕'; }
+  const fmt = ts && String(ts).includes('T') ? fmtDateTime(ts) : fmtDate(ts);
+  return `${ico} ${fmt || '—'}`;
+}
+
 function _despCardHtml(d) {
   const badgeMap = { 'Asignada':'badge-blue', 'En Ruta':'badge-warning', 'En Tránsito':'badge-warning', 'Entregada':'badge-success', 'Pendiente':'badge-gray', 'No Entregada':'badge-danger' };
   const estadoLabel = d.estado === 'En Ruta' ? 'En Tránsito' : d.estado;
@@ -959,7 +980,7 @@ function _despCardHtml(d) {
         <div>
           <div class="ot-id">${d.documentoId}</div>
           <div class="ot-cliente">${d.cliente || '—'}${subBadge}</div>
-          <div class="ot-meta">📅 ${fmtDate(d.fechaDespacho || d.fecha)} · 🏢 ${d.bodega || '—'}${d.destino ? ' · 📍 '+d.destino : ''}</div>
+          <div class="ot-meta">${_fechaEstadoLabel(d)} · 🏢 ${d.bodega || '—'}${d.destino ? ' · 📍 '+d.destino : ''}</div>
           <div class="ot-meta" style="margin-top:2px">${skusLabel} · ${totalUd} unidades</div>
           ${motivoLine}
           ${mapsLink}
