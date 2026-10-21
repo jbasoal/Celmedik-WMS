@@ -706,16 +706,32 @@ tbody tr:hover td{background:rgba(0,112,242,0.04);}
     <div class="form-row">
       <div class="form-group"><label class="form-label">Vcto. Licencia</label><input type="date" class="form-input" id="c-vcto"></div>
       <div class="form-group">
-        <label class="form-label">Nombre en "Transportado por" *</label>
+        <label class="form-label">Nombre en "Transportado por"</label>
         <input type="text" class="form-input" id="c-nombre-opcion" placeholder="Ej: Carlos Arcos" title="Texto exacto que aparece en el dropdown Transportado por del modal de Salida">
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">Opcional. Déjelo vacío si este perfil sólo captura despachos genéricos (Externo / Retira Cliente) desde su bodega.</div>
       </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Captura también despachos asignados a (opcional)</label>
+      <div id="c-extras-wrap" style="display:flex;flex-wrap:wrap;gap:10px;padding:10px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius)">
+        <label style="display:inline-flex;align-items:center;gap:6px;background:var(--surface);padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;font-size:12.5px">
+          <input type="checkbox" value="Externo" class="c-extra-chk"><span>Externo</span>
+        </label>
+        <label style="display:inline-flex;align-items:center;gap:6px;background:var(--surface);padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;font-size:12.5px">
+          <input type="checkbox" value="Retira Cliente" class="c-extra-chk"><span>Retira Cliente</span>
+        </label>
+        <label style="display:inline-flex;align-items:center;gap:6px;background:var(--surface);padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;font-size:12.5px">
+          <input type="checkbox" value="Otros" class="c-extra-chk"><span>Otros</span>
+        </label>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px">Útil para operadores de bodega que ven los despachos marcados como Externo / Retira Cliente de su bodega. El filtro cruza con las bodegas permitidas.</div>
     </div>
     <div class="form-group">
       <label class="form-label">Bodegas desde las que puede retirar *</label>
       <div id="c-bodegas-wrap" style="display:flex;flex-wrap:wrap;gap:10px;padding:10px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius)">
         <span style="color:var(--text3);font-size:12px">Cargando bodegas...</span>
       </div>
-      <div style="font-size:11px;color:var(--text3);margin-top:4px">Define qué salidas verá el chofer cuando sean marcadas como "Pendiente de asignación".</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px">Define qué salidas verá el chofer cuando sean marcadas como "Pendiente de asignación" o cuando se marquen los checkboxes de arriba.</div>
     </div>
     <div id="conductorLoginSection">
       <div class="section-div"><div class="section-div-line"></div><div class="section-div-text">Acceso App Móvil</div><div class="section-div-line"></div></div>
@@ -1047,6 +1063,16 @@ function _getConductorBodegasSeleccionadas() {
     return [...document.querySelectorAll('.c-bodega-chk:checked')].map(c => c.value);
 }
 
+// Nombres genéricos de "Transportado por" (Externo / Retira Cliente / Otros)
+// que este perfil también debe capturar como propios. Es opcional.
+function _setConductorExtrasSeleccionados(selected) {
+    const set = new Set(Array.isArray(selected) ? selected : []);
+    document.querySelectorAll('.c-extra-chk').forEach(chk => { chk.checked = set.has(chk.value); });
+}
+function _getConductorExtrasSeleccionados() {
+    return [...document.querySelectorAll('.c-extra-chk:checked')].map(c => c.value);
+}
+
 // ══ NAVIGATION ══
 function navTo(page) {
   document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
@@ -1374,6 +1400,7 @@ function openModal(id) {
     ['c-nombre','c-rut','c-tel','c-licencia','c-email','c-pass','c-nombre-opcion'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
     document.getElementById('c-vcto').value = '';
     _renderConductorBodegas([]);
+    _setConductorExtrasSeleccionados([]);
     document.getElementById('conductor-err').style.display = 'none';
     document.getElementById('conductor-ok').style.display = 'none';
   }
@@ -1931,9 +1958,15 @@ function renderConductores() {
     const bodsCell = bods.length
       ? bods.map(b => `<span class="badge badge-blue" style="margin:1px 2px 1px 0">${b}</span>`).join('')
       : '<span style="color:var(--text3);font-size:11px">—</span>';
+    const extras = Array.isArray(c.nombresOpcionExtra) ? c.nombresOpcionExtra : (c.nombresOpcionExtra ? Object.values(c.nombresOpcionExtra) : []);
+    const extrasBadges = extras.length
+      ? ' ' + extras.map(e => `<span class="badge" style="background:var(--accent2-dim,#2e7cbf33);color:var(--accent2);border:1px solid rgba(46,124,191,.35);font-size:10.5px;margin-left:2px">${e}</span>`).join('')
+      : '';
     const nomOpcion = c.nombreOpcion
-      ? `<span class="text-mono" style="font-size:11.5px;color:var(--accent2);font-weight:600">${c.nombreOpcion}</span>`
-      : '<span style="color:var(--danger);font-size:11px">⚠ Sin asignar</span>';
+      ? `<span class="text-mono" style="font-size:11.5px;color:var(--accent2);font-weight:600">${c.nombreOpcion}</span>${extrasBadges}`
+      : (extras.length
+          ? `<span style="color:var(--text3);font-size:11px">(sólo genéricos)</span>${extrasBadges}`
+          : '<span style="color:var(--danger);font-size:11px">⚠ Sin asignar</span>');
     return `<tr>
       <td style="font-weight:500">${c.nombre}</td>
       <td>${nomOpcion}</td>
@@ -1967,6 +2000,8 @@ function editConductor(id) {
   document.getElementById('c-nombre-opcion').value = c.nombreOpcion||'';
   const bods = Array.isArray(c.bodegasPermitidas) ? c.bodegasPermitidas : (c.bodegasPermitidas ? Object.values(c.bodegasPermitidas) : []);
   _renderConductorBodegas(bods);
+  const extras = Array.isArray(c.nombresOpcionExtra) ? c.nombresOpcionExtra : (c.nombresOpcionExtra ? Object.values(c.nombresOpcionExtra) : []);
+  _setConductorExtrasSeleccionados(extras);
   document.getElementById('conductor-err').style.display = 'none';
   document.getElementById('conductor-ok').style.display = 'none';
   openModal('nuevoConductorModal');
@@ -1980,22 +2015,28 @@ function saveConductor() {
   const nombre = document.getElementById('c-nombre').value.trim();
   const nombreOpcion = document.getElementById('c-nombre-opcion').value.trim();
   const bodegasPermitidas = _getConductorBodegasSeleccionadas();
+  const nombresOpcionExtra = _getConductorExtrasSeleccionados();
   const errEl = document.getElementById('conductor-err');
   const okEl = document.getElementById('conductor-ok');
   errEl.style.display = 'none'; okEl.style.display = 'none';
   if (!nombre) { errEl.textContent = 'El nombre es obligatorio.'; errEl.style.display='block'; return; }
-  if (!nombreOpcion) { errEl.textContent = 'Debe indicar el nombre que aparecerá en el dropdown "Transportado por".'; errEl.style.display='block'; return; }
+  if (!nombreOpcion && !nombresOpcionExtra.length) {
+    errEl.textContent = 'Debe indicar el nombre del dropdown "Transportado por" o marcar al menos un valor genérico (Externo / Retira Cliente / Otros).';
+    errEl.style.display='block'; return;
+  }
   if (!bodegasPermitidas.length) { errEl.textContent = 'Debe seleccionar al menos una bodega desde la que el conductor puede retirar.'; errEl.style.display='block'; return; }
   // Garantiza unicidad del nombreOpcion para que el dropdown de Salida pueda mapearlo al conductor.
-  const dupe = Object.entries(data.conductores || {}).find(([k, c]) =>
-      k !== _editConductorId && (c.nombreOpcion || '').trim().toLowerCase() === nombreOpcion.toLowerCase());
-  if (dupe) { errEl.textContent = `El nombre "${nombreOpcion}" ya está asignado a otro conductor. Use un nombre único.`; errEl.style.display='block'; return; }
+  if (nombreOpcion) {
+    const dupe = Object.entries(data.conductores || {}).find(([k, c]) =>
+        k !== _editConductorId && (c.nombreOpcion || '').trim().toLowerCase() === nombreOpcion.toLowerCase());
+    if (dupe) { errEl.textContent = `El nombre "${nombreOpcion}" ya está asignado a otro conductor. Use un nombre único.`; errEl.style.display='block'; return; }
+  }
   const cData = {
     nombre, rut:document.getElementById('c-rut').value.trim(),
     telefono:document.getElementById('c-tel').value.trim(),
     licencia:document.getElementById('c-licencia').value.trim(),
     vencimientoLicencia:document.getElementById('c-vcto').value,
-    nombreOpcion, bodegasPermitidas,
+    nombreOpcion, nombresOpcionExtra, bodegasPermitidas,
     activo:true
   };
 

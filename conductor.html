@@ -537,7 +537,11 @@ let currentUser = null, maestroUid = null, conductorId = null, conductorNombre =
 // Datos del conductor logueado (nombreOpcion debe coincidir con la opción
 // del dropdown "Transportado por" del WMS; bodegasPermitidas define qué
 // pendientes verá).
-let conductorInfo = { nombreOpcion: '', bodegasPermitidas: [], activo: true };
+// nombresOpcionExtra: lista opcional de valores genéricos de "Transportado
+// por" (p.ej. ["Externo","Retira Cliente"]) que este perfil también debe
+// capturar — útil para operadores de bodega que ven despachos asignados a
+// externos o retira cliente desde su bodega.
+let conductorInfo = { nombreOpcion: '', nombresOpcionExtra: [], bodegasPermitidas: [], activo: true };
 let misMovimientos = {};   // Salidas visibles al chofer (tipo=Salida ∩ filtro perfil)
 let misDespachos   = {};   // Estado/hitos de despachos ya tomados (/organizaciones/.../despachos/)
 let currentGPS = null;
@@ -622,12 +626,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     const c = cSnap.val() || {};
     conductorNombre = c.nombre || u.email;
     conductorInfo.nombreOpcion = (c.nombreOpcion || '').trim();
+    conductorInfo.nombresOpcionExtra = Array.isArray(c.nombresOpcionExtra)
+      ? c.nombresOpcionExtra.map(s => (s||'').trim()).filter(Boolean)
+      : (c.nombresOpcionExtra ? Object.values(c.nombresOpcionExtra).map(s => (s||'').trim()).filter(Boolean) : []);
     conductorInfo.bodegasPermitidas = Array.isArray(c.bodegasPermitidas)
       ? c.bodegasPermitidas
       : (c.bodegasPermitidas ? Object.values(c.bodegasPermitidas) : []);
     conductorInfo.activo = c.activo !== false;
-    if (!conductorInfo.nombreOpcion) {
-      alert('Su ficha de conductor no tiene configurado el "Nombre en Transportado por". Pida al administrador que lo complete en el panel de Transporte.');
+    if (!conductorInfo.nombreOpcion && !conductorInfo.nombresOpcionExtra.length) {
+      alert('Su ficha de conductor no tiene configurado el "Nombre en Transportado por" ni nombres extra. Pida al administrador que lo complete en el panel de Transporte.');
     }
     if (!conductorInfo.bodegasPermitidas.length) {
       alert('Su ficha de conductor no tiene bodegas asignadas. Pida al administrador que configure las bodegas desde las que puede retirar.');
@@ -694,6 +701,9 @@ function attachListeners() {
   db.ref(`organizaciones/${maestroUid}/conductores/${conductorId}`).on('value', s => {
     const c = s.val() || {};
     conductorInfo.nombreOpcion = (c.nombreOpcion || '').trim();
+    conductorInfo.nombresOpcionExtra = Array.isArray(c.nombresOpcionExtra)
+      ? c.nombresOpcionExtra.map(s => (s||'').trim()).filter(Boolean)
+      : (c.nombresOpcionExtra ? Object.values(c.nombresOpcionExtra).map(s => (s||'').trim()).filter(Boolean) : []);
     conductorInfo.bodegasPermitidas = Array.isArray(c.bodegasPermitidas)
       ? c.bodegasPermitidas
       : (c.bodegasPermitidas ? Object.values(c.bodegasPermitidas) : []);
@@ -721,14 +731,23 @@ function _construirDespachos() {
 
   const miNombre = conductorInfo.nombreOpcion;
   const misBodegas = new Set(conductorInfo.bodegasPermitidas || []);
+  // Nombres extra que este perfil también captura (p.ej. "Externo", "Retira
+  // Cliente"). Como son valores genéricos no asociados a una bodega, exigimos
+  // además que la bodega del despacho esté dentro de bodegasPermitidas, para
+  // que un operador de bodega sólo vea los externos/retira de SU bodega.
+  const extrasSet = new Set((conductorInfo.nombresOpcionExtra || []).filter(Boolean));
   const PENDIENTE_LITERAL = 'Pendiente de asignación';
 
   Object.entries(porDocumento).forEach(([docId, movs]) => {
     const first = movs[0];
     const transporte = (first.transportadoPor || '').trim();
     const bodega = first.bodega || '';
-    const esMio = miNombre && transporte === miNombre;
-    const esPendiente = transporte === PENDIENTE_LITERAL && misBodegas.has(bodega);
+    const esMioPorNombre = miNombre && transporte === miNombre;
+    const esMioPorExtra = extrasSet.has(transporte) && misBodegas.has(bodega);
+    const esMio = esMioPorNombre || esMioPorExtra;
+    // Sólo mostramos "Pendiente de asignación" a conductores con nombreOpcion
+    // propio — sin él no podrían auto-asignarse al tomar.
+    const esPendiente = !!miNombre && transporte === PENDIENTE_LITERAL && misBodegas.has(bodega);
     if (!esMio && !esPendiente) return;
 
     // Estado base: viene de /despachos/{docId}/estado, o inferido:
