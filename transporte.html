@@ -493,7 +493,13 @@ tbody tr:hover td{background:rgba(0,112,242,0.04);}
               <div class="page-header-title">Conductores</div>
               <div class="page-header-sub">Gestión de conductores y acceso móvil</div>
             </div>
-            <button class="btn btn-primary btn-sm" onclick="openModal('nuevoConductorModal')">+ Nuevo conductor</button>
+            <div style="display:flex;align-items:center;gap:12px">
+              <label style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text2);cursor:pointer;user-select:none">
+                <input type="checkbox" id="showInactivosConductores" onchange="renderConductores()">
+                <span>Mostrar inactivos</span>
+              </label>
+              <button class="btn btn-primary btn-sm" onclick="openModal('nuevoConductorModal')">+ Nuevo conductor</button>
+            </div>
           </div>
           <div class="card" style="padding:0;">
             <div class="table-wrap">
@@ -1967,8 +1973,16 @@ function toggleConductorFilter(e) {
 
 function renderConductores() {
   const tb = document.getElementById('tConductores');
-  const rows = Object.entries(data.conductores);
-  if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="9">Sin conductores registrados</td></tr>'; return; }
+  // Por defecto ocultamos los inactivos. El checkbox "Mostrar inactivos"
+  // permite al admin reactivarlos cuando sea necesario.
+  const showInactivos = document.getElementById('showInactivosConductores')?.checked;
+  let rows = Object.entries(data.conductores);
+  if (!showInactivos) rows = rows.filter(([_, c]) => c && c.activo !== false);
+  if (!rows.length) {
+    const msg = showInactivos ? 'Sin conductores registrados' : 'Sin conductores activos';
+    tb.innerHTML = `<tr class="empty-row"><td colspan="9">${msg}</td></tr>`;
+    return;
+  }
   tb.innerHTML = rows.map(([id, c]) => {
     const bods = Array.isArray(c.bodegasPermitidas) ? c.bodegasPermitidas : (c.bodegasPermitidas ? Object.values(c.bodegasPermitidas) : []);
     const bodsCell = bods.length
@@ -2072,24 +2086,75 @@ function saveConductor() {
   if (!_secondaryApp) {
     try { _secondaryApp = firebase.app('sec2'); } catch(e) { _secondaryApp = firebase.initializeApp(firebaseConfig,'sec2'); }
   }
-  _secondaryApp.auth().createUserWithEmailAndPassword(email, pass)
-    .then(cred => {
-      const uid = cred.user.uid;
-      cData.email = email; cData.uid = uid;
-      const updates = {};
-      const condId = `C-${Date.now()}`;
-      updates[`organizaciones/${orgUid}/conductores/${condId}`] = cData;
-      updates[`usuarios/${uid}/perfil`] = 'Transportista';
-      updates[`usuarios/${uid}/maestroUid`] = orgUid;
-      updates[`usuarios/${uid}/conductorId`] = condId;
-      return db.ref().update(updates).then(() => _secondaryApp.auth().signOut());
+  const secAuth = _secondaryApp.auth();
+
+  // Verifica, antes de intentar vincular/sobre-escribir, que si el UID
+  // devuelto ya tenía un perfil distinto a Transportista, no lo pisamos
+  // (p.ej. Maestro, Operador). Devuelve "ok" o un mensaje de error.
+  const _vincularPerfilConductor = async (uid, actionLabel) => {
+    const perfilExistente = (await db.ref(`usuarios/${uid}/perfil`).once('value')).val();
+    if (perfilExistente && perfilExistente !== 'Transportista') {
+      throw new Error(`El email ya está en uso por un usuario con perfil "${perfilExistente}" en el WMS. No se puede convertir a Transportista desde aquí; use otro email o pida al administrador que lo migre manualmente.`);
+    }
+    // Si el usuario ya era Transportista y ya tenía conductorId distinto en
+    // esta misma organización, avisamos y abortamos para no dejar fichas
+    // duplicadas.
+    const condPrevio = (await db.ref(`usuarios/${uid}/conductorId`).once('value')).val();
+    if (condPrevio && data.conductores && data.conductores[condPrevio] && (data.conductores[condPrevio].activo !== false)) {
+      throw new Error(`Este email ya está vinculado a un conductor activo (${data.conductores[condPrevio].nombre || condPrevio}). Edítelo en lugar de crear uno nuevo.`);
+    }
+    cData.email = email; cData.uid = uid;
+    const updates = {};
+    const condId = `C-${Date.now()}`;
+    updates[`organizaciones/${orgUid}/conductores/${condId}`] = cData;
+    updates[`usuarios/${uid}/perfil`] = 'Transportista';
+    updates[`usuarios/${uid}/maestroUid`] = orgUid;
+    updates[`usuarios/${uid}/conductorId`] = condId;
+    await db.ref().update(updates);
+    return actionLabel;
+  };
+
+  const _finish = (label) => {
+    okEl.textContent = `✓ Conductor ${nombre} ${label}.`;
+    okEl.style.display = 'block';
+    setTimeout(() => closeModal('nuevoConductorModal'), 1700);
+  };
+
+  secAuth.createUserWithEmailAndPassword(email, pass)
+    .then(async cred => {
+      const label = await _vincularPerfilConductor(cred.user.uid, 'creado con acceso móvil');
+      await secAuth.signOut();
+      _finish(label);
     })
-    .then(() => { okEl.textContent = `✓ Conductor ${nombre} creado con acceso móvil.`; okEl.style.display='block'; setTimeout(()=>closeModal('nuevoConductorModal'),1500); })
-    .catch(err => {
-      const msgs = {'auth/email-already-in-use':'Email ya registrado','auth/weak-password':'Contraseña muy débil'};
-      errEl.textContent = msgs[err.code] || err.message; errEl.style.display='block';
+    .catch(async err => {
+      // Email ya existe: intentamos iniciar sesión para obtener el UID y
+      // vincular la ficha de conductor sin pisar un perfil existente.
+      if (err && err.code === 'auth/email-already-in-use') {
+        try {
+          const cred = await secAuth.signInWithEmailAndPassword(email, pass);
+          const label = await _vincularPerfilConductor(cred.user.uid, 'vinculado al usuario Firebase existente');
+          await secAuth.signOut();
+          _finish(label);
+          return;
+        } catch (e2) {
+          const code = e2 && e2.code;
+          if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+            errEl.textContent = 'El email ya tiene una cuenta Firebase, pero la contraseña ingresada no coincide. Ingrese la contraseña actual del usuario, o resetéela desde Firebase Console.';
+          } else if (e2 && e2.message) {
+            errEl.textContent = e2.message;
+          } else {
+            errEl.textContent = 'No se pudo vincular el email existente.';
+          }
+          try { await secAuth.signOut(); } catch(_){}
+          errEl.style.display = 'block';
+          return;
+        }
+      }
+      const msgs = {'auth/weak-password':'Contraseña muy débil','auth/invalid-email':'Email inválido'};
+      errEl.textContent = msgs[err.code] || err.message || 'No se pudo crear el conductor.';
+      errEl.style.display = 'block';
     })
-    .finally(() => { btn.disabled=false; btn.innerHTML='Guardar Conductor'; });
+    .finally(() => { btn.disabled = false; btn.innerHTML = 'Guardar Conductor'; });
 }
 
 // ══ VEHÍCULOS ══
