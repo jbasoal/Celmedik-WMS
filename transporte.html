@@ -39,6 +39,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .login-logo p{font-size:12px;color:var(--text3);margin-top:4px;}
 .status-msg{padding:10px 14px;border-radius:9px;font-size:13px;margin-bottom:16px;display:none;}
 .status-msg.error{background:var(--danger-dim);color:#BB0000;border:1px solid rgba(187,0,0,0.3);display:block;}
+.status-msg.info{background:#E6F0FA;color:#1E4D78;border:1px solid rgba(46,124,191,.35);display:block;}
 
 /* FORMS */
 .form-group{margin-bottom:14px;}
@@ -878,7 +879,22 @@ document.addEventListener('DOMContentLoaded', () => {
     const infoSnap = await db.ref(`usuarios/${u.uid}`).once('value');
     const info = infoSnap.val() || {};
     userPerfil = info.perfil || 'Maestro';
-    if (userPerfil === 'Transportista') { window.location.href = 'conductor.html'; return; }
+    // Si la sesión persistida es de un Transportista, cerramos y mostramos
+    // el login en lugar de redirigir — así el usuario puede ingresar sus
+    // credenciales de admin desde la misma pantalla (sin bucle con
+    // conductor.html).
+    if (userPerfil === 'Transportista') {
+      try { await auth.signOut(); } catch(_){}
+      currentUser = null;
+      showScreen('login');
+      const msg = document.getElementById('loginStatus');
+      if (msg) {
+        msg.textContent = `La sesión activa (${u.email || 'otra cuenta'}) es de conductor. Ingrese con credenciales de administración.`;
+        msg.className = 'status-msg info';
+        msg.style.display = 'block';
+      }
+      return;
+    }
     // orgUid = UID del Maestro dueño de los datos (o el propio uid si es Maestro)
     orgUid = (userPerfil === 'Maestro') ? u.uid : (info.maestroUid || u.uid);
     document.getElementById('userEmail').textContent = u.email;
