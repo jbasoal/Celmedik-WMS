@@ -906,10 +906,12 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('userEmail').textContent = u.email;
     document.getElementById('userInitial').textContent = u.email[0].toUpperCase();
     document.getElementById('userRole').textContent = `Perfil: ${userPerfil}`;
-    // Rango por defecto: hoy. El usuario puede ampliarlo con los dos inputs.
-    const hoy = new Date().toISOString().split('T')[0];
-    document.getElementById('fFechaDesde').value = hoy;
-    document.getElementById('fFechaHasta').value = hoy;
+    // Por defecto: sin filtros adicionales. El rango de fechas arranca el
+    // 2026-10-16 (fecha en que inició operación la app de conductor) para no
+    // mostrar movimientos previos que no son despachos reales de esta
+    // operación. El usuario puede modificarlo libremente desde los inputs.
+    document.getElementById('fFechaDesde').value = '2026-10-16';
+    document.getElementById('fFechaHasta').value = '';
     attachListeners();
     showScreen('app');
   });
@@ -1209,7 +1211,9 @@ function renderDespachos() {
   }
   if (fZona) rows = rows.filter(o => (o.destino||'').toLowerCase().includes(fZona));
   if (fDoc)  rows = rows.filter(o => (o.documentoId||'').toLowerCase().includes(fDoc));
-  rows.sort((a,b) => (b.fecha||'').localeCompare(a.fecha||''));
+  // Orden por fecha de despacho (prioridad) y luego fecha de registro.
+  // Descendente (más reciente primero).
+  rows.sort((a,b) => (b.fechaDespacho || b.fecha || '').localeCompare(a.fechaDespacho || a.fecha || ''));
   if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="8">Sin despachos para el filtro seleccionado</td></tr>'; return; }
   tb.innerHTML = rows.map(o => {
     const safeDoc = o.documentoId.replace(/'/g, "\\'");
@@ -1746,15 +1750,19 @@ function _rcPoblarTransportadoSelect(detalles) {
     // si son varias, exigir que el conductor cubra TODAS para evitar errores.
     return bodegasSel.every(b => bods.includes(b));
   }).sort((a,b) => (a.nombreOpcion||'').localeCompare(b.nombreOpcion||''));
-  // Mismas opciones genéricas que el perfil "Maestro" en index.html.
-  const genericas = ['Externo', 'Pendiente de asignación', 'Retira Cliente', 'Otros'];
+  // Opciones genéricas simplificadas (igual que en index.html): sólo
+  // "Pendiente de asignación". Externo / Retira Cliente / Otros se eliminaron
+  // del dropdown para evitar duplicados con conductores que lleven esos
+  // nombres; si se requiere asignar a Externo o Retira Cliente, crear un
+  // conductor con ese nombreOpcion para la bodega correspondiente.
+  const genericas = ['Pendiente de asignación'];
   const groups = [];
   if (conductores.length) {
     groups.push(`<optgroup label="Conductores asignables">${
       conductores.map(c => `<option value="${c.nombreOpcion}">${c.nombreOpcion}</option>`).join('')
     }</optgroup>`);
   }
-  groups.push(`<optgroup label="Otras opciones">${
+  groups.push(`<optgroup label="Sin asignar">${
     genericas.map(o => `<option value="${o}">${o}</option>`).join('')
   }</optgroup>`);
   sel.innerHTML = '<option value="">Seleccionar...</option>' + groups.join('');

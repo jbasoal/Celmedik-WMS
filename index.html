@@ -4861,18 +4861,15 @@ function _onTransportadoChange() {
 }
 
 // Opciones "genéricas" del select "Transportado por" (no son conductores
-// específicos). Se filtran según el perfil que registra la Salida.
-//   - Operador Los Angeles: Externo, Retira Cliente, Otros
-//   - Operario Santiago:    Externo, Retira Cliente
-//   - Resto: todas (incluye "Pendiente de asignación")
-function _opcionesGenericasTransportadoPorPerfil(perfil) {
-    if (perfil === 'Operador Los Angeles') {
-        return ['Externo', 'Retira Cliente', 'Otros'];
-    }
-    if (perfil === 'Operario Santiago') {
-        return ['Externo', 'Retira Cliente'];
-    }
-    return ['Externo', 'Pendiente de asignación', 'Retira Cliente', 'Otros'];
+// específicos). Se simplificó a "Pendiente de asignación" únicamente — los
+// valores "Externo" / "Retira Cliente" / "Otros" se eliminaron del dropdown
+// porque duplicaban a conductores con esos mismos nombres y generaban
+// confusión. Si se requiere asignar a Externo o Retira Cliente, debe
+// hacerse creando conductores con ese nombreOpcion para la bodega
+// correspondiente (p.ej. "Externo CELMEDIK LA"), que entonces aparecerá
+// en el grupo "Conductores asignables" filtrado por la bodega del movimiento.
+function _opcionesGenericasTransportadoPorPerfil(_perfil) {
+    return ['Pendiente de asignación'];
 }
 
 // Bodegas que el perfil del usuario actual puede operar. Usa el mismo
