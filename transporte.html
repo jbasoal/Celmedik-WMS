@@ -1000,6 +1000,7 @@ function _buildDespachos() {
         clienteRut: m.clienteRut || '',
         destino: m.destino || '',
         bodega: m.bodega || '',
+        bodegasSet: new Set(),
         fecha: m.fecha || '',
         fechaDespacho: m.fechaDespacho || '',
         transportadoPor: (m.transportadoPor || '').trim(),
@@ -1007,9 +1008,11 @@ function _buildDespachos() {
         items: []
       };
     }
+    if (m.bodega) porDoc[docId].bodegasSet.add(m.bodega);
     porDoc[docId].items.push({
       sku: m.sku || '', lote: m.lote || '', descripcion: m.descripcion || '',
-      cantidad: parseFloat(m.cantidad) || 0, ubicacion: m.ubicacion || ''
+      cantidad: parseFloat(m.cantidad) || 0, ubicacion: m.ubicacion || '',
+      bodega: m.bodega || ''
     });
     // Si distintas líneas tienen distintos valores, el primero gana (ya ocurre
     // porque el if arriba sólo se evalúa una vez por doc). Guardamos aquí los
@@ -1046,8 +1049,14 @@ function _buildDespachos() {
     const conductorLabelHtml = mostrarDetalle
       ? `${conductorNombreBase}<br><span style="font-size:11px;color:var(--text3)">(${detalleExterno})</span>`
       : conductorNombreBase;
+    // Lista de bodegas del despacho (puede venir de varias si la factura
+    // se dividió entre, p.ej., CELMEDIK BIODIAL y Bodega Externa).
+    const bodegasArr = [...(p.bodegasSet || [])];
+    const bodegaLabel = bodegasArr.length > 1 ? bodegasArr.join(' · ') : (bodegasArr[0] || p.bodega);
     resultado[docId] = {
       ...p,
+      bodegas: bodegasArr,
+      bodega: bodegaLabel,
       estado,
       conductorLabel,
       conductorLabelHtml,
@@ -1217,7 +1226,12 @@ function renderDespachos() {
       return true;
     });
   }
-  if (fBodega) rows = rows.filter(o => (o.bodega||'') === fBodega);
+  // Filtro de bodega: incluye despachos que tengan AL MENOS esa bodega
+  // (una factura dividida entre bodegas BIODIAL + Externa aparece bajo
+  // cualquiera de los dos filtros).
+  if (fBodega) rows = rows.filter(o => Array.isArray(o.bodegas) && o.bodegas.length
+    ? o.bodegas.includes(fBodega)
+    : (o.bodega||'') === fBodega);
   if (fEstado) rows = rows.filter(o => o.estado === fEstado);
   // Multi-select de conductores (vacío = no filtra). Coincide por conductorId
   // OR por nombreOpcion (para despachos asignados vía Transportado por aún

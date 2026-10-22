@@ -7092,8 +7092,8 @@ function saveDocumento() {
     const numDoc = document.getElementById('md-numdoc').value.trim();
     let proveedor = document.getElementById('md-proveedor').value.trim();
     const destino = (document.getElementById('md-destino')?.value || '').trim();
-    const transportadoPor = (document.getElementById('md-transportado')?.value || '').trim();
-    const transportadoPorDetalle = (document.getElementById('md-transportado-detalle')?.value || '').trim();
+    let transportadoPor = (document.getElementById('md-transportado')?.value || '').trim();
+    let transportadoPorDetalle = (document.getElementById('md-transportado-detalle')?.value || '').trim();
     const rutClienteRaw = (document.getElementById('md-rutcli')?.value || '').trim();
     const fechaDoc = document.getElementById('md-fecha').value;
     const fechaDespacho = (document.getElementById('md-fecha-despacho')?.value || '').trim();
@@ -7147,6 +7147,54 @@ function saveDocumento() {
             showFormError('movModal-err', 'Seleccione quién transportará la mercadería.');
             try { document.getElementById('md-transportado')?.focus(); } catch(_){}
             return;
+        }
+        // Si el N° de factura ya tiene un movimiento previo con un conductor
+        // específico (no "Pendiente de asignación") distinto al elegido ahora,
+        // preguntar si usar el mismo. Esto permite que una factura dividida
+        // entre varias bodegas (p.ej. CELMEDIK BIODIAL + Bodega Externa) se
+        // consolide como un único despacho en la app de conductor.
+        if (numDoc) {
+            const previas = Object.values(data.movimientos || {}).filter(m =>
+                m && m.tipo === 'Salida' &&
+                ((m.documentoId && m.documentoId === numDoc) || (m.referencia && m.referencia === numDoc)) &&
+                m.transportadoPor && m.transportadoPor !== 'Pendiente de asignación'
+            );
+            const previaConflicto = previas.find(m => (m.transportadoPor || '').trim() !== transportadoPor);
+            if (previaConflicto) {
+                const prevConductor = previaConflicto.transportadoPor;
+                const prevBodega = previaConflicto.bodega || '—';
+                const ok = confirm(
+                    `La factura «${numDoc}» ya fue asignada al conductor "${prevConductor}" (bodega ${prevBodega}).\n\n` +
+                    `Aceptar  → usar el mismo conductor «${prevConductor}» (el despacho se consolidará en la app del conductor).\n` +
+                    `Cancelar → mantener «${transportadoPor}» (los despachos quedarán separados).`
+                );
+                if (ok) {
+                    transportadoPor = prevConductor;
+                    const sel = document.getElementById('md-transportado');
+                    if (sel) {
+                        const existe = [...sel.options].some(o => o.value === prevConductor);
+                        if (!existe) {
+                            // El conductor previo no está en el dropdown filtrado por bodega
+                            // actual. Lo añadimos como opción extra para no perder la selección.
+                            const opt = document.createElement('option');
+                            opt.value = prevConductor; opt.textContent = prevConductor + ' (asignado en factura previa)';
+                            sel.appendChild(opt);
+                        }
+                        sel.value = prevConductor;
+                        if (typeof _onTransportadoChange === 'function') _onTransportadoChange();
+                        // Re-leer detalle de transportista (puede haberse limpiado por el cambio)
+                        transportadoPorDetalle = (document.getElementById('md-transportado-detalle')?.value || '').trim();
+                        // Si el conductor previo tenía detalle (Externo con empresa) y el nuevo
+                        // input quedó vacío, propagar el detalle del previo.
+                        if (!transportadoPorDetalle && previaConflicto.transportadoPorDetalle) {
+                            transportadoPorDetalle = previaConflicto.transportadoPorDetalle;
+                            const inp = document.getElementById('md-transportado-detalle');
+                            if (inp) inp.value = transportadoPorDetalle;
+                        }
+                    }
+                }
+                // Si cancela, continuamos con el conductor que el usuario eligió.
+            }
         }
         const esExternoVal = /^externo(\b|$)/i.test(transportadoPor);
         if ((transportadoPor === 'Otros' || esExternoVal) && !transportadoPorDetalle) {

@@ -770,14 +770,21 @@ function _construirDespachos() {
     let estado = regDesp?.estado;
     if (!estado) estado = esMio ? 'Asignada' : 'Pendiente';
 
-    // Agrega items por SKU/lote. Si el movimiento viene palletizado
+    // Agrega items por BODEGA+SKU+lote. Al incluir la bodega en la clave,
+    // un mismo SKU/lote presente en dos bodegas distintas (p.ej. CELMEDIK
+    // BIODIAL + Bodega Externa) queda como dos filas separadas con su
+    // bodega y ubicación propias. Si el movimiento viene palletizado
     // (concentrados), capturamos el total de bultos por palletGroupId
     // para evitar sumar duplicados de la misma línea de pallet.
     const items = {};
     const palletGroupsVistos = {}; // k → Set(palletGroupId)
+    const bodegasSet = new Set();
     movs.forEach(m => {
-      const k = `${m.sku||''}|${m.lote||''}`;
+      const mBodega = m.bodega || '';
+      if (mBodega) bodegasSet.add(mBodega);
+      const k = `${mBodega}|${m.sku||''}|${m.lote||''}`;
       if (!items[k]) items[k] = {
+        bodega: mBodega,
         sku: m.sku || '',
         lote: m.lote || '',
         descripcion: m.descripcion || '',
@@ -802,10 +809,15 @@ function _construirDespachos() {
       }
     });
 
+    // Bodega(s) del despacho: lista "·"-separada si vienen de varias.
+    const bodegasArr = [...bodegasSet];
+    const bodegaLabel = bodegasArr.length > 1 ? bodegasArr.join(' · ') : (bodegasArr[0] || bodega);
+
     resultado[docId] = {
       documentoId: docId,
       estado,
-      bodega,
+      bodega: bodegaLabel,
+      bodegas: bodegasArr,
       cliente: first.proveedor || '',
       clienteRut: first.clienteRut || '',
       destino: first.destino || '',
@@ -1051,14 +1063,29 @@ function openDetalle(docId) {
     <strong>Estado:</strong> ${d.estado}${rDet.entregaParcial ? ' <span class="parcial-badge">PARCIAL</span>' : ''}
     ${detTsLines.length ? '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">' + detTsLines.join('<br>') + '</div>' : ''}
   `;
-  // Items
-  const items = d.items.slice().sort((a,b) => a.sku.localeCompare(b.sku));
+  // Items — ordenados por bodega y luego por SKU. Si hay más de una bodega
+  // (p.ej. CELMEDIK BIODIAL + Bodega Externa en la misma factura), añadimos
+  // una fila de subtítulo por bodega para que el chofer vea con claridad
+  // de dónde retira cada ítem.
+  const items = d.items.slice().sort((a,b) => {
+    const bA = a.bodega||'', bB = b.bodega||'';
+    if (bA !== bB) return bA.localeCompare(bB);
+    return a.sku.localeCompare(b.sku);
+  });
   const anyBultos = items.some(i => i.bultos > 0);
-  const itemsHtml = `<table class="items-table"><thead><tr><th>SKU</th><th>Descripción</th><th>Lote</th><th>Qty</th>${anyBultos?'<th>Bultos</th>':''}<th>Ubicación</th></tr></thead><tbody>` +
-    items.map(i => {
-      const ubicStr = Object.entries(i.ubicaciones).sort((a,b)=>a[0].localeCompare(b[0])).map(([u,q])=>`${u} (${q})`).join(', ');
-      return `<tr><td class="text-mono" style="color:var(--accent)">${i.sku}</td><td>${i.descripcion||'—'}</td><td class="text-mono" style="font-size:11px">${i.lote||'—'}</td><td style="font-weight:600">${i.cantidad}</td>${anyBultos?`<td style="font-weight:600">${i.bultos||'—'}</td>`:''}<td style="font-size:11px">${ubicStr || '—'}</td></tr>`;
-    }).join('') + `</tbody></table>`;
+  const multiBodega = (Array.isArray(d.bodegas) ? d.bodegas.length : 0) > 1;
+  const colSpan = anyBultos ? 5 : 4;
+  let currentBodega = null;
+  const bodyRows = items.map(i => {
+    const ubicStr = Object.entries(i.ubicaciones).sort((a,b)=>a[0].localeCompare(b[0])).map(([u,q])=>`${u} (${q})`).join(', ');
+    let header = '';
+    if (multiBodega && i.bodega !== currentBodega) {
+      currentBodega = i.bodega;
+      header = `<tr><td colspan="${colSpan+1}" style="background:var(--bg2,#F3F6FA);font-weight:700;font-size:11.5px;color:var(--accent2);padding:6px 8px;text-transform:uppercase;letter-spacing:.4px">🏢 ${currentBodega || '—'}</td></tr>`;
+    }
+    return `${header}<tr><td class="text-mono" style="color:var(--accent)">${i.sku}</td><td>${i.descripcion||'—'}</td><td class="text-mono" style="font-size:11px">${i.lote||'—'}</td><td style="font-weight:600">${i.cantidad}</td>${anyBultos?`<td style="font-weight:600">${i.bultos||'—'}</td>`:''}<td style="font-size:11px">${ubicStr || '—'}</td></tr>`;
+  }).join('');
+  const itemsHtml = `<table class="items-table"><thead><tr><th>SKU</th><th>Descripción</th><th>Lote</th><th>Qty</th>${anyBultos?'<th>Bultos</th>':''}<th>Ubicación</th></tr></thead><tbody>${bodyRows}</tbody></table>`;
   document.getElementById('detItems').innerHTML = itemsHtml;
   // Resumen del cierre: foto(s) cedible, motivo no-entrega, fotos adicionales,
   // observaciones. Prominente arriba del timeline cuando aplica.
