@@ -2088,30 +2088,48 @@ function saveConductor() {
   }
   const secAuth = _secondaryApp.auth();
 
-  // Verifica, antes de intentar vincular/sobre-escribir, que si el UID
-  // devuelto ya tenía un perfil distinto a Transportista, no lo pisamos
-  // (p.ej. Maestro, Operador). Devuelve "ok" o un mensaje de error.
+  // Vincula la ficha de conductor al UID existente. Si el usuario ya tiene
+  // otro perfil WMS (Operador, etc.), preservamos ese perfil — el acceso al
+  // conductor app lo da conductorId, no el perfil. Esto permite que un
+  // mismo usuario tenga rol WMS + ficha de chofer al mismo tiempo.
   const _vincularPerfilConductor = async (uid, actionLabel) => {
-    const perfilExistente = (await db.ref(`usuarios/${uid}/perfil`).once('value')).val();
-    if (perfilExistente && perfilExistente !== 'Transportista') {
-      throw new Error(`El email ya está en uso por un usuario con perfil "${perfilExistente}" en el WMS. No se puede convertir a Transportista desde aquí; use otro email o pida al administrador que lo migre manualmente.`);
+    const infoSnap = await db.ref(`usuarios/${uid}`).once('value');
+    const info = infoSnap.val() || {};
+    const perfilExistente = info.perfil || '';
+    const maestroExistente = info.maestroUid || '';
+    const condPrevio = info.conductorId || '';
+
+    // Maestro no puede convertirse en conductor — perdería la raíz admin.
+    if (perfilExistente === 'Maestro') {
+      throw new Error('Este email corresponde a un usuario Maestro. No puede recibir ficha de conductor desde este panel.');
     }
-    // Si el usuario ya era Transportista y ya tenía conductorId distinto en
-    // esta misma organización, avisamos y abortamos para no dejar fichas
-    // duplicadas.
-    const condPrevio = (await db.ref(`usuarios/${uid}/conductorId`).once('value')).val();
+    // Si ya está vinculado a un conductor activo de esta organización, abortamos.
     if (condPrevio && data.conductores && data.conductores[condPrevio] && (data.conductores[condPrevio].activo !== false)) {
       throw new Error(`Este email ya está vinculado a un conductor activo (${data.conductores[condPrevio].nombre || condPrevio}). Edítelo en lugar de crear uno nuevo.`);
     }
+    // Si pertenece a otra organización (maestroUid distinto), no lo movemos.
+    if (maestroExistente && maestroExistente !== orgUid) {
+      throw new Error('Este email pertenece a otra organización. No se puede vincular desde esta cuenta.');
+    }
+
     cData.email = email; cData.uid = uid;
     const updates = {};
     const condId = `C-${Date.now()}`;
     updates[`organizaciones/${orgUid}/conductores/${condId}`] = cData;
-    updates[`usuarios/${uid}/perfil`] = 'Transportista';
-    updates[`usuarios/${uid}/maestroUid`] = orgUid;
+    // Perfil: sólo lo seteamos a Transportista si estaba vacío. Si ya tenía
+    // otro (Operador, etc.), lo conservamos — conductorId basta para dar
+    // acceso al conductor app.
+    if (!perfilExistente) {
+      updates[`usuarios/${uid}/perfil`] = 'Transportista';
+    }
+    if (!maestroExistente) {
+      updates[`usuarios/${uid}/maestroUid`] = orgUid;
+    }
     updates[`usuarios/${uid}/conductorId`] = condId;
     await db.ref().update(updates);
-    return actionLabel;
+    const perfilLabel = perfilExistente && perfilExistente !== 'Transportista'
+      ? ` (perfil WMS "${perfilExistente}" conservado)` : '';
+    return `${actionLabel}${perfilLabel}`;
   };
 
   const _finish = (label) => {

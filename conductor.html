@@ -612,30 +612,27 @@ document.addEventListener('DOMContentLoaded', async () => {
   auth.onAuthStateChanged(async u => {
     if (!u) { showLogin(); return; }
     currentUser = u;
-    const perfil = (await db.ref(`usuarios/${u.uid}/perfil`).once('value')).val();
-    // Si la sesión activa no es de un Transportista (p.ej. venimos con la
-    // sesión de admin de transporte.html persistida en el mismo navegador),
-    // la cerramos y mostramos el login de conductor en lugar de redirigir
-    // de vuelta — así el usuario puede ingresar sus credenciales de chofer.
-    if (perfil !== 'Transportista') {
+    // Acceso al conductor app: lo determina tener conductorId + maestroUid
+    // configurados en /usuarios/{uid}, sin importar el perfil WMS. Un
+    // Operador puede tener a la vez acceso al WMS y ficha de chofer.
+    const infoSnap = await db.ref(`usuarios/${u.uid}`).once('value');
+    const info = infoSnap.val() || {};
+    const mUid = info.maestroUid;
+    const condId = info.conductorId;
+    if (!mUid || !condId) {
       try { await auth.signOut(); } catch(_){}
       currentUser = null;
       showLogin();
       const msg = document.getElementById('loginStatus');
       if (msg) {
-        msg.textContent = `La sesión activa (${u.email || 'otra cuenta'}) no es de conductor. Ingrese con sus credenciales.`;
+        msg.textContent = `La sesión activa (${u.email || 'otra cuenta'}) no tiene ficha de conductor configurada. Ingrese con sus credenciales de chofer, o pida al administrador que lo configure.`;
         msg.className = 'status-msg info';
         msg.style.display = 'block';
       }
       return;
     }
-    maestroUid = (await db.ref(`usuarios/${u.uid}/maestroUid`).once('value')).val();
-    conductorId = (await db.ref(`usuarios/${u.uid}/conductorId`).once('value')).val();
-    if (!maestroUid || !conductorId) {
-      alert('Cuenta no configurada correctamente. Contacte al administrador.');
-      auth.signOut();
-      return;
-    }
+    maestroUid = mUid;
+    conductorId = condId;
     // Carga la ficha del conductor: nombreOpcion y bodegasPermitidas son
     // críticos para filtrar los despachos visibles.
     const cSnap = await db.ref(`organizaciones/${maestroUid}/conductores/${conductorId}`).once('value');
