@@ -620,7 +620,7 @@ tbody tr:hover td{background:rgba(0,112,242,0.04);}
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:20px;padding:14px;background:var(--bg2);border-radius:var(--radius);font-size:12.5px;">
       <div><span class="text-muted">Cliente:</span><br><strong id="detCliente">—</strong></div>
       <div><span class="text-muted">Conductor:</span><br><strong id="detConductor">—</strong></div>
-      <div><span class="text-muted">Vehículo:</span><br><strong id="detVehiculo">—</strong></div>
+      <div><span class="text-muted">Empresa de transporte:</span><br><strong id="detVehiculo">—</strong></div>
       <div><span class="text-muted">Zona:</span><br><strong id="detZona">—</strong></div>
       <div><span class="text-muted">F. Despacho:</span><br><strong id="detFecha">—</strong></div>
       <div><span class="text-muted">Estado:</span><br><span id="detEstado">—</span></div>
@@ -1021,12 +1021,25 @@ function _buildDespachos() {
     }
     // Conductor efectivo: prioridad al registro de despacho (conductorNombre),
     // cae en transportadoPor del movimiento como etiqueta libre.
-    const conductorLabel = (d && d.conductorNombre) || p.transportadoPor ||
+    const conductorNombreBase = (d && d.conductorNombre) || p.transportadoPor ||
       (p.transportadoPorDetalle ? `Otros: ${p.transportadoPorDetalle}` : '—');
+    // Si hay empresa de transporte (p.ej. Externo + empresa), la agregamos
+    // entre paréntesis debajo del nombre. _Label es la versión texto plano
+    // (para .textContent) y _LabelHtml tiene salto de línea para la tabla.
+    const detalleExterno = (p.transportadoPorDetalle || '').trim();
+    const esExternoTrans = /^externo(\b|$)/i.test(p.transportadoPor || '');
+    const mostrarDetalle = esExternoTrans && detalleExterno && !(d && d.conductorNombre);
+    const conductorLabel = mostrarDetalle
+      ? `${conductorNombreBase} (${detalleExterno})`
+      : conductorNombreBase;
+    const conductorLabelHtml = mostrarDetalle
+      ? `${conductorNombreBase}<br><span style="font-size:11px;color:var(--text3)">(${detalleExterno})</span>`
+      : conductorNombreBase;
     resultado[docId] = {
       ...p,
       estado,
       conductorLabel,
+      conductorLabelHtml,
       conductorId: d?.conductorId || null,
       despacho: d,
       // atajos para la tabla
@@ -1231,7 +1244,7 @@ function renderDespachos() {
       <td class="text-mono" style="color:var(--accent2);font-size:11.5px;font-weight:600">${o.documentoId}</td>
       <td style="font-weight:500">${o.cliente||'—'}</td>
       <td>${o.destino||'—'}</td>
-      <td>${o.conductorLabel||'—'}</td>
+      <td>${o.conductorLabelHtml||o.conductorLabel||'—'}</td>
       <td>${estadoBadge(o.estado, o)}</td>
       <td style="font-size:11.5px">${fmtDate(o.fechaDespacho || o.fecha)}</td>
       <td>${cedibleCell}</td>
@@ -1311,7 +1324,7 @@ function renderParciales() {
       <td class="text-mono" style="color:var(--accent2);font-size:11.5px;font-weight:600">${o.documentoId}</td>
       <td style="font-weight:500">${o.cliente||'—'}</td>
       <td>${o.destino||'—'}</td>
-      <td>${o.conductorLabel||'—'}</td>
+      <td>${o.conductorLabelHtml||o.conductorLabel||'—'}</td>
       <td>${estadoBadge(o.estado, o)}</td>
       <td style="max-width:220px;font-size:12px">${motivo}</td>
       <td style="font-size:11.5px">${fmtDateTime(fechaEst)}</td>

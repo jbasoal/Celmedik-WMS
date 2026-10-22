@@ -4849,15 +4849,34 @@ function _canOperadorAprobar(sku) {
     return false;
 }
 
-// Muestra/oculta el detalle libre del transportista cuando se elige "Otros".
+// Muestra/oculta el detalle libre del transportista. Se dispara en dos
+// casos:
+//   - "Otros" (legacy, por si queda algún perfil con esa opción).
+//   - Cualquier valor que empiece con "Externo" (literal o "Externo XXX"):
+//     en ese caso el campo se usa para capturar la empresa de transporte.
+// El label y placeholder cambian según el caso para dejarlo claro.
 function _onTransportadoChange() {
     const sel = document.getElementById('md-transportado');
     const grp = document.getElementById('md-transportado-detalle-group');
     const inp = document.getElementById('md-transportado-detalle');
     if (!sel || !grp) return;
-    const esOtros = sel.value === 'Otros';
-    grp.style.display = esOtros ? '' : 'none';
-    if (!esOtros && inp) inp.value = '';
+    const val = sel.value;
+    const esExterno = /^externo(\b|$)/i.test(val);
+    const esOtros = val === 'Otros';
+    const mostrar = esExterno || esOtros;
+    grp.style.display = mostrar ? '' : 'none';
+    if (!mostrar && inp) inp.value = '';
+    const lbl = grp.querySelector('.form-label');
+    if (lbl) {
+        lbl.innerHTML = esExterno
+            ? 'Empresa de transporte <span style="color:var(--danger)">*</span>'
+            : 'Detalle de transportista <span style="color:var(--danger)">*</span>';
+    }
+    if (inp) {
+        inp.placeholder = esExterno
+            ? 'Ej: Transportes Rápidos S.A.'
+            : 'Nombre o entidad del transportista';
+    }
 }
 
 // Opciones "genéricas" del select "Transportado por" (no son conductores
@@ -7113,8 +7132,11 @@ function saveDocumento() {
             try { document.getElementById('md-transportado')?.focus(); } catch(_){}
             return;
         }
-        if (transportadoPor === 'Otros' && !transportadoPorDetalle) {
-            showFormError('movModal-err', 'Debe indicar el detalle del transportista cuando selecciona «Otros».');
+        const esExternoVal = /^externo(\b|$)/i.test(transportadoPor);
+        if ((transportadoPor === 'Otros' || esExternoVal) && !transportadoPorDetalle) {
+            showFormError('movModal-err', esExternoVal
+                ? 'Debe indicar la empresa de transporte cuando selecciona «Externo».'
+                : 'Debe indicar el detalle del transportista cuando selecciona «Otros».');
             try { document.getElementById('md-transportado-detalle')?.focus(); } catch(_){}
             return;
         }
@@ -7245,7 +7267,7 @@ function saveDocumento() {
         ${isCambioUbic ? '' : `<span style="color:var(--text3)">Proveedor/Cliente:</span> ${proveedor||'—'}<br>`}
         ${tipo === 'Salida' && clienteRutFmt ? `<span style="color:var(--text3)">RUT Cliente:</span> <strong>${clienteRutFmt}</strong><br>` : ''}
         ${tipo === 'Salida' && destino ? `<span style="color:var(--text3)">Destino:</span> ${destino}<br>` : ''}
-        ${tipo === 'Salida' && transportadoPor ? `<span style="color:var(--text3)">Transportado por:</span> <strong>${transportadoPor === 'Otros' && transportadoPorDetalle ? transportadoPor + ': ' + transportadoPorDetalle : transportadoPor}</strong><br>` : ''}
+        ${tipo === 'Salida' && transportadoPor ? `<span style="color:var(--text3)">Transportado por:</span> <strong>${transportadoPorDetalle ? transportadoPor + ' (' + transportadoPorDetalle + ')' : transportadoPor}</strong><br>` : ''}
         ${tipo === 'Salida' && fechaDespacho ? `<span style="color:var(--text3)">Fecha de despacho:</span> <strong>${fmtDate(fechaDespacho)}</strong><br>` : ''}
         <span style="color:var(--text3)">Total unidades:</span> <strong>${totalUnidades}</strong>`;
 
@@ -7326,7 +7348,7 @@ function saveDocumento() {
                     destino: tipo === 'Salida' ? destino : '',
                     clienteRut: tipo === 'Salida' ? clienteRutFmt : '',
                     transportadoPor: tipo === 'Salida' ? transportadoPor : '',
-                    transportadoPorDetalle: tipo === 'Salida' && transportadoPor === 'Otros' ? transportadoPorDetalle : '',
+                    transportadoPorDetalle: tipo === 'Salida' && (transportadoPor === 'Otros' || /^externo(\b|$)/i.test(transportadoPor)) ? transportadoPorDetalle : '',
                     observaciones: obs,
                     fecha: fechaISO,
                     usuario,
@@ -7415,7 +7437,7 @@ function saveDocumento() {
                         proveedor, destino: tipo === 'Salida' ? destino : '',
                         clienteRut: tipo === 'Salida' ? clienteRutFmt : '',
                         transportadoPor: tipo === 'Salida' ? transportadoPor : '',
-                        transportadoPorDetalle: tipo === 'Salida' && transportadoPor === 'Otros' ? transportadoPorDetalle : '',
+                        transportadoPorDetalle: tipo === 'Salida' && (transportadoPor === 'Otros' || /^externo(\b|$)/i.test(transportadoPor)) ? transportadoPorDetalle : '',
                         bodega, ubic, obs,
                         items: [...movDocItems], usuario,
                         usuarioPerfil: userPerfil || '',
@@ -9271,11 +9293,13 @@ function renderMovimientos(preservePage) {
         const fechaCell = `<div class="text-mono" style="font-size:11px;white-space:nowrap">${fechaStr}</div>` +
             (horaStr ? `<div class="text-mono" style="font-size:10.5px;color:var(--text3);white-space:nowrap">${horaStr}</div>` : '');
 
-        // Transportado por: muestra «Otros: <detalle>» cuando aplica.
+        // Transportado por: muestra «<transportadoPor> (<detalle>)» cuando
+        // hay detalle (empresa de transporte para Externo, o free text para
+        // "Otros" heredado).
         let transCell = '<span class="text-muted" style="font-size:11px">—</span>';
         if (g.transportadoPor) {
-            const texto = g.transportadoPor === 'Otros' && g.transportadoPorDetalle
-                ? `${g.transportadoPor}: ${g.transportadoPorDetalle}`
+            const texto = g.transportadoPorDetalle
+                ? `${g.transportadoPor} (${g.transportadoPorDetalle})`
                 : g.transportadoPor;
             transCell = `<span style="font-size:11px">${texto}</span>`;
         }

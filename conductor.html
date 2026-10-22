@@ -813,6 +813,7 @@ function _construirDespachos() {
       fecha: first.fecha || '',
       referencia: first.referencia || '',
       transportadoPor: transporte,
+      transportadoPorDetalle: first.transportadoPorDetalle || '',
       items: Object.values(items),
       numeroMovimiento: first.numeroMovimiento || '',
       regDespacho: regDesp,
@@ -1046,7 +1047,7 @@ function openDetalle(docId) {
     <strong>Bodega origen:</strong> ${d.bodega||'—'}<br>
     <strong>Destino:</strong> ${d.destino||'—'}<br>
     <strong>Fecha de despacho:</strong> ${fmtDate(d.fechaDespacho||d.fecha)}<br>
-    <strong>Transportado por:</strong> ${d.transportadoPor||'—'}<br>
+    <strong>Transportado por:</strong> ${d.transportadoPor||'—'}${d.transportadoPorDetalle ? ' <span style="color:var(--text3)">('+d.transportadoPorDetalle+')</span>' : ''}<br>
     <strong>Estado:</strong> ${d.estado}${rDet.entregaParcial ? ' <span class="parcial-badge">PARCIAL</span>' : ''}
     ${detTsLines.length ? '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">' + detTsLines.join('<br>') + '</div>' : ''}
   `;
