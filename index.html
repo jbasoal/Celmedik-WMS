@@ -7123,6 +7123,22 @@ function saveDocumento() {
         clienteRutFmt = cli.rut || _formatRut(rutClienteRaw);
         clienteNombre = cli.nombre || proveedor;
         proveedor = clienteNombre; // forzar a que quede el nombre canónico del maestro
+        // Validación: si el N° de factura ya fue usado antes en una Salida
+        // con un RUT distinto, bloqueamos. Evita que una misma factura
+        // quede repartida entre dos clientes.
+        if (numDoc) {
+            const previa = Object.values(data.movimientos || {}).find(m =>
+                m && m.tipo === 'Salida' &&
+                ((m.documentoId && m.documentoId === numDoc) || (m.referencia && m.referencia === numDoc)) &&
+                m.clienteRut && _rutKey(m.clienteRut) !== key
+            );
+            if (previa) {
+                showFormError('movModal-err',
+                    `Factura ingresada previamente con otro N° de RUT. La factura «${numDoc}» ya fue registrada con RUT ${previa.clienteRut} (cliente: ${previa.proveedor || '—'}). Verifique el N° de factura o el RUT del cliente antes de continuar.`);
+                try { document.getElementById('md-rutcli')?.focus(); } catch(_){}
+                return;
+            }
+        }
         if (!destino) {
             showFormError('movModal-err', 'Seleccione el destino asociado al RUT del cliente.');
             return;
