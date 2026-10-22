@@ -41,6 +41,12 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .status-msg.error{background:var(--danger-dim);color:#BB0000;border:1px solid rgba(187,0,0,0.3);display:block;}
 .status-msg.info{background:#E6F0FA;color:#1E4D78;border:1px solid rgba(46,124,191,.35);display:block;}
 
+/* Modo Visualizador: oculta cualquier elemento marcado con .need-write
+   (botones de alta, edición, pausar, reasignar, cerrar, checkbox bulk, etc).
+   El panel queda operable como solo lectura. */
+body.perfil-visualizador .need-write{display:none !important;}
+body.perfil-visualizador .chk-cell{display:none !important;}
+
 /* FORMS */
 .form-group{margin-bottom:14px;}
 .form-label{display:block;font-size:11.5px;font-weight:600;color:var(--text2);margin-bottom:6px;letter-spacing:.4px;text-transform:uppercase;}
@@ -448,7 +454,7 @@ tbody tr:hover td{background:rgba(0,112,242,0.04);}
             <div style="display:flex;gap:8px;">
               <button class="btn btn-ghost btn-sm" onclick="selectAllParciales(true)">☑ Seleccionar todos</button>
               <button class="btn btn-ghost btn-sm" onclick="selectAllParciales(false)">☐ Deseleccionar</button>
-              <button class="btn btn-primary btn-sm" onclick="openReasignarCerrar()">⇄ Reasignar o cerrar</button>
+              <button class="btn btn-primary btn-sm need-write" onclick="openReasignarCerrar()">⇄ Reasignar o cerrar</button>
             </div>
           </div>
 
@@ -498,7 +504,7 @@ tbody tr:hover td{background:rgba(0,112,242,0.04);}
                 <input type="checkbox" id="showInactivosConductores" onchange="renderConductores()">
                 <span>Mostrar inactivos</span>
               </label>
-              <button class="btn btn-primary btn-sm" onclick="openModal('nuevoConductorModal')">+ Nuevo conductor</button>
+              <button class="btn btn-primary btn-sm need-write" onclick="openModal('nuevoConductorModal')">+ Nuevo conductor</button>
             </div>
           </div>
           <div class="card" style="padding:0;">
@@ -518,7 +524,7 @@ tbody tr:hover td{background:rgba(0,112,242,0.04);}
               <div class="page-header-title">Vehículos</div>
               <div class="page-header-sub">Flota de distribución</div>
             </div>
-            <button class="btn btn-primary btn-sm" onclick="openModal('nuevoVehiculoModal')">+ Nuevo vehículo</button>
+            <button class="btn btn-primary btn-sm need-write" onclick="openModal('nuevoVehiculoModal')">+ Nuevo vehículo</button>
           </div>
           <div class="card" style="padding:0;">
             <div class="table-wrap">
@@ -660,7 +666,7 @@ tbody tr:hover td{background:rgba(0,112,242,0.04);}
     <div class="btn-row" style="margin-top:16px;">
       <button class="btn btn-ghost btn-sm" onclick="closeModal('detalleOTModal')">Cerrar</button>
       <button class="btn btn-warning-sm btn-sm" onclick="openCambioEstado()">↔ Cambiar estado</button>
-      <button class="btn btn-danger-sm btn-sm" onclick="cancelarOT()">✕ Cancelar OT</button>
+      <button class="btn btn-danger-sm btn-sm need-write" onclick="cancelarOT()">✕ Cancelar OT</button>
     </div>
   </div>
 </div>
@@ -906,6 +912,11 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('userEmail').textContent = u.email;
     document.getElementById('userInitial').textContent = u.email[0].toUpperCase();
     document.getElementById('userRole').textContent = `Perfil: ${userPerfil}`;
+    // Modo Visualizador: panel solo-lectura. El CSS .perfil-visualizador
+    // oculta todo lo marcado con .need-write (botones +, ✏, ⏸/▶, ⇄, etc).
+    if (userPerfil === 'Visualizador') {
+      document.body.classList.add('perfil-visualizador');
+    }
     // Por defecto: sin filtros adicionales. El rango de fechas arranca el
     // 2026-10-16 (fecha en que inició operación la app de conductor) para no
     // mostrar movimientos previos que no son despachos reales de esta
@@ -1238,7 +1249,7 @@ function renderDespachos() {
     // forzado al modo "reasignar".
     const puedeReasignar = o.estado !== 'Cerrada';
     const btnReasignar = puedeReasignar
-      ? `<button class="btn btn-icon btn-sm btn-warning-sm" onclick="openReasignarConductor('${safeDoc}')" title="Reasignar conductor" style="margin-left:4px">⇄</button>`
+      ? `<button class="btn btn-icon btn-sm btn-warning-sm need-write" onclick="openReasignarConductor('${safeDoc}')" title="Reasignar conductor" style="margin-left:4px">⇄</button>`
       : '';
     return `<tr>
       <td class="text-mono" style="color:var(--accent2);font-size:11.5px;font-weight:600">${o.documentoId}</td>
@@ -1569,7 +1580,7 @@ function openDetalleDespacho(docId) {
     const canReasignar = (o.estado === 'Entregada Parcial' || o.estado === 'No Entregada');
     btnRow.innerHTML = `
       <button class="btn btn-ghost btn-sm" onclick="closeModal('detalleOTModal')">Cerrar</button>
-      ${canReasignar ? `<button class="btn btn-warning-sm btn-sm" onclick="openReasignarCerrarPorDoc('${o.documentoId.replace(/'/g,"\\'")}')">⇄ Reasignar o cerrar</button>` : ''}
+      ${canReasignar ? `<button class="btn btn-warning-sm btn-sm need-write" onclick="openReasignarCerrarPorDoc('${o.documentoId.replace(/'/g,"\\'")}')">⇄ Reasignar o cerrar</button>` : ''}
     `;
   }
   openModal('detalleOTModal');
@@ -2028,8 +2039,8 @@ function renderConductores() {
       <td>${fmtDate(c.vencimientoLicencia)}</td>
       <td>${c.activo!==false ? '<span class="badge badge-success">Activo</span>' : '<span class="badge badge-gray">Inactivo</span>'}</td>
       <td>
-        <button class="btn btn-icon btn-sm" onclick="editConductor('${id}')" title="Editar">✏</button>
-        <button class="btn btn-icon btn-sm ${c.activo!==false?'btn-danger-sm':'btn-success-sm'}" onclick="toggleConductor('${id}',${c.activo!==false})" style="margin-left:4px">
+        <button class="btn btn-icon btn-sm need-write" onclick="editConductor('${id}')" title="Editar">✏</button>
+        <button class="btn btn-icon btn-sm need-write ${c.activo!==false?'btn-danger-sm':'btn-success-sm'}" onclick="toggleConductor('${id}',${c.activo!==false})" style="margin-left:4px">
           ${c.activo!==false?'⏸':'▶'}
         </button>
       </td>
@@ -2221,8 +2232,8 @@ function renderVehiculos() {
     <td>${v.año||'—'}</td>
     <td>${v.activo!==false?'<span class="badge badge-success">Activo</span>':'<span class="badge badge-gray">Inactivo</span>'}</td>
     <td>
-      <button class="btn btn-icon btn-sm" onclick="editVehiculo('${id}')" title="Editar">✏</button>
-      <button class="btn btn-icon btn-sm ${v.activo!==false?'btn-danger-sm':'btn-success-sm'}" onclick="toggleVehiculo('${id}',${v.activo!==false})" style="margin-left:4px">${v.activo!==false?'⏸':'▶'}</button>
+      <button class="btn btn-icon btn-sm need-write" onclick="editVehiculo('${id}')" title="Editar">✏</button>
+      <button class="btn btn-icon btn-sm need-write ${v.activo!==false?'btn-danger-sm':'btn-success-sm'}" onclick="toggleVehiculo('${id}',${v.activo!==false})" style="margin-left:4px">${v.activo!==false?'⏸':'▶'}</button>
     </td>
   </tr>`).join('');
 }
@@ -2271,6 +2282,7 @@ function renderNotificaciones() {
 }
 
 function markNotifRead() {
+  if (userPerfil === 'Visualizador') return;
   const updates = {};
   Object.entries(data.notificaciones).forEach(([id,n]) => { if(!n.leida) updates[`organizaciones/${orgUid}/notificaciones/${id}/leida`] = true; });
   if (Object.keys(updates).length) db.ref().update(updates);

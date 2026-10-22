@@ -3150,7 +3150,7 @@ function loadProfile() {
         const navAdmin = document.getElementById('nav-admin');
         if (navAdmin) navAdmin.style.display = userPerfil === 'Maestro' ? '' : 'none';
         const navTransporte = document.getElementById('nav-transporte');
-        if (navTransporte) navTransporte.style.display = (userPerfil === 'Maestro' || userPerfil === 'Farmacéutico') ? '' : 'none';
+        if (navTransporte) navTransporte.style.display = (userPerfil === 'Maestro' || userPerfil === 'Farmacéutico' || userPerfil === 'Visualizador') ? '' : 'none';
         // Orden de Transporte: perfiles que operan bodegas físicas de despacho
         // (Maestro/Farmacéutico sin restricción; Operador genérico y Operador
         // Los Angeles restringido a su bodega). Operario Santiago (fijo a
