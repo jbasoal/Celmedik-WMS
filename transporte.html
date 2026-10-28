@@ -1262,7 +1262,7 @@ function renderDespachos() {
   tb.innerHTML = rows.map(o => {
     const safeDoc = o.documentoId.replace(/'/g, "\\'");
     const cedibleCell = o.cedibleFlag
-      ? `<a class="cedible-link" onclick="viewCedible('${safeDoc}')" title="Ver / descargar cedible">📄 Ver</a>`
+      ? `<a class="cedible-link" onclick="viewCedible('${safeDoc}')" title="Ver cedible">📄 Ver</a> <a class="cedible-link" onclick="_descargarCedibleDirecto('${safeDoc}')" title="Descargar cedible" style="margin-left:4px">⬇</a>`
       : '<span class="cedible-none">—</span>';
     // Botón "Reasignar conductor": disponible mientras el despacho no esté
     // ya cerrado definitivamente. Reutiliza el modal de reasignar/cerrar
@@ -1388,7 +1388,7 @@ function renderParciales() {
       ? `${o.motivoNoEntrega || '—'}${o.motivoNoEntregaDetalle ? ': '+o.motivoNoEntregaDetalle : ''}`
       : (o.observacionesCierre || '—');
     const cedibleCell = o.cedibleFlag
-      ? `<a class="cedible-link" onclick="viewCedible('${safeDoc}')">📄 Ver</a>`
+      ? `<a class="cedible-link" onclick="viewCedible('${safeDoc}')" title="Ver cedible">📄 Ver</a> <a class="cedible-link" onclick="_descargarCedibleDirecto('${safeDoc}')" title="Descargar cedible" style="margin-left:4px">⬇</a>`
       : '<span class="cedible-none">—</span>';
     const fechaEst = o.noEntregadoEn || o.entregadoEn || o.fecha;
     return `<tr class="${checked?'row-selected':''}">

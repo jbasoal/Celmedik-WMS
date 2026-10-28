@@ -7,7 +7,7 @@
 // se encolan en IndexedDB desde conductor.html y se sincronizan al
 // volver online — ese flujo NO vive en este worker.
 
-const CACHE_NAME = 'celmedik-conductor-v1';
+const CACHE_NAME = 'celmedik-conductor-v2';
 const SHELL_URLS = [
   '/conductor.html',
   '/manifest.json',
