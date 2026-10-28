@@ -545,6 +545,14 @@ let currentUser = null, maestroUid = null, conductorId = null, conductorNombre =
 let conductorInfo = { nombreOpcion: '', nombresOpcionExtra: [], bodegasPermitidas: [], activo: true };
 let misMovimientos = {};   // Salidas visibles al chofer (tipo=Salida ∩ filtro perfil)
 let misDespachos   = {};   // Estado/hitos de despachos ya tomados (/organizaciones/.../despachos/)
+// Flags de "primer snapshot recibido" por cada listener. Sin esto, cuando
+// movimientos (que suele llegar primero) dispara renderDespachos antes de
+// que /despachos haya cargado, todos los despachos del chofer se clasifican
+// como "Asignada" (regDesp es null → se infiere) y se les muestra el botón
+// "Iniciar transporte" aunque ya hayan sido Entregadas. Un click en esa
+// ventana pisa el estado y vuelve el despacho a En Tránsito.
+let _movsReady = false;
+let _despsReady = false;
 let currentGPS = null;
 let activeDocId = null;    // documentoId del despacho activo en algún modal
 let activeTab = 'pendientes';
@@ -703,10 +711,12 @@ function attachListeners() {
     .orderByChild('tipo').equalTo('Salida')
     .on('value', s => {
       misMovimientos = s.val() || {};
+      _movsReady = true;
       renderDespachos();
     });
   db.ref(`organizaciones/${maestroUid}/despachos`).on('value', s => {
     misDespachos = s.val() || {};
+    _despsReady = true;
     renderDespachos();
   });
   // Si el admin actualiza la ficha del conductor en vivo (p.ej. agrega una
@@ -846,6 +856,22 @@ function setTab(tab) {
 function renderDespachos() {
   const list = document.getElementById('despachosList');
   const empty = document.getElementById('emptyState');
+  // Guard crítico: esperar a que AMBOS listeners (movimientos + despachos)
+  // hayan devuelto su primer snapshot. Sin este guard, el chofer ve todos
+  // sus despachos como "Asignada" durante la ventana entre carga de salidas
+  // y carga de /despachos (hasta ~1.5s en cuentas con muchos movimientos),
+  // y puede clickear "Iniciar transporte" sobre uno ya Entregado,
+  // regresándolo falsamente a En Tránsito.
+  if (!_movsReady || !_despsReady) {
+    empty.style.display = 'block';
+    const titleEl = empty.querySelector('.empty-state-title');
+    if (titleEl) titleEl.textContent = 'Cargando despachos...';
+    list.innerHTML = '';
+    ['cntPendientes','cntTransito','cntEntregados','cntNoEntregados'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.textContent = '—';
+    });
+    return;
+  }
   const search = (document.getElementById('searchDoc')?.value || '').trim().toLowerCase();
   const todos = _construirDespachos();
 
@@ -1259,6 +1285,20 @@ async function confirmarIniciar() {
   btn.disabled = true;
   try {
     const docId = activeDocId;
+    // Guardrail: no permitir regresar un despacho ya En Tránsito, Entregada,
+    // No Entregada o Cerrada al estado "En Tránsito". Protege de un click
+    // sobre una vista desactualizada (p.ej. durante la carga inicial de
+    // /despachos, antes se mostraba el botón "Iniciar transporte" sobre
+    // despachos ya finalizados).
+    if (isOnline) {
+      const snap = await db.ref(`organizaciones/${maestroUid}/despachos/${docId}/estado`).once('value');
+      const estadoActual = snap.val();
+      if (estadoActual && estadoActual !== 'Asignada') {
+        alert(`Este despacho ya está en estado "${estadoActual}". No se puede iniciar transporte sobre un despacho que no esté Asignado. Refresca la vista para ver el estado actual.`);
+        closeModal('iniciarModal');
+        return;
+      }
+    }
     const now = new Date().toISOString();
     const hitoId = 'H-' + Date.now();
     const hito = {
@@ -1390,6 +1430,18 @@ async function confirmarEntrega() {
   btn.disabled = true;
   try {
     const docId = activeDocId;
+    // Guardrail: sólo permitir confirmar entrega sobre despachos que estén
+    // En Tránsito (o legacy "En Ruta"). Bloquea regresiones desde Entregada,
+    // No Entregada o Cerrada por clicks sobre vista desactualizada.
+    if (isOnline) {
+      const snap = await db.ref(`organizaciones/${maestroUid}/despachos/${docId}/estado`).once('value');
+      const estadoActual = snap.val();
+      if (estadoActual && estadoActual !== 'En Tránsito' && estadoActual !== 'En Ruta') {
+        alert(`Este despacho ya está en estado "${estadoActual}". No se puede confirmar entrega. Refresca la vista para ver el estado actual.`);
+        closeModal('entregarModal');
+        return;
+      }
+    }
     const now = new Date().toISOString();
     // Las fotos se guardan como data URL (base64) en RTDB para no depender
     // de Storage. Comprimimos cada una (igual que en No Entregado) antes de
@@ -1511,6 +1563,17 @@ async function confirmarNoEntregado() {
   btn.disabled = true;
   try {
     const docId = activeDocId;
+    // Guardrail: sólo permitir marcar No Entregado sobre despachos En Tránsito.
+    // Bloquea regresiones desde Entregada o Cerrada.
+    if (isOnline) {
+      const snap = await db.ref(`organizaciones/${maestroUid}/despachos/${docId}/estado`).once('value');
+      const estadoActual = snap.val();
+      if (estadoActual && estadoActual !== 'En Tránsito' && estadoActual !== 'En Ruta') {
+        alert(`Este despacho ya está en estado "${estadoActual}". No se puede marcar como No Entregado. Refresca la vista para ver el estado actual.`);
+        closeModal('noEntregadoModal');
+        return;
+      }
+    }
     const now = new Date().toISOString();
     // Fotos adicionales se guardan como base64 en RTDB (mismo motivo que
     // la foto del cedible). Comprimimos cada una antes.
