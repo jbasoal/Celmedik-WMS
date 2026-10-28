@@ -1066,8 +1066,51 @@ function _despCardHtml(d) {
     </div>`;
 }
 
+// ══ FOTOS DEL DESPACHO (carga on-demand) ══
+// Las fotos (cedible firmado, fotos de entrega, fotos adicionales) ya no
+// viven en /despachos/{id}, sino en /despachoFotos/{id}. El listener
+// principal baja sólo el metadata (unos pocos KB en total) y las fotos
+// se cargan sólo cuando se abre el detalle de un despacho. Esto reduce
+// el payload inicial de ~65MB a ~60KB en una cuenta real.
+//
+// Backward-compat: si /despachoFotos/{id} está vacío pero hay fotos en
+// los campos antiguos de /despachos/{id}, los devuelve igual (hasta que
+// la migración mueva todo al nuevo nodo).
+async function _cargarFotosDespacho(docId) {
+  const r = (misDespachos || {})[docId] || {};
+  // Legacy inline en /despachos (previo a la separación)
+  const legacy = {
+    fotoCedibleBase64: r.fotoCedibleBase64 || '',
+    fotosEntregaBase64: r.fotosEntregaBase64 || null,
+    fotosAdicionalesBase64: r.fotosAdicionalesBase64 || null,
+    fotoCedibleUrl: r.fotoCedibleUrl || '',
+    fotosAdicionalesUrls: r.fotosAdicionalesUrls || null,
+  };
+  const tieneAlgoLegacy = legacy.fotoCedibleBase64 || legacy.fotosEntregaBase64 || legacy.fotosAdicionalesBase64 || legacy.fotoCedibleUrl || legacy.fotosAdicionalesUrls;
+  // Si no hay nada legacy y no hay flag de fotos nuevas, no hay nada que traer.
+  const tieneFlagNueva = r.tieneFotoCedible || r.tieneFotosEntrega || r.tieneFotosAdicionales;
+  if (!tieneAlgoLegacy && !tieneFlagNueva) return legacy;
+  if (!isOnline) return legacy;
+  try {
+    const snap = await db.ref(`organizaciones/${maestroUid}/despachoFotos/${docId}`).once('value');
+    const nuevo = snap.val() || {};
+    // El nuevo nodo tiene prioridad; si está vacío, caemos a legacy.
+    return {
+      fotoCedibleBase64:      nuevo.fotoCedibleBase64      || legacy.fotoCedibleBase64,
+      fotosEntregaBase64:     nuevo.fotosEntregaBase64     || legacy.fotosEntregaBase64,
+      fotosAdicionalesBase64: nuevo.fotosAdicionalesBase64 || legacy.fotosAdicionalesBase64,
+      fotoCedibleUrl:         legacy.fotoCedibleUrl,
+      fotosAdicionalesUrls:   legacy.fotosAdicionalesUrls,
+      _hitosFotos:            nuevo.hitosFotos || null,
+    };
+  } catch (e) {
+    console.warn('[_cargarFotosDespacho] fallback a legacy:', e && e.message);
+    return legacy;
+  }
+}
+
 // ══ DETALLE ══
-function openDetalle(docId) {
+async function openDetalle(docId) {
   const d = _construirDespachos()[docId];
   if (!d) return;
   activeDocId = docId;
@@ -1116,31 +1159,19 @@ function openDetalle(docId) {
   // Resumen del cierre: foto(s) cedible, motivo no-entrega, fotos adicionales,
   // observaciones. Prominente arriba del timeline cuando aplica.
   const r = d.regDespacho || {};
-  // Compatibilidad: `fotosEntregaBase64` (nuevo, array hasta 4),
-  // `fotoCedibleBase64` (anterior, data URL única en RTDB) o
-  // `fotoCedibleUrl` (legacy, URL de Storage). Todos se muestran como miniaturas.
-  const fotosEntregaArr = r.fotosEntregaBase64;
-  const fotosEntregaList = Array.isArray(fotosEntregaArr)
-    ? fotosEntregaArr
-    : (fotosEntregaArr ? Object.values(fotosEntregaArr) : []);
-  const cedibleFallback = r.fotoCedibleBase64 || r.fotoCedibleUrl || '';
-  const fotosEntregaFinal = fotosEntregaList.length ? fotosEntregaList : (cedibleFallback ? [cedibleFallback] : []);
+  // Las fotos ya no vienen inline en /despachos; cargarlas on-demand desde
+  // /despachoFotos/{docId}. Mientras se cargan, mostramos un placeholder.
+  const tieneCedibleFlag = r.tieneFotoCedible || r.fotoCedibleBase64 || r.fotoCedibleUrl;
+  const tieneAdicFlag = r.tieneFotosAdicionales || r.fotosAdicionalesBase64 || r.fotosAdicionalesUrls;
   let cierreHtml = '';
-  if (d.estado === 'Entregada' && fotosEntregaFinal.length) {
-    const titulo = fotosEntregaFinal.length > 1 ? `Fotos de la entrega (${fotosEntregaFinal.length})` : 'Cedible firmado';
-    cierreHtml += `<div style="margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">${titulo}</div><div class="fotos-grid">${
-      fotosEntregaFinal.map((src, i) => `<div class="fotos-thumb"><img src="${src}" onclick="_abrirFotoFull('e${i}',this.src)">${i===0 && fotosEntregaFinal.length>1 ? '<span class="ced-tag">CEDIBLE</span>' : ''}</div>`).join('')
-    }</div></div>`;
+  if (d.estado === 'Entregada' && tieneCedibleFlag) {
+    cierreHtml += `<div id="detFotosEntrega" style="margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Cedible firmado</div><div style="font-size:12px;color:var(--text3)">Cargando foto...</div></div>`;
   }
   if (d.estado === 'No Entregada') {
     const detalle = r.motivoNoEntregaDetalle ? ' — ' + r.motivoNoEntregaDetalle : '';
     cierreHtml += `<div style="margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:var(--danger);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Motivo</div><div class="motivo-pill" style="font-size:13px">${r.motivoNoEntrega || '—'}${detalle}</div></div>`;
-    const fotosArr = r.fotosAdicionalesBase64 || r.fotosAdicionalesUrls;
-    const fotos = Array.isArray(fotosArr) ? fotosArr : (fotosArr ? Object.values(fotosArr) : []);
-    if (fotos.length) {
-      cierreHtml += `<div style="margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Fotos adicionales</div><div class="fotos-grid">${
-        fotos.map((src, i) => `<div class="fotos-thumb"><img src="${src}" onclick="_abrirFotoFull('n${i}',this.src)"></div>`).join('')
-      }</div></div>`;
+    if (tieneAdicFlag) {
+      cierreHtml += `<div id="detFotosAdic" style="margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Fotos adicionales</div><div style="font-size:12px;color:var(--text3)">Cargando fotos...</div></div>`;
     }
   }
   if (r.observacionesCierre) {
@@ -1162,6 +1193,43 @@ function openDetalle(docId) {
   document.querySelectorAll('#detCierre').forEach(el => el.remove());
   document.getElementById('detItems').insertAdjacentHTML('afterend', `<div id="detCierre">${cierreHtml}</div>`);
   document.getElementById('detTimeline').innerHTML = timelineHtml;
+  // Carga diferida de fotos (nuevo nodo /despachoFotos). Reemplaza los
+  // placeholders una vez que las fotos lleguen. Sin esto, el detalle del
+  // despacho se abriría instantáneo pero el bloque de cedible/fotos quedaría
+  // con el placeholder — en la práctica el fetch es muy rápido porque un
+  // único despacho pesa pocos KB a MB, no los 65MB del listener antiguo.
+  if (tieneCedibleFlag || tieneAdicFlag) {
+    _cargarFotosDespacho(docId).then(fotos => {
+      if (activeDocId !== docId) return;  // el user cerró/abrió otro
+      // Cedible / fotos de entrega
+      const wrapE = document.getElementById('detFotosEntrega');
+      if (wrapE) {
+        const arr = fotos.fotosEntregaBase64;
+        const list = Array.isArray(arr) ? arr : (arr ? Object.values(arr) : []);
+        const fallback = fotos.fotoCedibleBase64 || fotos.fotoCedibleUrl || '';
+        const finales = list.length ? list : (fallback ? [fallback] : []);
+        if (!finales.length) { wrapE.remove(); }
+        else {
+          const titulo = finales.length > 1 ? `Fotos de la entrega (${finales.length})` : 'Cedible firmado';
+          wrapE.innerHTML = `<div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">${titulo}</div><div class="fotos-grid">${
+            finales.map((src, i) => `<div class="fotos-thumb"><img src="${src}" onclick="_abrirFotoFull('e${i}',this.src)">${i===0 && finales.length>1 ? '<span class="ced-tag">CEDIBLE</span>' : ''}</div>`).join('')
+          }</div>`;
+        }
+      }
+      // Fotos adicionales (no entrega)
+      const wrapA = document.getElementById('detFotosAdic');
+      if (wrapA) {
+        const arr = fotos.fotosAdicionalesBase64 || fotos.fotosAdicionalesUrls;
+        const list = Array.isArray(arr) ? arr : (arr ? Object.values(arr) : []);
+        if (!list.length) { wrapA.remove(); }
+        else {
+          wrapA.innerHTML = `<div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Fotos adicionales</div><div class="fotos-grid">${
+            list.map((src, i) => `<div class="fotos-thumb"><img src="${src}" onclick="_abrirFotoFull('n${i}',this.src)"></div>`).join('')
+          }</div>`;
+        }
+      }
+    }).catch(err => console.warn('[openDetalle] fallo cargar fotos:', err && err.message));
+  }
   // Botón de acción contextual (sólo uno; para "En tránsito" el chofer tiene
   // dos acciones y las ofrecemos desde el card principal, no desde el detalle).
   const btn = document.getElementById('detActionBtn');
@@ -1455,28 +1523,34 @@ async function confirmarEntrega() {
     _showProgressSnack('Guardando entrega...');
     const hitoId = 'H-' + Date.now();
     const esParcial = !!entregaParcialMode;
+    // Hito de auditoría SIN fotos — las fotos pesadas van al nodo separado
+    // /despachoFotos/{docId} para que el listener principal baje poco.
     const hito = {
       estado: 'Entregada', fecha: now,
       lat: currentGPS?.lat || null, lng: currentGPS?.lng || null,
       observaciones: obs,
-      // Compatibilidad: `fotoCedibleBase64` apunta a la primera foto; además
-      // guardamos el array completo en `fotosEntregaBase64`.
-      fotoCedibleBase64: fotosBase64[0],
-      fotosEntregaBase64: fotosBase64,
       entregaConObservaciones: !!conObs && !!obs,
       entregaParcial: esParcial,
       usuario: currentUser.email
     };
     const basePath = `organizaciones/${maestroUid}/despachos/${docId}`;
+    const fotosPath = `organizaciones/${maestroUid}/despachoFotos/${docId}`;
     const updates = {
+      // Metadata liviano en /despachos (lo que ve el listener del chofer)
       [`${basePath}/estado`]: 'Entregada',
       [`${basePath}/entregadoEn`]: now,
-      [`${basePath}/fotoCedibleBase64`]: fotosBase64[0],
-      [`${basePath}/fotosEntregaBase64`]: fotosBase64,
+      [`${basePath}/tieneFotoCedible`]: true,
+      [`${basePath}/tieneFotosEntrega`]: fotosBase64.length > 0,
       [`${basePath}/entregaConObservaciones`]: !!conObs && !!obs,
       [`${basePath}/entregaParcial`]: esParcial,
       [`${basePath}/observacionesCierre`]: obs,
-      [`${basePath}/hitos/${hitoId}`]: hito
+      [`${basePath}/hitos/${hitoId}`]: hito,
+      // Fotos (base64 pesadas) al nodo separado — se cargan on-demand al abrir detalle
+      [`${fotosPath}/fotoCedibleBase64`]: fotosBase64[0],
+      [`${fotosPath}/fotosEntregaBase64`]: fotosBase64,
+      // Backward compat: limpia las fotos inline antiguas si existían
+      [`${basePath}/fotoCedibleBase64`]: null,
+      [`${basePath}/fotosEntregaBase64`]: null
     };
     if (isOnline) {
       await db.ref().update(updates);
@@ -1587,24 +1661,28 @@ async function confirmarNoEntregado() {
     }
     _showProgressSnack('Guardando no-entrega...');
     const hitoId = 'H-' + Date.now();
+    // Hito de auditoría SIN fotos — van al nodo separado para no inflar el listener
     const hito = {
       estado:'No Entregada', fecha:now,
       lat: currentGPS?.lat || null, lng: currentGPS?.lng || null,
       motivoNoEntrega: motivo,
       motivoNoEntregaDetalle: motivo === 'Otro' ? motivoDet : '',
       observaciones: obs,
-      fotosAdicionalesBase64: fotosBase64,
       usuario: currentUser.email
     };
     const basePath = `organizaciones/${maestroUid}/despachos/${docId}`;
+    const fotosPath = `organizaciones/${maestroUid}/despachoFotos/${docId}`;
     const updates = {
       [`${basePath}/estado`]: 'No Entregada',
       [`${basePath}/noEntregadoEn`]: now,
       [`${basePath}/motivoNoEntrega`]: motivo,
       [`${basePath}/motivoNoEntregaDetalle`]: motivo === 'Otro' ? motivoDet : '',
       [`${basePath}/observacionesCierre`]: obs,
-      [`${basePath}/fotosAdicionalesBase64`]: fotosBase64,
-      [`${basePath}/hitos/${hitoId}`]: hito
+      [`${basePath}/tieneFotosAdicionales`]: fotosBase64.length > 0,
+      [`${basePath}/hitos/${hitoId}`]: hito,
+      [`${fotosPath}/fotosAdicionalesBase64`]: fotosBase64,
+      // Backward compat: limpia las fotos inline antiguas si existían
+      [`${basePath}/fotosAdicionalesBase64`]: null
     };
     if (isOnline) {
       await db.ref().update(updates);

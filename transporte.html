@@ -1062,7 +1062,13 @@ function _buildDespachos() {
       conductorLabelHtml,
       conductorId: d?.conductorId || null,
       despacho: d,
-      // atajos para la tabla
+      // Flag "tiene cedible": lee bandera nueva (tieneFotoCedible) y acepta
+      // también los campos inline antiguos (backward-compat con data que
+      // todavía no migró). La imagen real se baja on-demand desde
+      // /despachoFotos/{docId} para no inflar el listener principal.
+      cedibleFlag: !!(d && (d.tieneFotoCedible || d.fotoCedibleBase64 || d.fotoCedibleUrl)),
+      // cedibleSrc queda disponible solo si está inline (legacy); los
+      // consumidores modernos deben pasar por _cargarFotosDespachoAdmin().
       cedibleSrc: (d && (d.fotoCedibleBase64 || d.fotoCedibleUrl)) || '',
       entregadoEn: d?.entregadoEn || '',
       enRutaEn: d?.enRutaEn || '',
@@ -1255,7 +1261,7 @@ function renderDespachos() {
   if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="8">Sin despachos para el filtro seleccionado</td></tr>'; return; }
   tb.innerHTML = rows.map(o => {
     const safeDoc = o.documentoId.replace(/'/g, "\\'");
-    const cedibleCell = o.cedibleSrc
+    const cedibleCell = o.cedibleFlag
       ? `<a class="cedible-link" onclick="viewCedible('${safeDoc}')" title="Ver / descargar cedible">📄 Ver</a>`
       : '<span class="cedible-none">—</span>';
     // Botón "Reasignar conductor": disponible mientras el despacho no esté
@@ -1294,14 +1300,55 @@ function estadoBadge(estado, o) {
   return `<span class="badge ${cls}">${estado}</span>`;
 }
 
+// Cache en memoria de las fotos ya traídas (por docId). Las fotos pesan MB,
+// no las repetimos al re-abrir el mismo despacho.
+const _fotosCacheAdmin = {};
+
+// Baja (o devuelve de cache) las fotos del despacho desde /despachoFotos.
+// Devuelve {fotoCedibleBase64, fotosEntregaBase64, fotosAdicionalesBase64,
+// fotoCedibleUrl, fotosAdicionalesUrls}. Si el despacho todavía tiene las
+// fotos inline en /despachos (data no migrada), las usa como fallback.
+async function _cargarFotosDespachoAdmin(docId) {
+  if (_fotosCacheAdmin[docId]) return _fotosCacheAdmin[docId];
+  const d = (data.despachos || {})[docId] || {};
+  const legacy = {
+    fotoCedibleBase64: d.fotoCedibleBase64 || '',
+    fotosEntregaBase64: d.fotosEntregaBase64 || null,
+    fotosAdicionalesBase64: d.fotosAdicionalesBase64 || null,
+    fotoCedibleUrl: d.fotoCedibleUrl || '',
+    fotosAdicionalesUrls: d.fotosAdicionalesUrls || null,
+  };
+  try {
+    const snap = await db.ref(`organizaciones/${orgUid}/despachoFotos/${docId}`).once('value');
+    const nuevo = snap.val() || {};
+    const resultado = {
+      fotoCedibleBase64:      nuevo.fotoCedibleBase64      || legacy.fotoCedibleBase64,
+      fotosEntregaBase64:     nuevo.fotosEntregaBase64     || legacy.fotosEntregaBase64,
+      fotosAdicionalesBase64: nuevo.fotosAdicionalesBase64 || legacy.fotosAdicionalesBase64,
+      fotoCedibleUrl:         legacy.fotoCedibleUrl,
+      fotosAdicionalesUrls:   legacy.fotosAdicionalesUrls,
+      _hitosFotos:            nuevo.hitosFotos || null,
+    };
+    _fotosCacheAdmin[docId] = resultado;
+    return resultado;
+  } catch (e) {
+    console.warn('[_cargarFotosDespachoAdmin] fallback a legacy:', e && e.message);
+    return legacy;
+  }
+}
+
 // Abre el visor de imágenes con el cedible del despacho + botón de descarga.
-function viewCedible(docId) {
+async function viewCedible(docId) {
   const o = _buildDespachos()[docId];
-  if (!o || !o.cedibleSrc) { showToast('Este despacho no tiene cedible registrado.', 'warning'); return; }
+  if (!o || !o.cedibleFlag) { showToast('Este despacho no tiene cedible registrado.', 'warning'); return; }
   const el = document.getElementById('imgViewerSrc');
-  el.src = o.cedibleSrc;
+  el.src = '';
   el.dataset.filename = `cedible-${docId}.jpg`;
   openModal('imgViewerModal');
+  const fotos = await _cargarFotosDespachoAdmin(docId);
+  const src = fotos.fotoCedibleBase64 || fotos.fotoCedibleUrl || '';
+  if (!src) { showToast('No se pudo cargar la imagen.', 'warning'); return; }
+  el.src = src;
 }
 
 // Descarga la imagen actualmente visible en el visor.
@@ -1340,7 +1387,7 @@ function renderParciales() {
     const motivo = o.estado === 'No Entregada'
       ? `${o.motivoNoEntrega || '—'}${o.motivoNoEntregaDetalle ? ': '+o.motivoNoEntregaDetalle : ''}`
       : (o.observacionesCierre || '—');
-    const cedibleCell = o.cedibleSrc
+    const cedibleCell = o.cedibleFlag
       ? `<a class="cedible-link" onclick="viewCedible('${safeDoc}')">📄 Ver</a>`
       : '<span class="cedible-none">—</span>';
     const fechaEst = o.noEntregadoEn || o.entregadoEn || o.fecha;
@@ -1605,10 +1652,12 @@ function openDetalleDespacho(docId) {
 function openDetalleOT(id) { return openDetalleDespacho(id); }
 
 // Inserta un bloque con el cedible destacado al inicio del cuerpo del detalle.
-function _agregarCedibleEnDetalle(o) {
+// La imagen se baja on-demand desde /despachoFotos para no inflar el listener
+// principal (cada despacho con cedible pesa ~1-2MB en base64).
+async function _agregarCedibleEnDetalle(o) {
   // Elimina cualquier bloque previo para no duplicar al reabrir.
   document.querySelectorAll('#detCedibleWrap').forEach(el => el.remove());
-  if (!o.cedibleSrc) return;
+  if (!o.cedibleFlag) return;
   const anchor = document.getElementById('detItemsBody').closest('.table-wrap');
   if (!anchor) return;
   const safeDoc = o.documentoId.replace(/'/g, "\\'");
@@ -1618,20 +1667,30 @@ function _agregarCedibleEnDetalle(o) {
   wrap.innerHTML = `
     <div class="section-div"><div class="section-div-line"></div><div class="section-div-text">Cedible firmado</div><div class="section-div-line"></div></div>
     <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;">
-      <img src="${o.cedibleSrc}" style="max-width:200px;max-height:200px;border-radius:6px;border:1px solid var(--border);cursor:pointer;object-fit:cover" onclick="viewCedible('${safeDoc}')">
+      <div id="detCedibleImgSlot" style="width:200px;height:200px;border-radius:6px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:12px;background:var(--bg)">Cargando...</div>
       <div style="display:flex;flex-direction:column;gap:6px;">
         <button class="btn btn-ghost btn-sm" onclick="viewCedible('${safeDoc}')" style="width:auto">🔍 Ver completo</button>
         <button class="btn btn-success-sm btn-sm" onclick="_descargarCedibleDirecto('${safeDoc}')" style="width:auto">⬇ Descargar</button>
       </div>
     </div>`;
   anchor.parentNode.insertBefore(wrap, anchor);
+  const fotos = await _cargarFotosDespachoAdmin(o.documentoId);
+  const src = fotos.fotoCedibleBase64 || fotos.fotoCedibleUrl || '';
+  const slot = document.getElementById('detCedibleImgSlot');
+  if (slot) {
+    if (!src) { slot.textContent = 'Sin imagen'; return; }
+    slot.outerHTML = `<img src="${src}" style="max-width:200px;max-height:200px;border-radius:6px;border:1px solid var(--border);cursor:pointer;object-fit:cover" onclick="viewCedible('${safeDoc}')">`;
+  }
 }
 
-function _descargarCedibleDirecto(docId) {
+async function _descargarCedibleDirecto(docId) {
   const o = _buildDespachos()[docId];
-  if (!o || !o.cedibleSrc) return;
+  if (!o || !o.cedibleFlag) return;
+  const fotos = await _cargarFotosDespachoAdmin(docId);
+  const src = fotos.fotoCedibleBase64 || fotos.fotoCedibleUrl || '';
+  if (!src) { showToast('No se pudo obtener la imagen.', 'warning'); return; }
   const a = document.createElement('a');
-  a.href = o.cedibleSrc;
+  a.href = src;
   a.download = `cedible-${docId}.jpg`;
   document.body.appendChild(a);
   a.click();
@@ -1876,6 +1935,11 @@ async function confirmReasignarCerrar() {
         updates[`${basePath}/fotoCedibleBase64`] = null;
         updates[`${basePath}/fotoCedibleUrl`] = null;
         updates[`${basePath}/fotosEntregaBase64`] = null;
+        updates[`${basePath}/tieneFotoCedible`] = null;
+        updates[`${basePath}/tieneFotosEntrega`] = null;
+        updates[`${basePath}/tieneFotosAdicionales`] = null;
+        // El nodo /despachoFotos/{id} se borra entero para liberar MB
+        updates[`organizaciones/${orgUid}/despachoFotos/${docId}`] = null;
         updates[`${basePath}/enRutaEn`] = null;
         // Reset del conductor en el despacho. Si la nueva opción es un
         // conductor registrado, lo apuntamos; si es genérica, lo borramos.
