@@ -1073,6 +1073,9 @@ function _buildDespachos() {
       entregadoEn: d?.entregadoEn || '',
       enRutaEn: d?.enRutaEn || '',
       noEntregadoEn: d?.noEntregadoEn || '',
+      tomadoEn: d?.tomadoEn || '',
+      cerradoDefinitivoEn: d?.cerradoDefinitivoEn || '',
+      hitos: (d && d.hitos) || null,
       cerradoDefinitivo: !!(d && d.cerradoDefinitivo),
       entregaParcial: !!(d && d.entregaParcial),
       motivoNoEntrega: d?.motivoNoEntrega || '',
@@ -1095,6 +1098,32 @@ function _badgeClassForEstado(estado) {
     'Cerrada':'badge-cerrada'
   };
   return map[estado] || 'badge-gray';
+}
+
+// Fecha+hora en que se alcanzó el estado actual del despacho. Lee los
+// timestamps que escribe conductor.html (/despachos/{docId}) según el
+// estado efectivo; si para un estado "temprano" (Pendiente / Asignada
+// sin tomar) todavía no hay marca específica, cae en la fecha del
+// movimiento / fechaDespacho. Como último recurso, usa el último hito
+// registrado del mismo estado.
+function _fechaEstadoActual(o) {
+  if (!o) return '';
+  const e = o.estado;
+  let ts = '';
+  if (e === 'Cerrada')                                   ts = o.cerradoDefinitivoEn || o.entregadoEn || o.noEntregadoEn;
+  else if (e === 'Entregada' || e === 'Entregada Parcial') ts = o.entregadoEn;
+  else if (e === 'No Entregada')                         ts = o.noEntregadoEn;
+  else if (e === 'En Tránsito')                          ts = o.enRutaEn;
+  else if (e === 'Asignada')                             ts = o.tomadoEn;
+  // Fallback: último hito del mismo estado (si existe).
+  if (!ts && o.hitos) {
+    const match = Object.values(o.hitos)
+      .filter(h => h && (h.estado === e || (e === 'En Tránsito' && h.estado === 'En Ruta')))
+      .sort((a,b) => (b.fecha||'').localeCompare(a.fecha||''))[0];
+    if (match && match.fecha) ts = match.fecha;
+  }
+  // Último fallback: fecha del movimiento / fecha de despacho.
+  return ts || o.fecha || o.fechaDespacho || '';
 }
 
 // Renderiza los checkboxes de "Bodegas desde las que puede retirar" en el
@@ -1277,7 +1306,7 @@ function renderDespachos() {
       <td>${o.destino||'—'}</td>
       <td>${o.conductorLabelHtml||o.conductorLabel||'—'}</td>
       <td>${estadoBadge(o.estado, o)}</td>
-      <td style="font-size:11.5px">${fmtDate(o.fechaDespacho || o.fecha)}</td>
+      <td style="font-size:11.5px;white-space:nowrap" title="Fecha y hora en que se registró el estado actual">${fmtDateTime(_fechaEstadoActual(o))}</td>
       <td>${cedibleCell}</td>
       <td style="white-space:nowrap">
         <button class="btn btn-icon btn-sm" onclick="openDetalleDespacho('${safeDoc}')" title="Ver detalle">🔍</button>
