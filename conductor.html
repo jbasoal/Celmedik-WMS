@@ -1708,19 +1708,35 @@ async function confirmarNoEntregado() {
 // ══ FOTO FLOW (¿imagen ok?) ══
 // Cuando el usuario elige una foto desde cualquier <input type=file capture=environment>
 // mostramos el preview a pantalla completa con dos acciones: Guardar / Repetir.
+//
+// IMPORTANTE: pre-comprimimos la foto INMEDIATAMENTE al capturarla, antes de
+// hacer el preview o guardarla en el array. La cámara nativa entrega el JPEG
+// completo del sensor (12-48MP = 5-15MB raw, hasta ~200MB como bitmap crudo
+// decodificado). Mantener eso en RAM + mostrarlo full-screen reventaba la
+// memoria del WebView en teléfonos con menos RAM (Android mata el proceso con
+// "memoria insuficiente"). Comprimiendo a 1600px/80% quedamos en ~500KB-1MB,
+// manejable en cualquier dispositivo.
 let _pendingPhotoDataUrl = null;
-function onPhotoChosen(input, kind) {
+async function onPhotoChosen(input, kind) {
   if (!input.files.length) return;
   pendingFotoKind = kind;
-  const reader = new FileReader();
-  reader.onload = e => {
-    _pendingPhotoDataUrl = e.target.result;
-    document.getElementById('pf-img').src = _pendingPhotoDataUrl;
-    document.getElementById('photoFullscreen').classList.add('active');
-  };
-  reader.readAsDataURL(input.files[0]);
-  // Limpiar input para permitir que el user vuelva a seleccionar otra con la misma cámara
+  const file = input.files[0];
+  // Limpiamos el input YA para que el user pueda reintentar y para liberar la
+  // referencia al archivo original lo antes posible.
   input.value = '';
+  _showProgressSnack('Procesando foto...');
+  try {
+    const blob = await _compressImage(file, 1600, 0.80);
+    _pendingPhotoDataUrl = await _blobToDataUrl(blob);
+    _clearProgressSnack();
+  } catch (e) {
+    _clearProgressSnack();
+    console.error('[onPhotoChosen] fallo al procesar foto:', e);
+    alert('No se pudo procesar la foto. Vuelve a tomarla.');
+    return;
+  }
+  document.getElementById('pf-img').src = _pendingPhotoDataUrl;
+  document.getElementById('photoFullscreen').classList.add('active');
 }
 
 function acceptPhoto() {
@@ -1736,11 +1752,15 @@ function acceptPhoto() {
     _renderFotosGrid();
   }
   document.getElementById('photoFullscreen').classList.remove('active');
+  // Liberar el bitmap decodificado del preview (ayuda al GC en WebView Android).
+  document.getElementById('pf-img').src = '';
   _pendingPhotoDataUrl = null;
 }
 
 function rejectPhoto() {
   document.getElementById('photoFullscreen').classList.remove('active');
+  // Liberar el bitmap decodificado del preview antes de reabrir cámara.
+  document.getElementById('pf-img').src = '';
   _pendingPhotoDataUrl = null;
   // Re-abre el selector del input apropiado
   if (pendingFotoKind === 'entrega') document.getElementById('ent-foto').click();
@@ -1762,6 +1782,8 @@ function _abrirFotoFull(_id, src) {
 function _cerrarFotoFull() {
   const modal = document.getElementById('photoFullscreen');
   modal.classList.remove('active');
+  // Liberar el bitmap decodificado del preview (ayuda al GC en WebView Android).
+  document.getElementById('pf-img').src = '';
   // Restaura los botones por si vuelve a usarse en el flujo "¿imagen ok?".
   const actions = modal.querySelector('.pf-actions');
   actions.innerHTML = `
@@ -1784,27 +1806,48 @@ async function _dataUrlToBlob(dataUrl) {
 }
 
 // Comprime una imagen (data URL o Blob) a JPEG con tamaño máximo controlado.
+// Para File/Blob usamos URL.createObjectURL (no FileReader→base64) porque la
+// cámara nativa entrega el JPEG raw del sensor (12-48MP, 5-15MB); crear la
+// base64 string en RAM se come ~1.33x ese tamaño antes de siquiera decodificar
+// el bitmap, y en WebView Android (presupuesto típico ~256MB/proceso) eso
+// mataba el proceso en teléfonos con poca RAM.
 async function _compressImage(input, maxDim = 1920, quality = 0.85) {
-  const dataUrl = (typeof input === 'string') ? input : await _fileToDataUrl(input);
-  const img = await new Promise((res, rej) => {
-    const i = new Image();
-    i.onload = () => res(i);
-    i.onerror = () => rej(new Error('No se pudo cargar la imagen para comprimir.'));
-    i.src = dataUrl;
-  });
-  let { width, height } = img;
-  if (width > maxDim || height > maxDim) {
-    const ratio = Math.min(maxDim / width, maxDim / height);
-    width = Math.round(width * ratio);
-    height = Math.round(height * ratio);
+  let objectUrl = null;
+  let imgSrc;
+  if (typeof input === 'string') {
+    imgSrc = input;
+  } else {
+    objectUrl = URL.createObjectURL(input);
+    imgSrc = objectUrl;
   }
-  const canvas = document.createElement('canvas');
-  canvas.width = width; canvas.height = height;
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(img, 0, 0, width, height);
-  return await new Promise((res, rej) => {
-    canvas.toBlob(b => b ? res(b) : rej(new Error('No se pudo comprimir la imagen.')), 'image/jpeg', quality);
-  });
+  try {
+    const img = await new Promise((res, rej) => {
+      const i = new Image();
+      i.onload = () => res(i);
+      i.onerror = () => rej(new Error('No se pudo cargar la imagen para comprimir.'));
+      i.src = imgSrc;
+    });
+    let { width, height } = img;
+    if (width > maxDim || height > maxDim) {
+      const ratio = Math.min(maxDim / width, maxDim / height);
+      width = Math.round(width * ratio);
+      height = Math.round(height * ratio);
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = width; canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, width, height);
+    // Liberamos refs al bitmap grande antes de pedir el blob — ayuda al GC.
+    img.src = '';
+    const blob = await new Promise((res, rej) => {
+      canvas.toBlob(b => b ? res(b) : rej(new Error('No se pudo comprimir la imagen.')), 'image/jpeg', quality);
+    });
+    // Reseteamos el canvas también para soltar el buffer de píxeles.
+    canvas.width = 0; canvas.height = 0;
+    return blob;
+  } finally {
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+  }
 }
 
 // Comprime hasta que el blob quede bajo ~500 KB — necesario para guardar
