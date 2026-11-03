@@ -603,6 +603,31 @@
         .kardex-alerta { padding:10px 14px; border-radius:6px; margin-bottom:12px; font-size:13px; font-weight:600; }
         .kardex-alerta.warn { background: rgba(245,158,11,0.12); color: #92400e; border:1px solid rgba(245,158,11,0.35); }
         .kardex-alerta.danger { background: rgba(200,50,50,0.10); color: #7f1d1d; border:1px solid rgba(200,50,50,0.35); }
+        /* Multi-select con checkboxes (Kardex: Bodega / Tipo Movimiento) */
+        .kx-multi { position: relative; width: 100%; }
+        .kx-multi > summary { list-style: none; cursor: pointer; user-select: none;
+            padding-right: 26px; min-height: 36px; display: flex; align-items: center;
+            background-image: linear-gradient(45deg, transparent 50%, var(--text3) 50%),
+                              linear-gradient(135deg, var(--text3) 50%, transparent 50%);
+            background-position: calc(100% - 14px) 50%, calc(100% - 9px) 50%;
+            background-size: 5px 5px, 5px 5px; background-repeat: no-repeat;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .kx-multi > summary::-webkit-details-marker { display: none; }
+        .kx-multi > summary::marker { content: ''; }
+        .kx-multi-menu { position: absolute; z-index: 50; top: calc(100% + 4px); left: 0;
+            min-width: 100%; max-height: 300px; overflow-y: auto;
+            background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+            box-shadow: 0 6px 20px rgba(0,0,0,.12); padding: 6px 0; }
+        .kx-multi-menu label { display: flex; align-items: center; gap: 8px; padding: 6px 12px;
+            cursor: pointer; font-size: 13px; white-space: nowrap; color: var(--text); }
+        .kx-multi-menu label:hover { background: var(--bg2); }
+        .kx-multi-menu label input[type=checkbox] { margin: 0; }
+        .kx-multi-actions { display: flex; justify-content: space-between; gap: 8px;
+            padding: 4px 12px 8px; border-bottom: 1px solid var(--border); margin-bottom: 4px;
+            font-size: 11.5px; }
+        .kx-multi-actions a { color: var(--accent2); cursor: pointer; font-weight: 600;
+            user-select: none; }
+        .kx-multi-actions a:hover { text-decoration: underline; }
         /* Fila expandible Recepciones / Despachos */
         tr.doc-detalle-row td { padding:0 !important; background: var(--bg3); }
         tr.doc-detalle-row .doc-detalle-panel { padding: 14px 18px; border-left: 3px solid var(--accent); animation: doc-open .18s ease; }
@@ -1523,30 +1548,24 @@
                                 <input type="text" class="form-input" id="kxLote" list="kxLoteList" placeholder="Vacío = todos los lotes del SKU" autocomplete="off">
                                 <datalist id="kxLoteList"></datalist>
                             </div>
-                            <div style="display:flex;flex-direction:column;gap:4px;min-width:170px">
+                            <div style="display:flex;flex-direction:column;gap:4px;min-width:200px;position:relative" class="filtro-bodega-mov">
                                 <label class="form-label" style="margin:0">Bodega</label>
-                                <select class="form-select filtro-bodega-mov" id="kxBodega">
-                                    <option value="">Todas las bodegas</option>
-                                </select>
+                                <details class="kx-multi" id="kxBodegaMulti">
+                                    <summary class="form-select">Todas las bodegas</summary>
+                                    <div class="kx-multi-menu" id="kxBodegaMenu"></div>
+                                </details>
                             </div>
                             <div style="display:flex;flex-direction:column;gap:4px;min-width:220px;flex:1">
                                 <label class="form-label" style="margin:0">Cliente / Proveedor <span style="color:var(--text3);font-weight:400;font-size:10px">(opcional)</span></label>
                                 <input type="text" class="form-input" id="kxContraparte" list="kxContraparteList" placeholder="Ej: CLINICA NEFROLOGICA..." autocomplete="off">
                                 <datalist id="kxContraparteList"></datalist>
                             </div>
-                            <div style="display:flex;flex-direction:column;gap:4px;min-width:170px">
+                            <div style="display:flex;flex-direction:column;gap:4px;min-width:200px;position:relative">
                                 <label class="form-label" style="margin:0">Tipo Movimiento</label>
-                                <select class="form-select" id="kxTipo">
-                                    <option value="">Todos los tipos</option>
-                                    <option value="Entrada">Entrada</option>
-                                    <option value="Salida">Salida</option>
-                                    <option value="Devolución">Devolución</option>
-                                    <option value="Destrucción">Destrucción</option>
-                                    <option value="AjusteInventario">Ajuste Inventario</option>
-                                    <option value="Ajuste">Cambio de Status</option>
-                                    <option value="CambioEstado">Cambio de Estado</option>
-                                    <option value="CambioUbicacion">Cambio de Ubicación</option>
-                                </select>
+                                <details class="kx-multi" id="kxTipoMulti">
+                                    <summary class="form-select">Todos los tipos</summary>
+                                    <div class="kx-multi-menu" id="kxTipoMenu"></div>
+                                </details>
                             </div>
                             <div style="display:flex;flex-direction:column;gap:4px">
                                 <label class="form-label" style="margin:0">Desde</label>
@@ -3910,7 +3929,7 @@ function _flushPendingRenders() {
         renderBodegas(); renderBodegaBtns(); updateBodegaSelect();
         if (_isPageActive('recepciones')) _poblarBodegasSelect('fRecBodega');
         if (_isPageActive('despachos'))   _poblarBodegasSelect('fDespBodega');
-        if (_isPageActive('kardex'))      _poblarBodegasSelect('kxBodega');
+        if (_isPageActive('kardex'))      _kxPoblarBodegasMulti();
     }
     if (q.has('clientes') && _isPageActive('clientes'))         renderClientes();
     if (q.has('productos') && _isPageActive('productos'))       renderProductos();
@@ -9526,8 +9545,114 @@ function _poblarBodegasSelect(selectId) {
 // KARDEX
 // ══════════════════════════════════════════════════════════════════
 
+// Filtros multi-select del Kardex. Se mantienen entre consultas y se
+// resetean con limpiarKardex(). Vacíos = "sin filtro" (todas las opciones).
+const _kxBodegasFilter = new Set();
+const _kxTiposFilter = new Set();
+
+const _KX_TIPOS = [
+    { v: 'Entrada', l: 'Entrada' },
+    { v: 'Salida', l: 'Salida' },
+    { v: 'Devolución', l: 'Devolución' },
+    { v: 'Destrucción', l: 'Destrucción' },
+    { v: 'AjusteInventario', l: 'Ajuste Inventario' },
+    { v: 'Ajuste', l: 'Cambio de Status' },
+    { v: 'CambioEstado', l: 'Cambio de Estado' },
+    { v: 'CambioUbicacion', l: 'Cambio de Ubicación' }
+];
+
+function _kxPoblarBodegasMulti() {
+    const menu = document.getElementById('kxBodegaMenu');
+    if (!menu) return;
+    const bodegas = Object.values(data.bodegas || {}).map(b => b.nombre).filter(Boolean).sort();
+    const arrFijas = bodegasFijasActual();
+    const lista = arrFijas ? bodegas.filter(b => arrFijas.includes(b)) : bodegas;
+    // Descartar seleccionadas que ya no existan.
+    for (const v of [..._kxBodegasFilter]) if (!lista.includes(v)) _kxBodegasFilter.delete(v);
+    const actions = `<div class="kx-multi-actions">
+        <a onclick="_kxMultiSelectAll('bodegas')">Marcar todas</a>
+        <a onclick="_kxMultiClear('bodegas')">Limpiar</a>
+    </div>`;
+    const items = lista.map(b => `<label>
+        <input type="checkbox" value="${_escHtml(b)}" ${_kxBodegasFilter.has(b)?'checked':''} onchange="_kxMultiToggle('bodegas', this.value, this.checked)">
+        <span>${_escHtml(b)}</span>
+    </label>`).join('');
+    menu.innerHTML = actions + items;
+    _kxMultiRefreshLabel('bodegas');
+}
+
+function _kxPoblarTiposMulti() {
+    const menu = document.getElementById('kxTipoMenu');
+    if (!menu) return;
+    const actions = `<div class="kx-multi-actions">
+        <a onclick="_kxMultiSelectAll('tipos')">Marcar todas</a>
+        <a onclick="_kxMultiClear('tipos')">Limpiar</a>
+    </div>`;
+    const items = _KX_TIPOS.map(t => `<label>
+        <input type="checkbox" value="${t.v}" ${_kxTiposFilter.has(t.v)?'checked':''} onchange="_kxMultiToggle('tipos', this.value, this.checked)">
+        <span>${_escHtml(t.l)}</span>
+    </label>`).join('');
+    menu.innerHTML = actions + items;
+    _kxMultiRefreshLabel('tipos');
+}
+
+function _kxMultiToggle(kind, value, checked) {
+    const set = kind === 'bodegas' ? _kxBodegasFilter : _kxTiposFilter;
+    if (checked) set.add(value); else set.delete(value);
+    _kxMultiRefreshLabel(kind);
+}
+
+function _kxMultiSelectAll(kind) {
+    const set = kind === 'bodegas' ? _kxBodegasFilter : _kxTiposFilter;
+    const menuId = kind === 'bodegas' ? 'kxBodegaMenu' : 'kxTipoMenu';
+    const menu = document.getElementById(menuId);
+    if (!menu) return;
+    menu.querySelectorAll('input[type=checkbox]').forEach(cb => {
+        cb.checked = true;
+        set.add(cb.value);
+    });
+    _kxMultiRefreshLabel(kind);
+}
+
+function _kxMultiClear(kind) {
+    const set = kind === 'bodegas' ? _kxBodegasFilter : _kxTiposFilter;
+    const menuId = kind === 'bodegas' ? 'kxBodegaMenu' : 'kxTipoMenu';
+    const menu = document.getElementById(menuId);
+    set.clear();
+    if (menu) menu.querySelectorAll('input[type=checkbox]').forEach(cb => { cb.checked = false; });
+    _kxMultiRefreshLabel(kind);
+}
+
+function _kxMultiRefreshLabel(kind) {
+    const btnId = kind === 'bodegas' ? 'kxBodegaMulti' : 'kxTipoMulti';
+    const set   = kind === 'bodegas' ? _kxBodegasFilter : _kxTiposFilter;
+    const sum = document.getElementById(btnId)?.querySelector('summary');
+    if (!sum) return;
+    const defaultLabel = kind === 'bodegas' ? 'Todas las bodegas' : 'Todos los tipos';
+    if (!set.size) { sum.textContent = defaultLabel; return; }
+    if (set.size === 1) {
+        const v = [...set][0];
+        if (kind === 'tipos') {
+            const t = _KX_TIPOS.find(x => x.v === v);
+            sum.textContent = t ? t.l : v;
+        } else {
+            sum.textContent = v;
+        }
+        return;
+    }
+    sum.textContent = `${set.size} seleccionadas`;
+}
+
+// Cerrar dropdowns multi-select al clickear fuera.
+document.addEventListener('click', e => {
+    document.querySelectorAll('details.kx-multi[open]').forEach(d => {
+        if (!d.contains(e.target)) d.open = false;
+    });
+});
+
 function initKardexPage() {
-    _poblarBodegasSelect('kxBodega');
+    _kxPoblarBodegasMulti();
+    _kxPoblarTiposMulti();
     // Autocompletado SKU con SKUs del maestro (mostrando descripción)
     const dlSku = document.getElementById('kxSKUList');
     if (dlSku) {
@@ -9576,8 +9701,9 @@ function initKardexPage() {
 }
 
 function limpiarKardex() {
-    ['kxSKU','kxLote','kxTipo','kxContraparte'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
-    const b = document.getElementById('kxBodega'); if (b) b.value = '';
+    ['kxSKU','kxLote','kxContraparte'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    _kxMultiClear('bodegas');
+    _kxMultiClear('tipos');
     const d = document.getElementById('kxDesde'); if (d) d.value = `${new Date().getFullYear()}-01-01`;
     const h = document.getElementById('kxHasta'); if (h) h.value = new Date().toISOString().slice(0, 10);
     document.getElementById('kardexResultado').innerHTML = '';
@@ -9586,12 +9712,13 @@ function limpiarKardex() {
 function consultarKardex() {
     const sku    = (document.getElementById('kxSKU').value || '').trim().toUpperCase();
     const lote   = (document.getElementById('kxLote').value || '').trim();
-    const bodega = document.getElementById('kxBodega').value || '';
-    const tipo   = document.getElementById('kxTipo').value || '';
     const contra = (document.getElementById('kxContraparte')?.value || '').trim().toLowerCase();
     const desde  = document.getElementById('kxDesde').value || '';
     const hasta  = document.getElementById('kxHasta').value || '';
     const cont   = document.getElementById('kardexResultado');
+    // Multi-select: Set vacío = sin filtro (todas las opciones).
+    const bodegasSel = _kxBodegasFilter;
+    const tiposSel   = _kxTiposFilter;
 
     if (!sku) {
         cont.innerHTML = `<div class="card"><p class="text-muted text-sm" style="padding:10px 4px">Ingrese el SKU para consultar el Kardex. El lote es opcional (déjelo vacío para ver todos los lotes del SKU).</p></div>`;
@@ -9605,11 +9732,11 @@ function consultarKardex() {
     // período como al cálculo del saldo inicial.
     const aplicarDimensionales = (lista) => {
         let r = lista.filter(m => (m.sku || '').toUpperCase() === sku);
-        if (conLote)  r = r.filter(m => (m.lote || '') === lote);
-        if (arrFijas) r = r.filter(m => arrFijas.includes(m.bodega || ''));
-        if (bodega)   r = r.filter(m => (m.bodega || '') === bodega);
-        if (tipo)     r = r.filter(m => m.tipo === tipo);
-        if (contra)   r = r.filter(m => {
+        if (conLote)       r = r.filter(m => (m.lote || '') === lote);
+        if (arrFijas)      r = r.filter(m => arrFijas.includes(m.bodega || ''));
+        if (bodegasSel.size) r = r.filter(m => bodegasSel.has(m.bodega || ''));
+        if (tiposSel.size)   r = r.filter(m => tiposSel.has(m.tipo));
+        if (contra)        r = r.filter(m => {
             const c = ((m.proveedor || '') + ' ' + (m.proveedorCliente || '')).toLowerCase();
             return c.includes(contra);
         });
@@ -9687,7 +9814,7 @@ function consultarKardex() {
                 <div class="kx-row"><span class="kx-lbl">Fabricante</span><span class="kx-val">${prod.fabricante || '—'}</span></div>
                 <div class="kx-row"><span class="kx-lbl">Lote</span>${loteCell}</div>
                 <div class="kx-row"><span class="kx-lbl">Vencimiento</span>${venceCell}</div>
-                <div class="kx-row"><span class="kx-lbl">Bodega</span><span class="kx-val">${bodega || 'Todas'}</span></div>
+                <div class="kx-row"><span class="kx-lbl">Bodega</span><span class="kx-val">${bodegasSel.size === 0 ? 'Todas' : (bodegasSel.size === 1 ? [...bodegasSel][0] : [...bodegasSel].join(', '))}</span></div>
                 <div class="kx-row"><span class="kx-lbl">Período</span><span class="kx-val">${desde ? fmtDate(desde) : '—'} al ${hasta ? fmtDate(hasta) : '—'}</span></div>
             </div>
         </div>
@@ -9811,7 +9938,7 @@ function consultarKardex() {
         : '';
     // Nota al pie cuando hay filtros secundarios activos (tipo/contraparte):
     // avisa que el saldo refleja solo las filas visibles, no el stock real.
-    const notaFiltros = (tipo || contra)
+    const notaFiltros = (tiposSel.size || contra)
         ? `<div style="padding:8px 12px;margin-top:8px;background:rgba(245,158,11,.10);border:1px solid rgba(245,158,11,.35);border-radius:6px;font-size:12px;color:#92400e">
             ⚠ Hay filtros de tipo o contraparte activos. El saldo mostrado considera únicamente los movimientos de ese tipo/contraparte en el período, no el stock real total del SKU.
            </div>`
