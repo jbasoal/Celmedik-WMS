@@ -174,6 +174,15 @@
         body.perfil-visualizador .need-write,
         body.perfil-operador .need-maestro,
         body.perfil-farmaceutico .need-maestro { display: none !important; }
+
+        /* Opciones del select que sólo ven los perfiles con valorización.
+           Nota: Cliente también lleva .perfil-visualizador, así que se
+           re-oculta explícitamente para ese caso. */
+        .need-valorizacion-opt { display: none; }
+        body.perfil-maestro .need-valorizacion-opt,
+        body.perfil-farmaceutico .need-valorizacion-opt,
+        body.perfil-visualizador .need-valorizacion-opt { display: initial; }
+        body.perfil-cliente .need-valorizacion-opt { display: none !important; }
         body.perfil-operador-bodega .need-maestro { display: none !important; }
         /* Filtro Bodega en Movimientos: oculto para operadores con UNA sola bodega fija.
            Operadores con múltiples bodegas permitidas ven el filtro para poder alternar. */
@@ -963,6 +972,8 @@
                                 <option value="sku">Ordenar: SKU A-Z</option>
                                 <option value="fefo">Ordenar: FEFO</option>
                                 <option value="desc">Ordenar: Descripción A-Z</option>
+                                <option value="precio" class="need-valorizacion-opt">Ordenar: Precio compra unitario</option>
+                                <option value="valor" class="need-valorizacion-opt">Ordenar: Valor total</option>
                             </select>
                             <button class="btn btn-ghost btn-sm" onclick="clearStockFilters()">Limpiar</button>
                         </div>
@@ -10546,7 +10557,7 @@ function renderStock() {
         if (thead) thead.innerHTML = '<th></th><th>SKU</th><th>Descripción</th><th>Presentación</th><th>Ud. Venta</th><th style="text-align:right">Lotes activos</th><th style="text-align:right">Total unidades</th>' + _colValor + '<th style="text-align:right">Stock mín.</th><th>Estado</th>';
         // 9 columnas base + 1 opcional (Valor Total).
         const _colsTotal = _verValor ? 10 : 9;
-        if (subtitleEl) subtitleEl.textContent = 'Stock total consolidado por SKU · clic en la fila para desglose FEFO';
+        // subtitle se setea abajo según sortBy.
         // Agrega por SKU. Como el stock viene "expandido" con reservas (dos
         // filas virtuales por lote reservado), usamos un Set para no contar
         // dos veces el mismo lote-ubicación al totalizar la cantidad de lotes,
@@ -10558,11 +10569,62 @@ function renderStock() {
             a[s.sku].lineas.push(s);
             return a;
         }, {});
-        const skuRows = Object.values(acc).map(r => ({ sku: r.sku, total: r.total, lotes: r._lotSet.size, lineas: r.lineas })).sort((x, y) => x.sku.localeCompare(y.sku));
+        // Enriquezco cada fila con el precio compra unitario y el valor
+        // total ANTES de ordenar, para que sortBy pueda usarlos como clave.
+        const skuRowsBase = Object.values(acc).map(r => {
+            const p = prods[r.sku] || {};
+            let valorTotal = 0;
+            let hayStockValorizable = false;
+            r.lineas.forEach(l => {
+                const q = parseFloat(l.cantidad) || 0;
+                if (q <= 0) return;
+                if ((l.bodega || '').trim().toUpperCase() === BODEGA_SIN_VALORIZACION) return;
+                hayStockValorizable = true;
+                valorTotal += q * _precioLineaStock(l, p);
+            });
+            return {
+                sku: r.sku, total: r.total, lotes: r._lotSet.size, lineas: r.lineas,
+                precioRef: _precioCompraSku(r.sku, p),
+                valorTotal, hayStockValorizable
+            };
+        });
+        // Orden según la casilla "Ordenar". Precio/Valor DESC para que las
+        // filas de mayor valorización queden arriba (lo útil al revisar).
+        const skuRows = skuRowsBase.slice();
+        if (sortBy === 'precio')      skuRows.sort((a, b) => (b.precioRef||0) - (a.precioRef||0) || a.sku.localeCompare(b.sku));
+        else if (sortBy === 'valor')  skuRows.sort((a, b) => (b.valorTotal||0) - (a.valorTotal||0) || a.sku.localeCompare(b.sku));
+        else if (sortBy === 'desc')   skuRows.sort((a, b) => (prods[a.sku]?.descripcion||a.sku).toLowerCase().localeCompare((prods[b.sku]?.descripcion||b.sku).toLowerCase()));
+        else if (sortBy === 'fefo') {
+            // FEFO en vista Total por SKU: por el vencimiento más próximo
+            // (más temprano) de cualquier línea del SKU. SKUs sin lotes con
+            // vencimiento quedan al final.
+            const minVence = r => {
+                let v = null;
+                r.lineas.forEach(l => {
+                    if ((parseFloat(l.cantidad)||0) <= 0) return;
+                    if (l.vence && (!v || l.vence < v)) v = l.vence;
+                });
+                return v;
+            };
+            skuRows.sort((a, b) => {
+                const va = minVence(a), vb = minVence(b);
+                if (!va && !vb) return a.sku.localeCompare(b.sku);
+                if (!va) return 1; if (!vb) return -1;
+                return va.localeCompare(vb);
+            });
+        } else {
+            skuRows.sort((a, b) => a.sku.localeCompare(b.sku));
+        }
+        if (subtitleEl) {
+            if (sortBy === 'precio')      subtitleEl.textContent = 'Ordenado por Precio compra unitario — Mayor a menor';
+            else if (sortBy === 'valor')  subtitleEl.textContent = 'Ordenado por Valor total — Mayor a menor';
+            else if (sortBy === 'desc')   subtitleEl.textContent = 'Ordenado por Descripción — A a Z';
+            else if (sortBy === 'fefo')   subtitleEl.textContent = 'Ordenado por FEFO — Vencimiento más próximo primero';
+            else                           subtitleEl.textContent = 'Stock total consolidado por SKU · clic en la fila para desglose FEFO';
+        }
         if (!skuRows.length) { tb.innerHTML = `<tr class="empty-row"><td colspan="${_colsTotal}">No hay stock registrado</td></tr>`; return; }
         // Totalizador de la columna Valor Total — suma el valor de todas las
-        // filas visibles bajo los filtros actuales, excluyendo EMIMED. Se
-        // computa en el mismo bucle de render para que no quede desfasado.
+        // filas visibles bajo los filtros actuales, excluyendo EMIMED.
         let _granTotalSku = 0;
         tb.innerHTML = skuRows.map(s => {
             const p = prods[s.sku] || {};
@@ -10572,19 +10634,8 @@ function renderStock() {
                 ? `<span class="badge badge-danger">Bajo mínimo</span>`
                 : `<span class="badge badge-success">OK</span>`;
             const abierto = _stockSkuExpandidos.has(s.sku);
-            // Valor Total: suma de cantidad × precio por cada línea, EXCLUYENDO
-            // bodega EMIMED (consignación). Se calcula línea-a-línea para que a
-            // futuro, si distintos lotes/compras del mismo SKU tienen precios
-            // distintos (guardados en el movimiento), la suma los respete.
-            let valorTotal = 0;
-            let hayStockValorizable = false;
-            s.lineas.forEach(l => {
-                const q = parseFloat(l.cantidad) || 0;
-                if (q <= 0) return;
-                if ((l.bodega || '').trim().toUpperCase() === BODEGA_SIN_VALORIZACION) return;
-                hayStockValorizable = true;
-                valorTotal += q * _precioLineaStock(l, p);
-            });
+            const valorTotal = s.valorTotal;
+            const hayStockValorizable = s.hayStockValorizable;
             _granTotalSku += valorTotal;
             const valorCell = _verValor
                 ? `<td style="text-align:right;font-weight:600;color:var(--text)">${hayStockValorizable && valorTotal > 0 ? _fmtCLP(valorTotal) : '—'}</td>`
@@ -10688,12 +10739,29 @@ function renderStock() {
     });
     let aggRows = Object.values(grouped).filter(r => r.cantidad > 0);
 
+    // Para sort por precio/valor pre-computo la clave de orden en cada fila
+    // (evita re-calcular en el comparator). EMIMED cuenta como 0 ya que no
+    // se valoriza — queda al final del orden descendente.
+    if (sortBy === 'precio' || sortBy === 'valor') {
+        aggRows.forEach(r => {
+            const esEmimed = (r.bodega || '').trim().toUpperCase() === BODEGA_SIN_VALORIZACION;
+            r._precio = esEmimed ? 0 : _precioLineaStock(r, prods[r.sku]);
+            r._valorTotal = esEmimed ? 0 : (r._precio * (parseFloat(r.cantidad) || 0));
+        });
+    }
+
     if (sortBy === 'fefo') {
         aggRows.sort((a, b) => { if (!a.vence) return 1; if (!b.vence) return -1; return new Date(a.vence+'T00:00:00') - new Date(b.vence+'T00:00:00'); });
         if (subtitleEl) subtitleEl.textContent = 'Ordenado por FEFO — Vencimiento más próximo primero';
     } else if (sortBy === 'sku') {
         aggRows.sort((a, b) => a.sku.localeCompare(b.sku));
         if (subtitleEl) subtitleEl.textContent = 'Ordenado por SKU — A a Z';
+    } else if (sortBy === 'precio') {
+        aggRows.sort((a, b) => (b._precio||0) - (a._precio||0) || a.sku.localeCompare(b.sku));
+        if (subtitleEl) subtitleEl.textContent = 'Ordenado por Precio compra unitario — Mayor a menor';
+    } else if (sortBy === 'valor') {
+        aggRows.sort((a, b) => (b._valorTotal||0) - (a._valorTotal||0) || a.sku.localeCompare(b.sku));
+        if (subtitleEl) subtitleEl.textContent = 'Ordenado por Valor total — Mayor a menor';
     } else {
         aggRows.sort((a, b) => ((prods[a.sku]?.descripcion||a.sku).toLowerCase()).localeCompare((prods[b.sku]?.descripcion||b.sku).toLowerCase()));
         if (subtitleEl) subtitleEl.textContent = 'Ordenado por Descripción — A a Z';
