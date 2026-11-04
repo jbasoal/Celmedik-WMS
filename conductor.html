@@ -1722,23 +1722,101 @@ async function confirmarNoEntregado() {
 let _pendingPhotoDataUrl = null;
 let _pendingPhotoObjectUrl = null;
 let _pendingPhotoBlob = null;
+
+// Detecta si un File/Blob trae un formato que el WebView de Android NO
+// decodifica de forma fiable. HEIC/HEIF es el caso típico del Xiaomi 14
+// (viene activado por default en varias regiones); en WebView Android el
+// decode falla con mensajes crípticos que a veces se reportan como
+// "memoria insuficiente". JPEG y PNG sí funcionan en todas partes.
+function _esFormatoNoSoportado(file) {
+  if (!file) return null;
+  const type = (file.type || '').toLowerCase();
+  const name = (file.name || '').toLowerCase();
+  if (type === 'image/heic' || type === 'image/heif' ||
+      name.endsWith('.heic') || name.endsWith('.heif')) {
+    return 'HEIC/HEIF';
+  }
+  // Algunos celulares guardan RAW o DNG desde la app de cámara.
+  if (type === 'image/x-adobe-dng' || name.endsWith('.dng') || name.endsWith('.raw')) {
+    return 'RAW/DNG';
+  }
+  return null;
+}
+
+// Intenta comprimir con tamaños progresivamente más chicos. Si la cámara
+// del teléfono entrega una foto muy grande (p.ej. 50MP del Xiaomi 14),
+// el primer intento puede fallar; bajamos la resolución hasta que entre.
+async function _compressImageProgresivo(file) {
+  const intentos = [
+    { maxDim: 1280, quality: 0.80 },
+    { maxDim: 1024, quality: 0.75 },
+    { maxDim: 800,  quality: 0.70 },
+    { maxDim: 640,  quality: 0.65 }
+  ];
+  let lastErr = null;
+  for (const opts of intentos) {
+    try {
+      const blob = await _compressImage(file, opts.maxDim, opts.quality);
+      return { blob, intento: opts };
+    } catch (e) {
+      lastErr = e;
+      console.warn(`[onPhotoChosen] intento ${opts.maxDim}px falló:`, e && e.message);
+    }
+  }
+  throw lastErr || new Error('No se pudo comprimir la imagen tras varios intentos.');
+}
+
 async function onPhotoChosen(input, kind) {
   if (!input.files.length) return;
   pendingFotoKind = kind;
   const file = input.files[0];
+  // Diagnóstico de lo que entrega la cámara del teléfono (visible en la
+  // consola si el conductor abre DevTools sobre el Xiaomi vía USB).
+  console.log('[onPhotoChosen] foto recibida:', {
+    name: file.name, type: file.type, sizeKB: Math.round(file.size/1024)
+  });
   // Limpiamos el input YA para que el user pueda reintentar y para liberar la
   // referencia al archivo original lo antes posible.
   input.value = '';
+  // Guardrail: formatos que el WebView Android NO decodifica bien (HEIC,
+  // RAW). Mostramos un mensaje claro con instrucciones concretas, para que
+  // el conductor sepa qué cambiar en su teléfono.
+  const fmtMalo = _esFormatoNoSoportado(file);
+  if (fmtMalo) {
+    const msg = fmtMalo === 'HEIC/HEIF'
+      ? 'Tu cámara está guardando las fotos en HEIC/HEIF, un formato que la app no puede procesar.\n\n' +
+        'Cómo arreglarlo (Xiaomi/Redmi):\n' +
+        '1) Abre la app Cámara\n' +
+        '2) Toca el engranaje de Ajustes (arriba a la derecha o abajo)\n' +
+        '3) Busca "Formato de imagen" o "Picture format"\n' +
+        '4) Cambia de HEIF a JPEG\n\n' +
+        'Luego vuelve a la app y toma de nuevo la foto.'
+      : 'Tu cámara está guardando las fotos en formato RAW/DNG. Cambia el formato a JPEG en los ajustes de la cámara.';
+    alert(msg);
+    return;
+  }
   _showProgressSnack('Procesando foto...');
+  let resultado;
   try {
-    // 1280px es amplio de sobra para un cedible firmado legible y deja
-    // margen adicional de RAM para WebViews ajustados (Xiaomi, etc.).
-    _pendingPhotoBlob = await _compressImage(file, 1280, 0.80);
+    // Reintenta con tamaños progresivamente más chicos si el WebView mata
+    // la operación por memoria (típico en MIUI/HyperOS con cámaras >50MP).
+    resultado = await _compressImageProgresivo(file);
+    _pendingPhotoBlob = resultado.blob;
+    console.log(`[onPhotoChosen] foto comprimida OK con ${resultado.intento.maxDim}px, resultado ${Math.round(resultado.blob.size/1024)}KB`);
     _clearProgressSnack();
   } catch (e) {
     _clearProgressSnack();
-    console.error('[onPhotoChosen] fallo al procesar foto:', e);
-    alert('No se pudo procesar la foto. Vuelve a tomarla.\n\nDetalle: ' + ((e && e.message) || e));
+    console.error('[onPhotoChosen] fallo total al procesar foto:', e);
+    const detalle = (e && e.message) ? e.message : String(e);
+    alert(
+      'No se pudo procesar la foto en este teléfono.\n\n' +
+      'Prueba una de estas opciones:\n' +
+      '  • Baja la resolución de la cámara (Ajustes de Cámara → Resolución → elige 12MP en vez de 50MP/Ultra HD)\n' +
+      '  • Cambia el formato de imagen a JPEG en los ajustes de la cámara\n' +
+      '  • Abre la app desde Chrome (en vez de Mi Browser si lo estás usando)\n' +
+      '  • Cierra otras apps y vuelve a intentar\n\n' +
+      'Detalle técnico: ' + detalle
+    );
     _pendingPhotoBlob = null;
     return;
   }
