@@ -1711,12 +1711,17 @@ async function confirmarNoEntregado() {
 //
 // IMPORTANTE: pre-comprimimos la foto INMEDIATAMENTE al capturarla, antes de
 // hacer el preview o guardarla en el array. La cámara nativa entrega el JPEG
-// completo del sensor (12-48MP = 5-15MB raw, hasta ~200MB como bitmap crudo
-// decodificado). Mantener eso en RAM + mostrarlo full-screen reventaba la
-// memoria del WebView en teléfonos con menos RAM (Android mata el proceso con
-// "memoria insuficiente"). Comprimiendo a 1600px/80% quedamos en ~500KB-1MB,
-// manejable en cualquier dispositivo.
+// completo del sensor (12-50MP). _compressImage usa createImageBitmap con
+// resize durante decode (ver detalle ahí) para que el peak de RAM sea ~8MB
+// en lugar de ~200MB — necesario en WebView Android con MIUI/HyperOS, que
+// mata procesos agresivamente aunque el dispositivo tenga mucha RAM libre
+// (ej: Xiaomi 14 → "memoria insuficiente" en el popup del preview).
+//
+// Guardamos el preview como Object URL (no data URL base64) para ahorrar
+// ~33% extra de RAM mientras el modal está abierto.
 let _pendingPhotoDataUrl = null;
+let _pendingPhotoObjectUrl = null;
+let _pendingPhotoBlob = null;
 async function onPhotoChosen(input, kind) {
   if (!input.files.length) return;
   pendingFotoKind = kind;
@@ -1726,45 +1731,70 @@ async function onPhotoChosen(input, kind) {
   input.value = '';
   _showProgressSnack('Procesando foto...');
   try {
-    const blob = await _compressImage(file, 1600, 0.80);
-    _pendingPhotoDataUrl = await _blobToDataUrl(blob);
+    // 1280px es amplio de sobra para un cedible firmado legible y deja
+    // margen adicional de RAM para WebViews ajustados (Xiaomi, etc.).
+    _pendingPhotoBlob = await _compressImage(file, 1280, 0.80);
     _clearProgressSnack();
   } catch (e) {
     _clearProgressSnack();
     console.error('[onPhotoChosen] fallo al procesar foto:', e);
-    alert('No se pudo procesar la foto. Vuelve a tomarla.');
+    alert('No se pudo procesar la foto. Vuelve a tomarla.\n\nDetalle: ' + ((e && e.message) || e));
+    _pendingPhotoBlob = null;
     return;
   }
-  document.getElementById('pf-img').src = _pendingPhotoDataUrl;
+  // Preview con object URL (sin base64 en RAM). Se revoca al cerrar el preview.
+  _pendingPhotoObjectUrl = URL.createObjectURL(_pendingPhotoBlob);
+  document.getElementById('pf-img').src = _pendingPhotoObjectUrl;
   document.getElementById('photoFullscreen').classList.add('active');
 }
 
-function acceptPhoto() {
-  if (!_pendingPhotoDataUrl) return;
+async function acceptPhoto() {
+  if (!_pendingPhotoBlob) return;
+  // Convertimos a data URL sólo al aceptar — la foto ya está chica (~500KB)
+  // y la mayor parte del resto del flujo (fotosEntrega[], confirmarEntrega,
+  // _compressImageForDb) sigue trabajando con data URL por compatibilidad.
+  let dataUrl;
+  try {
+    dataUrl = await _blobToDataUrl(_pendingPhotoBlob);
+  } catch (e) {
+    console.error('[acceptPhoto] blob→dataUrl falló:', e);
+    alert('No se pudo guardar la foto. Vuelve a tomarla.');
+    _closePhotoPreview();
+    return;
+  }
+  _pendingPhotoDataUrl = dataUrl;
   if (pendingFotoKind === 'entrega') {
     if (fotosEntrega.length < 4) {
-      fotosEntrega.push({ dataUrl: _pendingPhotoDataUrl });
+      fotosEntrega.push({ dataUrl });
     }
     _renderFotosEntregaGrid();
     document.getElementById('ent-foto-hint').style.display = 'none';
   } else if (pendingFotoKind === 'adicional') {
-    fotosAdicionales.push({ dataUrl: _pendingPhotoDataUrl });
+    fotosAdicionales.push({ dataUrl });
     _renderFotosGrid();
   }
-  document.getElementById('photoFullscreen').classList.remove('active');
-  // Liberar el bitmap decodificado del preview (ayuda al GC en WebView Android).
-  document.getElementById('pf-img').src = '';
-  _pendingPhotoDataUrl = null;
+  _closePhotoPreview();
 }
 
 function rejectPhoto() {
-  document.getElementById('photoFullscreen').classList.remove('active');
-  // Liberar el bitmap decodificado del preview antes de reabrir cámara.
-  document.getElementById('pf-img').src = '';
-  _pendingPhotoDataUrl = null;
+  _closePhotoPreview();
   // Re-abre el selector del input apropiado
   if (pendingFotoKind === 'entrega') document.getElementById('ent-foto').click();
   else if (pendingFotoKind === 'adicional') document.getElementById('ne-foto').click();
+}
+
+// Cierra el preview y libera TODAS las refs a la foto pendiente (bitmap,
+// blob, object URL, data URL) para que el WebView pueda GC rápido.
+function _closePhotoPreview() {
+  document.getElementById('photoFullscreen').classList.remove('active');
+  const img = document.getElementById('pf-img');
+  if (img) img.src = '';
+  if (_pendingPhotoObjectUrl) {
+    try { URL.revokeObjectURL(_pendingPhotoObjectUrl); } catch (e) {}
+  }
+  _pendingPhotoObjectUrl = null;
+  _pendingPhotoBlob = null;
+  _pendingPhotoDataUrl = null;
 }
 
 // Abre una foto ya guardada (del detalle) a pantalla completa, en modo
@@ -1806,12 +1836,50 @@ async function _dataUrlToBlob(dataUrl) {
 }
 
 // Comprime una imagen (data URL o Blob) a JPEG con tamaño máximo controlado.
-// Para File/Blob usamos URL.createObjectURL (no FileReader→base64) porque la
-// cámara nativa entrega el JPEG raw del sensor (12-48MP, 5-15MB); crear la
-// base64 string en RAM se come ~1.33x ese tamaño antes de siquiera decodificar
-// el bitmap, y en WebView Android (presupuesto típico ~256MB/proceso) eso
-// mataba el proceso en teléfonos con poca RAM.
+//
+// Camino preferente: createImageBitmap(blob, {resizeWidth, resizeQuality}) —
+// le pide al decoder NATIVO del navegador que haga downscale DURANTE el decode,
+// sin materializar nunca el bitmap full-resolution en RAM. Para una foto de
+// 50MP del Xiaomi 14 esto baja el peak de ~200MB (bitmap crudo) a ~8MB, que
+// es lo que cabe en el presupuesto por-proceso del WebView en Android,
+// especialmente en MIUI/HyperOS que mata procesos agresivamente aunque el
+// dispositivo tenga RAM libre. Soporte: Chrome 52+, Firefox 98+, Safari 15+.
+//
+// Fallback: <img> + canvas. Puede necesitar el bitmap full-res según el
+// navegador, pero se usa solo cuando createImageBitmap no acepta resize*.
 async function _compressImage(input, maxDim = 1920, quality = 0.85) {
+  // Camino preferente: createImageBitmap con resize durante decode. Sólo
+  // aplica para File/Blob (tiene decoder nativo); para data URL caemos al
+  // camino <img>.
+  if (typeof input !== 'string' && typeof createImageBitmap === 'function') {
+    try {
+      // Pasamos sólo resizeWidth para preservar aspecto. Para fotos
+      // verticales el eje largo puede quedar un ~33% por encima de maxDim
+      // (bitmap peak ~8.7MB) — insignificante vs los 200MB del bitmap full-res.
+      const bitmap = await createImageBitmap(input, {
+        resizeWidth: maxDim,
+        resizeQuality: 'high'
+      });
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = bitmap.width; canvas.height = bitmap.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(bitmap, 0, 0);
+        const blob = await new Promise((res, rej) => {
+          canvas.toBlob(b => b ? res(b) : rej(new Error('No se pudo comprimir la imagen.')), 'image/jpeg', quality);
+        });
+        canvas.width = 0; canvas.height = 0;
+        return blob;
+      } finally {
+        bitmap.close();
+      }
+    } catch (e) {
+      console.warn('[_compressImage] createImageBitmap falló, usando fallback <img>:', e && e.message);
+      // Caemos al camino tradicional.
+    }
+  }
+  // Fallback: <img> + canvas. Usa URL.createObjectURL para File/Blob (no
+  // FileReader→base64, que suma ~1.33x al RAM del archivo antes de decodificar).
   let objectUrl = null;
   let imgSrc;
   if (typeof input === 'string') {
