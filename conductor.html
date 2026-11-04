@@ -2066,7 +2066,23 @@ async function _compressImage(input, maxDim = 1920, quality = 0.85) {
 // ~33% de overhead, así que apuntamos a ~500 KB raw → ~670 KB base64).
 // Degrada progresivamente dimensión + calidad hasta lograrlo.
 async function _compressImageForDb(input) {
-  const dataUrl = (typeof input === 'string') ? input : await _fileToDataUrl(input);
+  const target = 500 * 1024;
+  // Normalizamos a Blob SIEMPRE. _compressImage tiene camino rápido via
+  // createImageBitmap(blob,{resizeWidth,resizeQuality}) que decodifica y
+  // escala en pasada única con el decoder nativo — pero sólo si recibe un
+  // Blob. Si pasamos un data URL string cae al fallback <img>+canvas lento
+  // que decodifica full-res antes de escalar, lo que hacía que confirmar
+  // entrega demorara mucho.
+  let blob = null;
+  if (typeof input === 'string') {
+    try { blob = await (await fetch(input)).blob(); } catch(_) { blob = null; }
+  } else {
+    blob = input;
+  }
+  // Early-out: si el blob ya cumple el objetivo (WhatsApp, Scanner,
+  // galería, cámara en baja resolución), devolverlo tal cual — evitamos
+  // el decode+canvas+re-encode completo.
+  if (blob && blob.size < target) return blob;
   const attempts = [
     { maxDim: 1280, quality: 0.78 },
     { maxDim: 1024, quality: 0.70 },
@@ -2075,12 +2091,14 @@ async function _compressImageForDb(input) {
     { maxDim: 640,  quality: 0.50 },
     { maxDim: 480,  quality: 0.40 }
   ];
-  const target = 500 * 1024;
+  // Si la conversión a blob falló (muy raro), re-materializamos el dataUrl
+  // para que _compressImage use su fallback <img>+canvas.
+  const src = blob || (typeof input === 'string' ? input : await _fileToDataUrl(input));
   let lastBlob = null;
   for (const opts of attempts) {
-    const blob = await _compressImage(dataUrl, opts.maxDim, opts.quality);
-    lastBlob = blob;
-    if (blob.size < target) return blob;
+    const out = await _compressImage(src, opts.maxDim, opts.quality);
+    lastBlob = out;
+    if (out.size < target) return out;
   }
   // Último recurso: devolvemos la versión más chica obtenida aunque exceda
   // el objetivo. _blobToDataUrl luego determinará si cabe o fallará.
