@@ -385,8 +385,18 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
     <div class="form-group">
       <label class="form-label">Fotos de la entrega <span style="color:var(--danger)">*</span></label>
       <div class="ent-fotos-hint">La <strong>primera foto</strong> debe ser del cedible firmado (obligatoria). Puedes agregar <strong>hasta 4 fotos</strong> en total (producto, lugar, puerta, etc.).</div>
+      <!-- Input principal: abre la cámara nativa. -->
       <input type="file" id="ent-foto" accept="image/*" capture="environment" onchange="onPhotoChosen(this,'entrega')" style="display:none">
+      <!-- Input alternativo: sin 'capture' → abre el selector de archivos
+           (galería, administrador de archivos). Útil cuando la cámara del
+           teléfono entrega fotos problemáticas (p.ej. Xiaomi 14 con HEIF o
+           resolución 50MP). El conductor puede tomarla con otra app que
+           pre-comprima (WhatsApp, Scanner, etc.) y después elegirla acá. -->
+      <input type="file" id="ent-foto-gal" accept="image/*" onchange="onPhotoChosen(this,'entrega')" style="display:none">
       <div class="fotos-grid" id="ent-fotos-grid"></div>
+      <div style="margin-top:6px;text-align:center">
+        <a style="font-size:12px;color:var(--text3);text-decoration:underline;cursor:pointer" onclick="document.getElementById('ent-foto-gal').click()">📁 Elegir desde galería / archivos</a>
+      </div>
       <div id="ent-foto-hint" class="hint-required" style="display:none">La foto del cedible firmado es obligatoria.</div>
     </div>
 
@@ -466,8 +476,13 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
     <div class="form-group">
       <label class="form-label">Fotos adicionales <span style="color:var(--text3);font-weight:normal;font-size:11px">(opcional — lugar, producto, puerta, etc.)</span></label>
       <input type="file" id="ne-foto" accept="image/*" capture="environment" onchange="onPhotoChosen(this,'adicional')" style="display:none">
+      <!-- Input de galería: ver comentario en el modal Entrega. -->
+      <input type="file" id="ne-foto-gal" accept="image/*" onchange="onPhotoChosen(this,'adicional')" style="display:none">
       <div class="fotos-grid" id="ne-fotos-grid">
         <button type="button" class="foto-add" onclick="document.getElementById('ne-foto').click()">+</button>
+      </div>
+      <div style="margin-top:6px;text-align:center">
+        <a style="font-size:12px;color:var(--text3);text-decoration:underline;cursor:pointer" onclick="document.getElementById('ne-foto-gal').click()">📁 Elegir desde galería / archivos</a>
       </div>
     </div>
 
@@ -1773,9 +1788,14 @@ async function _compressImageProgresivo(file) {
 // y similares con cámaras grandes.
 const _UMBRAL_PRECOMPRESION_BYTES = 2 * 1024 * 1024;
 
+// Guarda el input que originó la foto actual, para que "↻ Repetir" reabra
+// el mismo (cámara vs galería) en vez de volver a cámara por default.
+let _pendingPhotoInputId = null;
+
 async function onPhotoChosen(input, kind) {
   if (!input.files.length) return;
   pendingFotoKind = kind;
+  _pendingPhotoInputId = input.id;
   const file = input.files[0];
   // Diagnóstico de lo que entrega la cámara del teléfono (visible en la
   // consola si el conductor abre DevTools sobre el Xiaomi vía USB).
@@ -1875,10 +1895,17 @@ async function acceptPhoto() {
 }
 
 function rejectPhoto() {
+  // Guardamos el input id ANTES de _closePhotoPreview porque esa función
+  // también resetea el estado pendiente en versiones futuras.
+  const prevInputId = _pendingPhotoInputId;
   _closePhotoPreview();
-  // Re-abre el selector del input apropiado
-  if (pendingFotoKind === 'entrega') document.getElementById('ent-foto').click();
-  else if (pendingFotoKind === 'adicional') document.getElementById('ne-foto').click();
+  // Re-abre el MISMO input que originó la foto (cámara o galería) para no
+  // forzar al conductor a volver a cámara si él prefiere galería.
+  let reabrirId = null;
+  if (prevInputId && document.getElementById(prevInputId)) reabrirId = prevInputId;
+  else if (pendingFotoKind === 'entrega')   reabrirId = 'ent-foto';
+  else if (pendingFotoKind === 'adicional') reabrirId = 'ne-foto';
+  if (reabrirId) document.getElementById(reabrirId).click();
 }
 
 // Cierra el preview y libera TODAS las refs a la foto pendiente (bitmap,
@@ -1893,6 +1920,7 @@ function _closePhotoPreview() {
   _pendingPhotoObjectUrl = null;
   _pendingPhotoBlob = null;
   _pendingPhotoDataUrl = null;
+  _pendingPhotoInputId = null;
 }
 
 // Abre una foto ya guardada (del detalle) a pantalla completa, en modo
