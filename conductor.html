@@ -383,8 +383,8 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
     </div>
 
     <div class="form-group">
-      <label class="form-label">Fotos de la entrega <span style="color:var(--danger)">*</span></label>
-      <div class="ent-fotos-hint">La <strong>primera foto</strong> debe ser del cedible firmado (obligatoria). Puedes agregar <strong>hasta 4 fotos</strong> en total (producto, lugar, puerta, etc.).</div>
+      <label class="form-label" id="ent-fotos-label">Fotos de la entrega <span id="ent-fotos-req" style="color:var(--danger)">*</span></label>
+      <div class="ent-fotos-hint" id="ent-fotos-hint-text">La <strong>primera foto</strong> debe ser del cedible firmado (obligatoria). Puedes agregar <strong>hasta 4 fotos</strong> en total (producto, lugar, puerta, etc.).</div>
       <!-- Input principal: abre la cámara nativa. -->
       <input type="file" id="ent-foto" accept="image/*" capture="environment" onchange="onPhotoChosen(this,'entrega')" style="display:none">
       <!-- Input alternativo: sin 'capture' → abre el selector de archivos
@@ -577,6 +577,7 @@ let fotosAdicionales = [];  // {dataUrl, blob, uploadedUrl?} para No Entregado
 let fotosEntrega = [];      // {dataUrl} hasta 4; el primer elemento es el cedible firmado
 let pendingFotoKind = null; // "entrega" | "adicional" — qué foto está a punto de confirmarse
 let entregaParcialMode = false; // Modo "Entrega parcial" en modal Entregar — obliga observaciones
+let _entregaEsExterno = false;  // Despacho asignado a "Externo" — foto cedible no obligatoria
 
 // ══ INDEXEDDB (OFFLINE QUEUE) ══
 let idb = null;
@@ -1417,6 +1418,17 @@ function openEntregar(docId, parcial = false) {
   if (!d) return;
   activeDocId = docId;
   entregaParcialMode = !!parcial;
+  // Despacho asignado a "Externo" → foto cedible opcional. Detecta
+  // tanto "Externo" literal como "Externo <empresa>" (p.ej. "Externo CELMEDIK LA").
+  _entregaEsExterno = /^externo(\b|$)/i.test((d.transportadoPor || '').trim());
+  const reqMark = document.getElementById('ent-fotos-req');
+  const hintText = document.getElementById('ent-fotos-hint-text');
+  if (reqMark) reqMark.style.display = _entregaEsExterno ? 'none' : '';
+  if (hintText) {
+    hintText.innerHTML = _entregaEsExterno
+      ? 'Despacho asignado a <strong>Externo</strong>: la foto del cedible es <strong>opcional</strong>. Si tienes una, agrégala; puedes subir hasta 4 fotos.'
+      : 'La <strong>primera foto</strong> debe ser del cedible firmado (obligatoria). Puedes agregar <strong>hasta 4 fotos</strong> en total (producto, lugar, puerta, etc.).';
+  }
   // Título y textos según modo
   document.getElementById('entregar-title').textContent = parcial ? 'Confirmar entrega parcial' : 'Confirmar entrega';
   const btnConfirm = document.getElementById('btn-entregar-confirm');
@@ -1468,16 +1480,18 @@ function toggleEntObs(checked) {
 function _renderFotosEntregaGrid() {
   const grid = document.getElementById('ent-fotos-grid');
   const maxFotos = 4;
-  const addBtnCls = fotosEntrega.length === 0 ? 'foto-add cedible' : 'foto-add';
-  const addBtnLabel = fotosEntrega.length === 0 ? '📷\nCedible' : '+';
+  // En externo, el "cedible" no se destaca ni rotula — todo foto es opcional.
+  const resaltaCedible = fotosEntrega.length === 0 && !_entregaEsExterno;
+  const addBtnCls = resaltaCedible ? 'foto-add cedible' : 'foto-add';
+  const addBtnLabel = resaltaCedible ? '📷\nCedible' : '+';
   const addBtn = fotosEntrega.length < maxFotos
-    ? `<button type="button" class="${addBtnCls}" onclick="document.getElementById('ent-foto').click()" style="white-space:pre-line;font-size:${fotosEntrega.length===0?'13':'24'}px;font-weight:${fotosEntrega.length===0?'700':'normal'}">${addBtnLabel}</button>`
+    ? `<button type="button" class="${addBtnCls}" onclick="document.getElementById('ent-foto').click()" style="white-space:pre-line;font-size:${resaltaCedible?'13':'24'}px;font-weight:${resaltaCedible?'700':'normal'}">${addBtnLabel}</button>`
     : '';
   const thumbs = fotosEntrega.map((f, idx) => `
     <div class="fotos-thumb">
       <img src="${f.dataUrl}">
       <button class="del" onclick="_removeFotoEntrega(${idx})" title="Eliminar foto">✕</button>
-      ${idx === 0 ? '<span class="ced-tag">CEDIBLE</span>' : ''}
+      ${idx === 0 && !_entregaEsExterno ? '<span class="ced-tag">CEDIBLE</span>' : ''}
     </div>`).join('');
   grid.innerHTML = thumbs + addBtn;
 }
@@ -1489,8 +1503,8 @@ function _removeFotoEntrega(idx) {
 
 async function confirmarEntrega() {
   if (!activeDocId) return;
-  // Al menos 1 foto (el cedible firmado)
-  if (!fotosEntrega.length) {
+  // Al menos 1 foto (el cedible firmado), salvo despachos a "Externo" donde es opcional.
+  if (!fotosEntrega.length && !_entregaEsExterno) {
     document.getElementById('ent-foto-hint').style.display = 'block';
     return;
   } else {
@@ -1540,12 +1554,14 @@ async function confirmarEntrega() {
     const esParcial = !!entregaParcialMode;
     // Hito de auditoría SIN fotos — las fotos pesadas van al nodo separado
     // /despachoFotos/{docId} para que el listener principal baje poco.
+    const sinFotos = fotosBase64.length === 0;
     const hito = {
       estado: 'Entregada', fecha: now,
       lat: currentGPS?.lat || null, lng: currentGPS?.lng || null,
       observaciones: obs,
       entregaConObservaciones: !!conObs && !!obs,
       entregaParcial: esParcial,
+      entregaExternoSinCedible: _entregaEsExterno && sinFotos,
       usuario: currentUser.email
     };
     const basePath = `organizaciones/${maestroUid}/despachos/${docId}`;
@@ -1554,15 +1570,16 @@ async function confirmarEntrega() {
       // Metadata liviano en /despachos (lo que ve el listener del chofer)
       [`${basePath}/estado`]: 'Entregada',
       [`${basePath}/entregadoEn`]: now,
-      [`${basePath}/tieneFotoCedible`]: true,
-      [`${basePath}/tieneFotosEntrega`]: fotosBase64.length > 0,
+      [`${basePath}/tieneFotoCedible`]: !sinFotos,
+      [`${basePath}/tieneFotosEntrega`]: !sinFotos,
       [`${basePath}/entregaConObservaciones`]: !!conObs && !!obs,
       [`${basePath}/entregaParcial`]: esParcial,
+      [`${basePath}/entregaExternoSinCedible`]: _entregaEsExterno && sinFotos,
       [`${basePath}/observacionesCierre`]: obs,
       [`${basePath}/hitos/${hitoId}`]: hito,
       // Fotos (base64 pesadas) al nodo separado — se cargan on-demand al abrir detalle
-      [`${fotosPath}/fotoCedibleBase64`]: fotosBase64[0],
-      [`${fotosPath}/fotosEntregaBase64`]: fotosBase64,
+      [`${fotosPath}/fotoCedibleBase64`]: sinFotos ? null : fotosBase64[0],
+      [`${fotosPath}/fotosEntregaBase64`]: sinFotos ? null : fotosBase64,
       // Backward compat: limpia las fotos inline antiguas si existían
       [`${basePath}/fotoCedibleBase64`]: null,
       [`${basePath}/fotosEntregaBase64`]: null
