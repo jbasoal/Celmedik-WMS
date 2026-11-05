@@ -984,18 +984,42 @@ function attachListeners() {
 }
 
 // Construye la lista de despachos agrupando movimientos de Salida por
-// documentoId y uniéndolos con el registro `/despachos/{documentoId}` que
-// escribe conductor.html. Devuelve un objeto { documentoId: {...} } con los
-// campos necesarios para la tabla y la vista de parciales.
+// documentoId + numeroMovimiento (clave compuesta cuando una misma factura
+// se usó para dos o más salidas separadas; clave simple = docId en el caso
+// normal para no romper estados guardados en /despachos/{docId}). Une cada
+// despacho con su registro en /despachos/{clave}. Devuelve un objeto
+// { clave: {...} }; el campo `.documentoId` sigue siendo la factura visible.
 function _buildDespachos() {
-  const porDoc = {};
+  // Primera pasada: tally de numMov distintos por factura.
+  const porDocRaw = {}; // docIdRaw → { numMovs:Set }
   Object.values(data.movimientos || {}).forEach(m => {
     if (!m || m.tipo !== 'Salida') return;
-    const docId = m.documentoId || m.referencia;
-    if (!docId) return;
-    if (!porDoc[docId]) {
-      porDoc[docId] = {
-        documentoId: docId,
+    const docIdRaw = m.documentoId || m.referencia;
+    if (!docIdRaw) return;
+    if (!porDocRaw[docIdRaw]) porDocRaw[docIdRaw] = { numMovs: new Set() };
+    if (m.numeroMovimiento) porDocRaw[docIdRaw].numMovs.add(m.numeroMovimiento);
+  });
+  const needsCompositePorDoc = {};
+  const legacyOwnerPorDoc = {};
+  Object.entries(porDocRaw).forEach(([docIdRaw, { numMovs }]) => {
+    needsCompositePorDoc[docIdRaw] = numMovs.size > 1;
+    if (numMovs.size > 1) legacyOwnerPorDoc[docIdRaw] = [...numMovs].sort()[0];
+  });
+  // Segunda pasada: agrupar por clave efectiva (compuesta o simple).
+  const porDoc = {};
+  const docKeyMeta = {}; // docKey → { docIdRaw, numMov, isLegacyOwner }
+  Object.values(data.movimientos || {}).forEach(m => {
+    if (!m || m.tipo !== 'Salida') return;
+    const docIdRaw = m.documentoId || m.referencia;
+    if (!docIdRaw) return;
+    const numMov = m.numeroMovimiento || '';
+    const needsComposite = needsCompositePorDoc[docIdRaw];
+    const docKey = (needsComposite && numMov) ? `${docIdRaw}#${numMov}` : docIdRaw;
+    if (!porDoc[docKey]) {
+      porDoc[docKey] = {
+        documentoId: docIdRaw,
+        docKey,
+        numeroMovimiento: needsComposite ? numMov : (m.numeroMovimiento || ''),
         cliente: m.proveedor || '',
         clienteRut: m.clienteRut || '',
         destino: m.destino || '',
@@ -1007,9 +1031,14 @@ function _buildDespachos() {
         transportadoPorDetalle: m.transportadoPorDetalle || '',
         items: []
       };
+      docKeyMeta[docKey] = {
+        docIdRaw,
+        numMov: needsComposite ? numMov : '',
+        isLegacyOwner: needsComposite && numMov === legacyOwnerPorDoc[docIdRaw]
+      };
     }
-    if (m.bodega) porDoc[docId].bodegasSet.add(m.bodega);
-    porDoc[docId].items.push({
+    if (m.bodega) porDoc[docKey].bodegasSet.add(m.bodega);
+    porDoc[docKey].items.push({
       sku: m.sku || '', lote: m.lote || '', descripcion: m.descripcion || '',
       cantidad: parseFloat(m.cantidad) || 0, ubicacion: m.ubicacion || '',
       bodega: m.bodega || ''
@@ -1018,11 +1047,15 @@ function _buildDespachos() {
     // porque el if arriba sólo se evalúa una vez por doc). Guardamos aquí los
     // movimientos para operaciones de reasignación.
   });
-  // Une con el registro de despacho que escribe el conductor.
+  // Une con el registro de despacho que escribe el conductor. Para claves
+  // compuestas, atribuye el estado legacy en /despachos/{docIdRaw} al
+  // "legacy owner" (menor numMov) — así el primer despacho no pierde estado.
   const dList = data.despachos || {};
   const resultado = {};
-  Object.entries(porDoc).forEach(([docId, p]) => {
-    const d = dList[docId] || null;
+  Object.entries(porDoc).forEach(([docKey, p]) => {
+    const meta = docKeyMeta[docKey];
+    let d = dList[docKey] || null;
+    if (!d && meta.isLegacyOwner) d = dList[meta.docIdRaw] || null;
     // Estado efectivo (todos los definidos en conductor.html + "Cerrada"
     // + "Entregada Parcial" para que se filtre por separado en la tabla).
     let estado;
@@ -1053,7 +1086,7 @@ function _buildDespachos() {
     // se dividió entre, p.ej., CELMEDIK BIODIAL y Bodega Externa).
     const bodegasArr = [...(p.bodegasSet || [])];
     const bodegaLabel = bodegasArr.length > 1 ? bodegasArr.join(' · ') : (bodegasArr[0] || p.bodega);
-    resultado[docId] = {
+    resultado[docKey] = {
       ...p,
       bodegas: bodegasArr,
       bodega: bodegaLabel,
@@ -1283,13 +1316,17 @@ function renderDespachos() {
     );
   }
   if (fZona) rows = rows.filter(o => (o.destino||'').toLowerCase().includes(fZona));
-  if (fDoc)  rows = rows.filter(o => (o.documentoId||'').toLowerCase().includes(fDoc));
+  if (fDoc)  rows = rows.filter(o =>
+    (o.documentoId||'').toLowerCase().includes(fDoc) ||
+    (o.numeroMovimiento||'').toLowerCase().includes(fDoc));
   // Orden por fecha de despacho (prioridad) y luego fecha de registro.
   // Descendente (más reciente primero).
   rows.sort((a,b) => (b.fechaDespacho || b.fecha || '').localeCompare(a.fechaDespacho || a.fecha || ''));
   if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="8">Sin despachos para el filtro seleccionado</td></tr>'; return; }
   tb.innerHTML = rows.map(o => {
-    const safeDoc = o.documentoId.replace(/'/g, "\\'");
+    // safeDoc = docKey interna (puede ser "{factura}#{numMov}"); se pasa a
+    // los handlers que luego buscan en _buildDespachos()[docKey].
+    const safeDoc = (o.docKey || o.documentoId).replace(/'/g, "\\'");
     const cedibleCell = o.cedibleFlag
       ? `<a class="cedible-link" onclick="viewCedible('${safeDoc}')" title="Ver cedible">📄 Ver</a> <a class="cedible-link" onclick="_descargarCedibleDirecto('${safeDoc}')" title="Descargar cedible" style="margin-left:4px">⬇</a>`
       : '<span class="cedible-none">—</span>';
@@ -1300,8 +1337,13 @@ function renderDespachos() {
     const btnReasignar = puedeReasignar
       ? `<button class="btn btn-icon btn-sm btn-warning-sm need-write" onclick="openReasignarConductor('${safeDoc}')" title="Reasignar conductor" style="margin-left:4px">⇄</button>`
       : '';
+    // Cuando la factura se dividió en varias salidas, mostramos N° Movimiento
+    // debajo de la factura para que el admin distinga las filas duplicadas.
+    const docCellHtml = (o.docKey && o.docKey !== o.documentoId && o.numeroMovimiento)
+      ? `${o.documentoId}<br><span style="font-size:10px;color:var(--text3);font-weight:500">N° ${o.numeroMovimiento}</span>`
+      : o.documentoId;
     return `<tr>
-      <td class="text-mono" style="color:var(--accent2);font-size:11.5px;font-weight:600">${o.documentoId}</td>
+      <td class="text-mono" style="color:var(--accent2);font-size:11.5px;font-weight:600">${docCellHtml}</td>
       <td style="font-weight:500">${o.cliente||'—'}</td>
       <td>${o.destino||'—'}</td>
       <td>${o.conductorLabelHtml||o.conductorLabel||'—'}</td>
@@ -1404,15 +1446,19 @@ function renderParciales() {
     .filter(o => !o.cerradoDefinitivo && (o.estado === 'Entregada Parcial' || o.estado === 'No Entregada'));
   if (fTipo === 'parcial') rows = rows.filter(o => o.estado === 'Entregada Parcial');
   if (fTipo === 'no-entregada') rows = rows.filter(o => o.estado === 'No Entregada');
-  if (fDoc) rows = rows.filter(o => (o.documentoId||'').toLowerCase().includes(fDoc));
+  if (fDoc) rows = rows.filter(o =>
+    (o.documentoId||'').toLowerCase().includes(fDoc) ||
+    (o.numeroMovimiento||'').toLowerCase().includes(fDoc));
   rows.sort((a,b) => (b.noEntregadoEn || b.entregadoEn || '').localeCompare(a.noEntregadoEn || a.entregadoEn || ''));
-  // Depura la selección por si algún docId ya no está en la lista.
-  const validIds = new Set(rows.map(r => r.documentoId));
+  // Depura la selección por si alguna clave ya no está en la lista (usamos
+  // docKey — compuesta cuando la factura tiene varias salidas).
+  const validIds = new Set(rows.map(r => r.docKey || r.documentoId));
   [..._selectedParciales].forEach(id => { if (!validIds.has(id)) _selectedParciales.delete(id); });
   if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="10">Sin despachos parciales o no entregados</td></tr>'; _syncSelectAllCheckbox(0); return; }
   tb.innerHTML = rows.map(o => {
-    const safeDoc = o.documentoId.replace(/'/g, "\\'");
-    const checked = _selectedParciales.has(o.documentoId) ? 'checked' : '';
+    const docKey = o.docKey || o.documentoId;
+    const safeDoc = docKey.replace(/'/g, "\\'");
+    const checked = _selectedParciales.has(docKey) ? 'checked' : '';
     const motivo = o.estado === 'No Entregada'
       ? `${o.motivoNoEntrega || '—'}${o.motivoNoEntregaDetalle ? ': '+o.motivoNoEntregaDetalle : ''}`
       : (o.observacionesCierre || '—');
@@ -1420,9 +1466,14 @@ function renderParciales() {
       ? `<a class="cedible-link" onclick="viewCedible('${safeDoc}')" title="Ver cedible">📄 Ver</a> <a class="cedible-link" onclick="_descargarCedibleDirecto('${safeDoc}')" title="Descargar cedible" style="margin-left:4px">⬇</a>`
       : '<span class="cedible-none">—</span>';
     const fechaEst = o.noEntregadoEn || o.entregadoEn || o.fecha;
+    // Si la factura se dividió en varias salidas, mostramos el N° Movimiento
+    // debajo para distinguir las filas.
+    const docCellHtml = (o.docKey && o.docKey !== o.documentoId && o.numeroMovimiento)
+      ? `${o.documentoId}<br><span style="font-size:10px;color:var(--text3);font-weight:500">N° ${o.numeroMovimiento}</span>`
+      : o.documentoId;
     return `<tr class="${checked?'row-selected':''}">
       <td class="chk-cell"><input type="checkbox" class="chk-parcial" data-doc="${safeDoc}" onchange="_toggleParcial('${safeDoc}',this.checked)" ${checked}></td>
-      <td class="text-mono" style="color:var(--accent2);font-size:11.5px;font-weight:600">${o.documentoId}</td>
+      <td class="text-mono" style="color:var(--accent2);font-size:11.5px;font-weight:600">${docCellHtml}</td>
       <td style="font-weight:500">${o.cliente||'—'}</td>
       <td>${o.destino||'—'}</td>
       <td>${o.conductorLabelHtml||o.conductorLabel||'—'}</td>
@@ -1620,7 +1671,11 @@ function openDetalleDespacho(docId) {
   if (!o) return;
   _detOT = o; // reutilizamos el estado para reusar el mismo modal
   document.getElementById('detOTId').textContent = o.documentoId;
-  document.getElementById('detOTSub').textContent = `Despacho desde WMS · Bodega: ${o.bodega||'—'}`;
+  // Cuando la factura se dividió en varias salidas, el N° Movimiento
+  // distingue este despacho del resto.
+  const extraSub = (o.docKey && o.docKey !== o.documentoId && o.numeroMovimiento)
+    ? ` · N° Mov: ${o.numeroMovimiento}` : '';
+  document.getElementById('detOTSub').textContent = `Despacho desde WMS · Bodega: ${o.bodega||'—'}${extraSub}`;
   document.getElementById('detCliente').textContent = o.cliente || '—';
   document.getElementById('detConductor').textContent = o.conductorLabel || '—';
   // Reutilizamos los campos del modal legacy para encajar la nueva info.
@@ -1670,7 +1725,7 @@ function openDetalleDespacho(docId) {
     const canReasignar = (o.estado === 'Entregada Parcial' || o.estado === 'No Entregada');
     btnRow.innerHTML = `
       <button class="btn btn-ghost btn-sm" onclick="closeModal('detalleOTModal')">Cerrar</button>
-      ${canReasignar ? `<button class="btn btn-warning-sm btn-sm need-write" onclick="openReasignarCerrarPorDoc('${o.documentoId.replace(/'/g,"\\'")}')">⇄ Reasignar o cerrar</button>` : ''}
+      ${canReasignar ? `<button class="btn btn-warning-sm btn-sm need-write" onclick="openReasignarCerrarPorDoc('${(o.docKey||o.documentoId).replace(/'/g,"\\'")}')">⇄ Reasignar o cerrar</button>` : ''}
     `;
   }
   openModal('detalleOTModal');
@@ -1689,7 +1744,7 @@ async function _agregarCedibleEnDetalle(o) {
   if (!o.cedibleFlag) return;
   const anchor = document.getElementById('detItemsBody').closest('.table-wrap');
   if (!anchor) return;
-  const safeDoc = o.documentoId.replace(/'/g, "\\'");
+  const safeDoc = (o.docKey || o.documentoId).replace(/'/g, "\\'");
   const wrap = document.createElement('div');
   wrap.id = 'detCedibleWrap';
   wrap.style.cssText = 'margin-bottom:16px';
@@ -1703,7 +1758,7 @@ async function _agregarCedibleEnDetalle(o) {
       </div>
     </div>`;
   anchor.parentNode.insertBefore(wrap, anchor);
-  const fotos = await _cargarFotosDespachoAdmin(o.documentoId);
+  const fotos = await _cargarFotosDespachoAdmin(o.docKey || o.documentoId);
   const src = fotos.fotoCedibleBase64 || fotos.fotoCedibleUrl || '';
   const slot = document.getElementById('detCedibleImgSlot');
   if (slot) {
@@ -1822,12 +1877,16 @@ function _rcInit(docIds, opts) {
   document.querySelector('#reasignarCerrarModal .modal-title').textContent = soloReasignar
     ? 'Reasignar conductor' : 'Reasignar o cerrar despacho(s)';
   document.getElementById('rc-count-sub').textContent = `${detalles.length} despacho${detalles.length>1?'s':''} seleccionado${detalles.length>1?'s':''}`;
-  const listHtml = detalles.map(o => `
+  const listHtml = detalles.map(o => {
+    const subMov = (o.docKey && o.docKey !== o.documentoId && o.numeroMovimiento)
+      ? `<span style="font-size:10px;color:var(--text3);font-weight:500"> · N° ${o.numeroMovimiento}</span>` : '';
+    return `
     <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px dashed var(--border);">
-      <span class="text-mono" style="color:var(--accent2);font-weight:600;min-width:120px">${o.documentoId}</span>
+      <span class="text-mono" style="color:var(--accent2);font-weight:600;min-width:120px">${o.documentoId}${subMov}</span>
       <span style="flex:1">${o.cliente||'—'} · ${o.destino||'—'}</span>
       ${estadoBadge(o.estado, o)}
-    </div>`).join('');
+    </div>`;
+  }).join('');
   document.getElementById('rc-list').innerHTML = listHtml;
   // Guarda la selección vigente en el dataset del botón para que confirm la pueda leer.
   document.getElementById('btn-rc-confirm').dataset.docs = JSON.stringify(docIds);
@@ -1939,15 +1998,21 @@ async function confirmReasignarCerrar() {
         };
       } else {
         // Reasignación: actualizamos transportadoPor en TODOS los movimientos
-        // de ese documento (mismo mecanismo que usa index.html). Esto es lo
-        // que la app del conductor usa para filtrar sus despachos.
+        // de ese despacho (mismo mecanismo que usa index.html). Esto es lo
+        // que la app del conductor usa para filtrar sus despachos. Cuando
+        // docId es una clave compuesta "{factura}#{numMov}", filtramos
+        // también por numeroMovimiento para no tocar otra salida con la
+        // misma factura.
+        const facturaVisible = o.documentoId;
+        const numMovSalida = o.numeroMovimiento || '';
         Object.entries(data.movimientos || {}).forEach(([mId, m]) => {
-          if (m && m.tipo === 'Salida' && (m.documentoId === docId)) {
-            updates[`usuarios/${orgUid}/movimientos/${mId}/transportadoPor`] = nuevoTransp;
-            // Si antes era "Otros: X", limpiamos el detalle a menos que la nueva opción también sea Otros.
-            if (nuevoTransp !== 'Otros') {
-              updates[`usuarios/${orgUid}/movimientos/${mId}/transportadoPorDetalle`] = '';
-            }
+          if (!m || m.tipo !== 'Salida') return;
+          if (m.documentoId !== facturaVisible) return;
+          if (numMovSalida && m.numeroMovimiento !== numMovSalida) return;
+          updates[`usuarios/${orgUid}/movimientos/${mId}/transportadoPor`] = nuevoTransp;
+          // Si antes era "Otros: X", limpiamos el detalle a menos que la nueva opción también sea Otros.
+          if (nuevoTransp !== 'Otros') {
+            updates[`usuarios/${orgUid}/movimientos/${mId}/transportadoPorDetalle`] = '';
           }
         });
         // Reinicia el despacho a estado "Asignada" / "Pendiente" y limpia los

@@ -759,13 +759,44 @@ function attachListeners() {
 //   - "En Ruta"    : el chofer la marcó En Ruta
 //   - "Entregada"  : entregada (con foto de cedible)
 function _construirDespachos() {
-  const resultado = {}; // documentoId → { ... }
-  const porDocumento = {};
+  const resultado = {}; // docKey → { ... }
+  // Agrupamos primero por documentoId "crudo" (factura) y contamos cuántos
+  // numeroMovimiento distintos aparecen. Si hay más de uno, la factura se
+  // usó para dos (o más) salidas separadas y cada una debe aparecer como un
+  // despacho independiente: la clave interna pasa a ser "{docId}#{numMov}"
+  // para que transportista, estado y fotos no se mezclen. Si hay un solo
+  // numeroMovimiento, la clave se queda como el docId original — así los
+  // despachos existentes no pierden su estado en /despachos/{docId}.
+  const porDocRaw = {}; // docIdRaw → { movs:[], numMovs:Set }
   Object.entries(misMovimientos || {}).forEach(([movId, m]) => {
     if (!m || m.tipo !== 'Salida') return;
-    const docId = m.documentoId || m.referencia || movId;
-    if (!porDocumento[docId]) porDocumento[docId] = [];
-    porDocumento[docId].push({ movId, ...m });
+    const docIdRaw = m.documentoId || m.referencia || movId;
+    if (!porDocRaw[docIdRaw]) porDocRaw[docIdRaw] = { movs: [], numMovs: new Set() };
+    porDocRaw[docIdRaw].movs.push({ movId, ...m });
+    if (m.numeroMovimiento) porDocRaw[docIdRaw].numMovs.add(m.numeroMovimiento);
+  });
+  const porDocumento = {};   // docKey → movs
+  const docKeyMeta = {};     // docKey → { docIdRaw, numMov, isLegacyOwner }
+  Object.entries(porDocRaw).forEach(([docIdRaw, { movs, numMovs }]) => {
+    const needsComposite = numMovs.size > 1;
+    // Para backward-compat: cuando partimos a dos un docId que antes era
+    // único, el estado legacy en /despachos/{docIdRaw} se atribuye al
+    // numeroMovimiento más antiguo (orden lexicográfico sobre el prefijo
+    // TIPO-YYYY-NNNNN). El resto parte limpio.
+    const legacyOwner = needsComposite ? [...numMovs].sort()[0] : null;
+    movs.forEach(m => {
+      const numMov = m.numeroMovimiento || '';
+      const docKey = (needsComposite && numMov) ? `${docIdRaw}#${numMov}` : docIdRaw;
+      if (!porDocumento[docKey]) {
+        porDocumento[docKey] = [];
+        docKeyMeta[docKey] = {
+          docIdRaw,
+          numMov: needsComposite ? numMov : '',
+          isLegacyOwner: needsComposite && numMov === legacyOwner
+        };
+      }
+      porDocumento[docKey].push(m);
+    });
   });
 
   const miNombre = conductorInfo.nombreOpcion;
@@ -777,7 +808,8 @@ function _construirDespachos() {
   const extrasSet = new Set((conductorInfo.nombresOpcionExtra || []).filter(Boolean));
   const PENDIENTE_LITERAL = 'Pendiente de asignación';
 
-  Object.entries(porDocumento).forEach(([docId, movs]) => {
+  Object.entries(porDocumento).forEach(([docKey, movs]) => {
+    const meta = docKeyMeta[docKey];
     const first = movs[0];
     const transporte = (first.transportadoPor || '').trim();
     const bodega = first.bodega || '';
@@ -789,10 +821,16 @@ function _construirDespachos() {
     const esPendiente = !!miNombre && transporte === PENDIENTE_LITERAL && misBodegas.has(bodega);
     if (!esMio && !esPendiente) return;
 
-    // Estado base: viene de /despachos/{docId}/estado, o inferido:
+    // Estado base: viene de /despachos/{docKey}/estado, o inferido:
     //   - mío sin registro → "Asignada"
     //   - pendiente sin registro → "Pendiente"
-    const regDesp = (misDespachos || {})[docId] || null;
+    // Backward-compat: si usamos clave compuesta y aún no hay registro en
+    // /despachos/{docKey}, atribuimos el estado legacy de /despachos/{docIdRaw}
+    // sólo al despacho "legacy owner" (menor numMov).
+    let regDesp = (misDespachos || {})[docKey] || null;
+    if (!regDesp && meta.isLegacyOwner) {
+      regDesp = (misDespachos || {})[meta.docIdRaw] || null;
+    }
     let estado = regDesp?.estado;
     if (!estado) estado = esMio ? 'Asignada' : 'Pendiente';
 
@@ -839,8 +877,10 @@ function _construirDespachos() {
     const bodegasArr = [...bodegasSet];
     const bodegaLabel = bodegasArr.length > 1 ? bodegasArr.join(' · ') : (bodegasArr[0] || bodega);
 
-    resultado[docId] = {
-      documentoId: docId,
+    resultado[docKey] = {
+      documentoId: meta.docIdRaw,                // mostrada al usuario (factura)
+      docKey,                                     // clave interna (Firebase path)
+      numeroMovimiento: meta.numMov || first.numeroMovimiento || '',
       estado,
       bodega: bodegaLabel,
       bodegas: bodegasArr,
@@ -853,7 +893,6 @@ function _construirDespachos() {
       transportadoPor: transporte,
       transportadoPorDetalle: first.transportadoPorDetalle || '',
       items: Object.values(items),
-      numeroMovimiento: first.numeroMovimiento || '',
       regDespacho: regDesp,
       esPendiente,
       esMio
@@ -1006,7 +1045,10 @@ function _despCardHtml(d) {
   const skusLabel = d.items.length === 1 ? '1 SKU' : `${d.items.length} SKUs`;
   const pills = d.items.slice(0, 3).map(i => `<span class="ot-item-pill">${i.sku} ×${i.cantidad}</span>`).join('')
       + (d.items.length > 3 ? `<span class="ot-item-pill" style="background:var(--bg3);color:var(--text3)">+${d.items.length-3} más</span>` : '');
-  const safe = d.documentoId.replace(/'/g, "\\'");
+  // `safe` identifica el despacho internamente — puede ser docKey compuesto
+  // ("{factura}#{numMov}") cuando una factura tiene varias salidas. Los
+  // handlers (openTomar/openIniciar/…) hacen _construirDespachos()[docKey].
+  const safe = (d.docKey || d.documentoId).replace(/'/g, "\\'");
 
   // Clase para el borde izquierdo según estado
   const cardClass = d.estado === 'Pendiente' ? 'disponible'
@@ -1065,7 +1107,7 @@ function _despCardHtml(d) {
     <div class="ot-card ${cardClass}">
       <div class="ot-card-header" onclick="openDetalle('${safe}')">
         <div>
-          <div class="ot-id">${d.documentoId}</div>
+          <div class="ot-id">${d.documentoId}${(d.docKey && d.docKey !== d.documentoId && d.numeroMovimiento) ? ` <span style="font-size:11px;color:var(--text3);font-weight:500">· N° ${d.numeroMovimiento}</span>` : ''}</div>
           <div class="ot-cliente">${d.cliente || '—'}${subBadge}</div>
           <div class="ot-meta">${_fechaEstadoLabel(d)} · 🏢 ${d.bodega || '—'}${d.destino ? ' · 📍 '+d.destino : ''}</div>
           <div class="ot-meta" style="margin-top:2px">${skusLabel} · ${totalUd} unidades</div>
@@ -1130,7 +1172,9 @@ async function openDetalle(docId) {
   const d = _construirDespachos()[docId];
   if (!d) return;
   activeDocId = docId;
-  document.getElementById('detTitle').textContent = `Despacho ${docId}`;
+  // docId puede ser compuesta cuando la factura tiene varias salidas; d.documentoId
+  // mantiene la factura visible.
+  document.getElementById('detTitle').textContent = `Despacho ${d.documentoId}`;
   const rDet = d.regDespacho || {};
   const detTsLines = [];
   const tsSol = d.fecha || d.fechaDespacho;
@@ -1281,10 +1325,16 @@ async function confirmarTomar() {
   btn.innerHTML = '<span class="spinner"></span> Tomando...';
   btn.disabled = true;
   try {
-    const docId = activeDocId;
-    // Transacción atómica en /despachos/{docId}: si otro chofer lo tomó antes,
+    const docKey = activeDocId;
+    // docKey puede ser compuesta "{factura}#{numMov}" cuando dos salidas
+    // comparten la factura; d.documentoId mantiene el nombre visible.
+    const d = _construirDespachos()[docKey];
+    if (!d) throw new Error('Despacho ya no disponible — refresca la vista.');
+    const facturaVisible = d.documentoId;
+    const numMovSalida = d.numeroMovimiento || '';
+    // Transacción atómica en /despachos/{docKey}: si otro chofer lo tomó antes,
     // la transacción retorna el valor existente y aquí lanzamos error.
-    const txRef = db.ref(`organizaciones/${maestroUid}/despachos/${docId}`);
+    const txRef = db.ref(`organizaciones/${maestroUid}/despachos/${docKey}`);
     const now = new Date().toISOString();
     const txResult = await txRef.transaction(cur => {
       if (cur && cur.conductorId && cur.conductorId !== conductorId) {
@@ -1293,7 +1343,8 @@ async function confirmarTomar() {
       }
       if (!cur) {
         return {
-          documentoId: docId,
+          documentoId: facturaVisible,
+          numeroMovimiento: numMovSalida,
           estado: 'Asignada',
           conductorId,
           conductorNombre: conductorInfo.nombreOpcion,
@@ -1310,24 +1361,29 @@ async function confirmarTomar() {
       closeModal('tomarModal');
       return;
     }
-    // Actualiza transportadoPor en TODAS las líneas del documento (multi-location update).
+    // Actualiza transportadoPor sólo en las líneas de ESTA salida — filtra
+    // por documentoId + numeroMovimiento para no tocar a otra salida con la
+    // misma factura.
     const updates = {};
     Object.entries(misMovimientos || {}).forEach(([movId, m]) => {
-      if (m && m.tipo === 'Salida' && (m.documentoId === docId) && m.transportadoPor === 'Pendiente de asignación') {
-        updates[`usuarios/${maestroUid}/movimientos/${movId}/transportadoPor`] = conductorInfo.nombreOpcion;
-      }
+      if (!m || m.tipo !== 'Salida') return;
+      if (m.documentoId !== facturaVisible) return;
+      if (numMovSalida && m.numeroMovimiento !== numMovSalida) return;
+      if (m.transportadoPor !== 'Pendiente de asignación') return;
+      updates[`usuarios/${maestroUid}/movimientos/${movId}/transportadoPor`] = conductorInfo.nombreOpcion;
     });
     // Audit log — para dejar rastro del cambio desde Pendiente→chofer.
     const auditId = Date.now();
+    const detalleMov = numMovSalida ? ` (N° ${numMovSalida})` : '';
     updates[`usuarios/${maestroUid}/auditoria/${auditId}`] = {
       fecha: now,
       accion: 'TomarDespacho',
       modulo: 'Transporte',
-      detalle: `Chofer ${conductorInfo.nombreOpcion} tomó el despacho ${docId}. transportadoPor cambiado de "Pendiente de asignación" al chofer.`,
+      detalle: `Chofer ${conductorInfo.nombreOpcion} tomó el despacho ${facturaVisible}${detalleMov}. transportadoPor cambiado de "Pendiente de asignación" al chofer.`,
       usuario: currentUser.email
     };
     if (Object.keys(updates).length) await db.ref().update(updates);
-    showSnack(`Despacho ${docId} asignado a ti. Marca "En Ruta" cuando salgas.`);
+    showSnack(`Despacho ${facturaVisible}${detalleMov} asignado a ti. Marca "En Ruta" cuando salgas.`);
     closeModal('tomarModal');
   } catch(e) {
     alert('Error al tomar el despacho: ' + e.message);
