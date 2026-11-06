@@ -1014,7 +1014,7 @@ function _buildDespachos() {
     if (!docIdRaw) return;
     const numMov = m.numeroMovimiento || '';
     const needsComposite = needsCompositePorDoc[docIdRaw];
-    const docKey = (needsComposite && numMov) ? `${docIdRaw}#${numMov}` : docIdRaw;
+    const docKey = (needsComposite && numMov) ? `${docIdRaw}__${numMov}` : docIdRaw;
     if (!porDoc[docKey]) {
       porDoc[docKey] = {
         documentoId: docIdRaw,
@@ -1324,7 +1324,7 @@ function renderDespachos() {
   rows.sort((a,b) => (b.fechaDespacho || b.fecha || '').localeCompare(a.fechaDespacho || a.fecha || ''));
   if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="8">Sin despachos para el filtro seleccionado</td></tr>'; return; }
   tb.innerHTML = rows.map(o => {
-    // safeDoc = docKey interna (puede ser "{factura}#{numMov}"); se pasa a
+    // safeDoc = docKey interna (puede ser "{factura}__{numMov}"); se pasa a
     // los handlers que luego buscan en _buildDespachos()[docKey].
     const safeDoc = (o.docKey || o.documentoId).replace(/'/g, "\\'");
     const cedibleCell = o.cedibleFlag

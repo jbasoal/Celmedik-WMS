@@ -786,7 +786,7 @@ function _construirDespachos() {
     const legacyOwner = needsComposite ? [...numMovs].sort()[0] : null;
     movs.forEach(m => {
       const numMov = m.numeroMovimiento || '';
-      const docKey = (needsComposite && numMov) ? `${docIdRaw}#${numMov}` : docIdRaw;
+      const docKey = (needsComposite && numMov) ? `${docIdRaw}__${numMov}` : docIdRaw;
       if (!porDocumento[docKey]) {
         porDocumento[docKey] = [];
         docKeyMeta[docKey] = {
@@ -1326,7 +1326,7 @@ async function confirmarTomar() {
   btn.disabled = true;
   try {
     const docKey = activeDocId;
-    // docKey puede ser compuesta "{factura}#{numMov}" cuando dos salidas
+    // docKey puede ser compuesta "{factura}__{numMov}" cuando dos salidas
     // comparten la factura; d.documentoId mantiene el nombre visible.
     const d = _construirDespachos()[docKey];
     if (!d) throw new Error('Despacho ya no disponible — refresca la vista.');
