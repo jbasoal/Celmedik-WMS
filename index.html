@@ -4103,6 +4103,15 @@ function calcStock() {
             if (!stock[key]) stock[key] = { sku:m.sku, lote:m.lote, cantidad:0, vence:m.vence, bodega:m.bodega||'', ubicacion:m.ubicacion||'', status:'Aprobado' };
             stock[key].cantidad += parseFloat(m.cantidad)||0;
             stock[key].status = m.status || 'Aprobado';
+            // Propagar precio unitario de compra desde la Entrada a la línea de
+            // stock para valorización. Si hay múltiples Entradas sobre la misma
+            // clave, prevalece la más reciente (iteración cronológica). No
+            // sobrescribimos con 0 — permite que Entradas antiguas sin precio
+            // no borren uno ingresado posteriormente (vía Corrección de Precio).
+            {
+                const pIn = parseFloat(m.precio);
+                if (!isNaN(pIn) && pIn > 0) stock[key].precioCompra = pIn;
+            }
         } else if (m.tipo === 'Salida' || m.tipo === 'Destrucción') {
             if (stock[key]) stock[key].cantidad -= parseFloat(m.cantidad)||0;
         } else if (m.tipo === 'Ajuste') {
@@ -4139,9 +4148,12 @@ function calcStock() {
             const keyDst = `${m.sku}|${m.lote}|${m.bodega||''}|${m.ubicacion||''}`;
             const baseStatus = (stock[keyOri] && stock[keyOri].status) || m.status || 'Aprobado';
             const baseVence  = (stock[keyOri] && stock[keyOri].vence)  || m.vence || '';
+            const basePrecio = stock[keyOri] ? stock[keyOri].precioCompra : undefined;
             if (stock[keyOri]) stock[keyOri].cantidad -= qty;
             if (!stock[keyDst]) stock[keyDst] = { sku:m.sku, lote:m.lote, cantidad:0, vence:baseVence, bodega:m.bodega||'', ubicacion:m.ubicacion||'', status: baseStatus };
             stock[keyDst].cantidad += qty;
+            // Propagar precioCompra del origen al destino si el destino aún no tenía.
+            if (stock[keyDst].precioCompra == null && basePrecio != null) stock[keyDst].precioCompra = basePrecio;
         }
     });
     // C1: Integrar devoluciones Aprobadas al stock
