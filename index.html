@@ -778,6 +778,10 @@
                 <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></span>
                 Ajuste Movimiento
             </a>
+            <a class="nav-link" data-page="correccionPrecio" id="nav-correccion-precio" style="display:none">
+                <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>
+                Corrección de Precio
+            </a>
             <a class="nav-link" data-page="cuarentena">
                 <span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
                 Cuarentena
@@ -1285,6 +1289,34 @@
                                 <tbody id="tAjMovHist"><tr class="empty-row"><td colspan="10">Sin ajustes registrados</td></tr></tbody>
                             </table>
                         </div>
+                    </div>
+                </div>
+
+                <!-- ── CORRECCIÓN DE PRECIO DE COMPRA (solo perfil Maestro) ── -->
+                <div id="correccionPrecio" class="page">
+                    <div class="card">
+                        <div class="card-header">
+                            <div>
+                                <div class="card-title">Corrección de Precio de Compra</div>
+                                <div class="card-subtitle">Actualizar el precio unitario de compra en movimientos de Entrada · Filtra por SKU, Lote y N° Factura/Documento · Solo perfil Maestro</div>
+                            </div>
+                        </div>
+                        <div class="alert-banner warning" style="margin-bottom:14px">
+                            <div class="alert-banner-icon">⚠</div>
+                            <div>
+                                <div class="alert-banner-title">Operación sensible</div>
+                                <div class="alert-banner-text">Se modificará únicamente el campo «Precio unitario» de las líneas de Entrada seleccionadas. El cambio queda registrado en auditoría y en el historial de Ajustes de Movimiento, y se regenera el PDF con los datos finales.</div>
+                            </div>
+                        </div>
+                        <div class="filter-bar">
+                            <input type="text" class="form-input" id="cpFactura" placeholder="N° Factura / Documento" style="max-width:220px" onkeydown="if(event.key==='Enter') buscarPrecioEntradas()">
+                            <input type="text" class="form-input" id="cpSKU" placeholder="SKU" style="max-width:160px" onkeydown="if(event.key==='Enter') buscarPrecioEntradas()">
+                            <input type="text" class="form-input" id="cpLote" placeholder="Lote" style="max-width:160px" onkeydown="if(event.key==='Enter') buscarPrecioEntradas()">
+                            <button class="btn btn-primary btn-sm" onclick="buscarPrecioEntradas()">Buscar</button>
+                            <button class="btn btn-ghost btn-sm" onclick="limpiarCorreccionPrecio()">Limpiar</button>
+                            <span style="font-size:11px;color:var(--text3);margin-left:8px">Debe indicar al menos un criterio.</span>
+                        </div>
+                        <div id="cpResults"></div>
                     </div>
                 </div>
 
@@ -3177,6 +3209,8 @@ function loadProfile() {
         if (navAjustes) navAjustes.style.display = userPerfil === 'Maestro' ? '' : 'none';
         const navAjusteMov = document.getElementById('nav-ajuste-mov');
         if (navAjusteMov) navAjusteMov.style.display = userPerfil === 'Maestro' ? '' : 'none';
+        const navCorreccionPrecio = document.getElementById('nav-correccion-precio');
+        if (navCorreccionPrecio) navCorreccionPrecio.style.display = userPerfil === 'Maestro' ? '' : 'none';
         const navAdmin = document.getElementById('nav-admin');
         if (navAdmin) navAdmin.style.display = userPerfil === 'Maestro' ? '' : 'none';
         const navTransporte = document.getElementById('nav-transporte');
@@ -3892,7 +3926,7 @@ function navigateTo(page) {
     if (pg) pg.classList.add('active');
     const lnk = document.querySelector(`.nav-link[data-page="${page}"]`);
     if (lnk) lnk.classList.add('active');
-    const titles = { dashboard:'Dashboard', productos:'Productos Maestro', stock:'Stock Actual', bodegas:'Bodegas', movimientos:'Movimientos', recepciones:'Recepciones', despachos:'Despachos', kardex:'Kardex Farmacéutico', facturasPorDespachar:'Pedidos por Despachar', ordenTransporte:'Orden de Transporte', ajusteMov:'Ajuste de Movimiento', cuarentena:'Cuarentena', devoluciones:'Devoluciones', retiro:'Retiro de Mercado', ajustes:'Ajuste de Inventario', trazabilidad:'Trazabilidad de Lotes', alertas:'Alertas', reportes:'Reportes ISP', auditoria:'Auditoría', dashComercial:'Dashboard Comercial' };
+    const titles = { dashboard:'Dashboard', productos:'Productos Maestro', stock:'Stock Actual', bodegas:'Bodegas', movimientos:'Movimientos', recepciones:'Recepciones', despachos:'Despachos', kardex:'Kardex Farmacéutico', facturasPorDespachar:'Pedidos por Despachar', ordenTransporte:'Orden de Transporte', ajusteMov:'Ajuste de Movimiento', correccionPrecio:'Corrección de Precio de Compra', cuarentena:'Cuarentena', devoluciones:'Devoluciones', retiro:'Retiro de Mercado', ajustes:'Ajuste de Inventario', trazabilidad:'Trazabilidad de Lotes', alertas:'Alertas', reportes:'Reportes ISP', auditoria:'Auditoría', dashComercial:'Dashboard Comercial' };
     document.getElementById('pageTitle').textContent = titles[page] || page;
     if (page === 'ordenTransporte') {
         const perfilesOT = ['Maestro','Farmacéutico','Operador','Operador Los Angeles'];
@@ -3901,6 +3935,7 @@ function navigateTo(page) {
     }
     if (page === 'ajustes') { if (userPerfil !== 'Maestro') { navigateTo('dashboard'); return; } renderAjustes(); }
     if (page === 'ajusteMov') { if (userPerfil !== 'Maestro') { navigateTo('dashboard'); return; } resetAjusteMov(); renderAjustesMovHistorial(); }
+    if (page === 'correccionPrecio') { if (userPerfil !== 'Maestro') { navigateTo('dashboard'); return; } resetCorreccionPrecio(); }
     if (page === 'admin')   { if (userPerfil !== 'Maestro') { navigateTo('dashboard'); return; } renderUsuarios(); loadDriveCfg(); }
     if (page === 'alertas') renderAlertas();
     if (page === 'auditoria') renderAuditoria();
@@ -8749,6 +8784,233 @@ async function guardarAjusteMov() {
             _setBtnLoading('btn-save-ajmov', false, 'Guardar ajustes y regenerar PDF');
             alert('Error al guardar: ' + err.message);
         });
+}
+
+// ══ CORRECCIÓN DE PRECIO DE COMPRA (solo perfil Maestro) ══
+// Operación enfocada: busca líneas de Entrada por N° Factura / SKU / Lote y
+// permite actualizar únicamente el campo `precio` (precio unitario de compra).
+// Registra un ajuste en `ajustesMovimiento` (aparece en el historial de AJM),
+// loguea en auditoría y regenera el PDF de cada operación impactada.
+let _cpMatches = [];  // [{ key, mov }, ...]
+
+function resetCorreccionPrecio() {
+    _cpMatches = [];
+    ['cpFactura','cpSKU','cpLote'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    const c = document.getElementById('cpResults'); if (c) c.innerHTML = '';
+}
+function limpiarCorreccionPrecio() { resetCorreccionPrecio(); }
+
+function buscarPrecioEntradas() {
+    if (userPerfil !== 'Maestro') { alert('Solo el perfil Maestro puede corregir precios de compra.'); return; }
+    const factura = (document.getElementById('cpFactura')?.value || '').trim().toLowerCase();
+    const sku     = (document.getElementById('cpSKU')?.value     || '').trim().toLowerCase();
+    const lote    = (document.getElementById('cpLote')?.value    || '').trim().toLowerCase();
+    const c = document.getElementById('cpResults');
+    if (!c) return;
+    if (!factura && !sku && !lote) {
+        c.innerHTML = '<div class="alert-banner warning" style="margin:8px 0"><div class="alert-banner-icon">⚠</div><div><div class="alert-banner-title">Indique al menos un criterio</div><div class="alert-banner-text">Ingrese N° Factura, SKU o Lote para buscar.</div></div></div>';
+        _cpMatches = [];
+        return;
+    }
+    const matches = Object.entries(data.movimientos || {})
+        .filter(([, m]) => m && m.tipo === 'Entrada')
+        .filter(([, m]) => {
+            if (factura) {
+                const ref = (m.referencia || '').toLowerCase();
+                const doc = (m.documentoId || '').toLowerCase();
+                const num = (m.numeroMovimiento || '').toLowerCase();
+                if (!ref.includes(factura) && !doc.includes(factura) && !num.includes(factura)) return false;
+            }
+            if (sku  && !(m.sku  || '').toLowerCase().includes(sku))  return false;
+            if (lote && !(m.lote || '').toLowerCase().includes(lote)) return false;
+            return true;
+        })
+        .map(([key, mov]) => ({ key, mov }))
+        .sort((a, b) => new Date(a.mov.fecha || 0) - new Date(b.mov.fecha || 0));
+    _cpMatches = matches;
+    if (!matches.length) {
+        c.innerHTML = '<div class="alert-banner danger" style="margin:8px 0"><div class="alert-banner-icon">✕</div><div><div class="alert-banner-title">Sin resultados</div><div class="alert-banner-text">No se encontraron movimientos de Entrada con los criterios indicados.</div></div></div>';
+        return;
+    }
+    renderCorreccionPrecio();
+}
+
+function renderCorreccionPrecio() {
+    const c = document.getElementById('cpResults');
+    if (!c) return;
+    const filas = _cpMatches.map((it, idx) => {
+        const m = it.mov;
+        const refCell = m.referencia ? _ajmEsc(m.referencia) : '—';
+        const numMov  = m.numeroMovimiento ? `<div class="text-mono" style="color:var(--accent2);font-size:11px">${_ajmEsc(m.numeroMovimiento)}</div>` : '';
+        return `<tr>
+            <td style="font-size:12px;white-space:nowrap">${_ajmEsc(fmtDate((m.fecha||'').slice(0,10)))}${numMov}</td>
+            <td style="font-size:12px">${refCell}</td>
+            <td class="text-mono" style="color:var(--accent2)">${_ajmEsc(m.sku||'')}</td>
+            <td style="font-size:12px">${_ajmEsc(m.descripcion||'—')}</td>
+            <td class="text-mono">${_ajmEsc(m.lote||'—')}</td>
+            <td style="text-align:right">${_ajmEsc(m.cantidad||0)}</td>
+            <td style="text-align:right;font-size:12px;color:var(--text2)" id="cp-prev-${idx}">${m.precio > 0 ? '$' + Number(m.precio).toLocaleString('es-CL') : '—'}</td>
+            <td><input type="number" class="form-input" id="cp-nuevo-${idx}" style="font-size:12px;width:110px" min="0" step="0.01" placeholder="Nuevo precio"></td>
+            <td style="font-size:11px;color:var(--text3)">${_ajmEsc(m.bodega||'—')}</td>
+        </tr>`;
+    }).join('');
+    c.innerHTML = `
+        <div class="card" style="margin-top:12px">
+            <div class="card-header"><div><div class="card-title" style="font-size:14px">Entradas encontradas (${_cpMatches.length})</div><div class="card-subtitle">Deje el «Nuevo precio» en blanco para no modificar esa línea. Solo se guardan las líneas con un precio distinto al actual.</div></div></div>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr>
+                        <th>Fecha / N° Mov.</th><th>N° Factura / Doc.</th><th>SKU</th><th>Descripción</th><th>Lote</th><th style="text-align:right">Cantidad</th><th style="text-align:right">Precio actual</th><th>Nuevo precio</th><th>Bodega</th>
+                    </tr></thead>
+                    <tbody>${filas}</tbody>
+                </table>
+            </div>
+            <div class="form-group" style="margin-top:12px">
+                <label class="form-label">Motivo de la corrección <span style="color:var(--danger)">*</span></label>
+                <textarea class="form-textarea" id="cp-motivo" rows="2" placeholder="Describa el motivo de la corrección de precio (obligatorio para trazabilidad)"></textarea>
+                <div style="font-size:11px;color:var(--text3);margin-top:4px">Queda registrado en el historial de Ajustes de Movimiento y en la auditoría.</div>
+            </div>
+            <div class="btn-row" style="margin-top:8px">
+                <button type="button" class="btn btn-ghost" onclick="limpiarCorreccionPrecio()">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btn-save-cp" onclick="confirmGuardarCorreccionPrecio()">Guardar correcciones de precio</button>
+            </div>
+        </div>
+    `;
+}
+
+function _cpLeerCambios() {
+    const cambios = [];
+    _cpMatches.forEach((it, idx) => {
+        const inp = document.getElementById(`cp-nuevo-${idx}`);
+        if (!inp) return;
+        const raw = (inp.value || '').trim();
+        if (raw === '') return;
+        const nuevo = parseFloat(raw);
+        if (isNaN(nuevo) || nuevo < 0) return;
+        const actual = parseFloat(it.mov.precio) || 0;
+        if (Math.abs(nuevo - actual) < 1e-6) return;
+        cambios.push({ idx, key: it.key, mov: it.mov, precioAnt: actual, precioNuevo: nuevo });
+    });
+    return cambios;
+}
+
+function confirmGuardarCorreccionPrecio() {
+    if (userPerfil !== 'Maestro') { alert('Solo el perfil Maestro puede corregir precios de compra.'); return; }
+    if (!_cpMatches.length) { alert('No hay líneas cargadas.'); return; }
+    const motivo = (document.getElementById('cp-motivo')?.value || '').trim();
+    if (motivo.length < 3) {
+        alert('Debe indicar el motivo de la corrección (mínimo 3 caracteres). Es obligatorio para trazabilidad.');
+        try { document.getElementById('cp-motivo')?.focus(); } catch(_){}
+        return;
+    }
+    const cambios = _cpLeerCambios();
+    if (!cambios.length) { alert('No hay cambios para guardar (ingrese un «Nuevo precio» distinto al actual en al menos una línea).'); return; }
+    const resumen = cambios.map(ch => {
+        const m = ch.mov;
+        const ref = m.referencia || m.documentoId || '—';
+        return `${_ajmEsc(m.sku)} · lote ${_ajmEsc(m.lote||'—')} · Fac. ${_ajmEsc(ref)}: $${Number(ch.precioAnt).toLocaleString('es-CL')} → $${Number(ch.precioNuevo).toLocaleString('es-CL')}`;
+    }).join('<br>');
+    showConfirm(
+        'Confirmar corrección de precio',
+        `${cambios.length} línea(s) de Entrada`,
+        `<div>Se actualizará el precio unitario de compra en <strong>${cambios.length}</strong> línea(s) de Entrada.</div>
+         <div style="margin-top:6px;max-height:200px;overflow:auto;font-size:12px;color:var(--text2);background:var(--bg2);padding:8px;border-radius:6px">${resumen}</div>
+         <div style="margin-top:8px;padding:8px 10px;border-radius:6px;background:rgba(8,84,160,.08);border:1px solid rgba(8,84,160,.28)">
+            <div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);font-weight:600">Motivo</div>
+            <div style="margin-top:2px;font-size:13px;color:var(--text)">${_ajmEsc(motivo)}</div>
+         </div>
+         <div style="margin-top:8px;font-size:12px;color:var(--text2)">Se regenerará el PDF de cada operación afectada y quedará registro en auditoría e historial.</div>`,
+        'Guardar correcciones',
+        'btn-primary',
+        () => guardarCorreccionPrecio(cambios, motivo)
+    );
+}
+
+async function guardarCorreccionPrecio(cambios, motivo) {
+    const uid = rootUid || currentUser.uid;
+    const ahora = new Date().toISOString();
+    _setBtnLoading('btn-save-cp', true);
+
+    // Un N° de ajuste por cada operación impactada (agrupadas por numeroMovimiento
+    // o documentoId para operaciones históricas sin N° de movimiento).
+    const grupos = {};
+    cambios.forEach(ch => {
+        const gk = ch.mov.numeroMovimiento || ch.mov.documentoId || ch.key;
+        if (!grupos[gk]) grupos[gk] = { numeroMovimiento: ch.mov.numeroMovimiento || '', documentoId: ch.mov.documentoId || '', referencia: ch.mov.referencia || '', bodega: ch.mov.bodega || '', items: [] };
+        grupos[gk].items.push(ch);
+    });
+
+    const updates = {};
+    const resumenAuditoria = [];
+    for (const gk of Object.keys(grupos)) {
+        const g = grupos[gk];
+        let ajusteNumMov = '';
+        try { ajusteNumMov = await generarNumeroMovimiento('AjusteMovimiento'); }
+        catch (e) { ajusteNumMov = `AJM-${new Date().getFullYear()}-CP${String(Date.now()).slice(-6)}`; }
+        const ajusteId = db.ref(`usuarios/${uid}/ajustesMovimiento`).push().key;
+        const cambiosItems = [];
+        g.items.forEach(ch => {
+            const merged = {
+                ...ch.mov,
+                precio: ch.precioNuevo,
+                ajustadoEn: ahora,
+                ajustadoPor: currentUser.email,
+                ajustadoPorPerfil: userPerfil || '',
+                ajusteId,
+                ajusteNumMov,
+                ajusteMotivo: motivo
+            };
+            updates[`usuarios/${uid}/movimientos/${ch.key}`] = merged;
+            cambiosItems.push({
+                sku: ch.mov.sku,
+                lote: ch.mov.lote || '',
+                campo: 'precio',
+                antes: ch.precioAnt,
+                despues: ch.precioNuevo
+            });
+            resumenAuditoria.push(`${ch.mov.sku} · lote ${ch.mov.lote||'—'} · Precio: $${ch.precioAnt} → $${ch.precioNuevo}`);
+        });
+        updates[`usuarios/${uid}/ajustesMovimiento/${ajusteId}`] = {
+            fecha: ahora,
+            usuario: currentUser.email,
+            usuarioPerfil: userPerfil || '',
+            numeroMovimiento: g.numeroMovimiento,
+            ajusteNumeroMovimiento: ajusteNumMov,
+            documentoId: g.documentoId,
+            referencia: g.referencia,
+            tipoMovimiento: 'Entrada',
+            bodega: g.bodega,
+            motivoAjuste: motivo,
+            totalItems: g.items.length,
+            totalCambios: g.items.length,
+            cambiosHeader: {},
+            cambiosItems,
+            resumen: g.items.map(ch => `SKU ${ch.mov.sku} lote ${ch.mov.lote||'—'} · Precio: «${ch.precioAnt}» → «${ch.precioNuevo}»`),
+            origen: 'CorreccionPrecio'
+        };
+    }
+
+    try {
+        await db.ref().update(updates);
+        logAudit('Corrección precio compra', 'Movimientos', '', '', `${cambios.length} línea(s) · Motivo: ${motivo}`);
+        resumenAuditoria.slice(0, 50).forEach(d => logAudit('Corrección precio compra (detalle)', 'Movimientos', '', '', d));
+        // Regenerar PDF de cada operación impactada
+        const opsPDF = new Set();
+        cambios.forEach(ch => { opsPDF.add(ch.mov.numeroMovimiento || ch.mov.documentoId); });
+        opsPDF.forEach(op => { if (op) try { regenerarPDF(op); } catch(e) { console.warn('No se pudo regenerar PDF:', e); } });
+        _setBtnLoading('btn-save-cp', false, 'Guardar correcciones de precio');
+        const c = document.getElementById('cpResults');
+        if (c) c.insertAdjacentHTML('afterbegin', `<div class="alert-banner success" style="margin:8px 0"><div class="alert-banner-icon">✓</div><div><div class="alert-banner-title">Correcciones aplicadas · ${cambios.length} línea(s)</div><div class="alert-banner-text">Se actualizó el precio de compra en los movimientos de Entrada indicados. Los cambios quedaron registrados en el historial de Ajustes de Movimiento y en la auditoría. Se regeneraron los PDF correspondientes.</div></div></div>`);
+        // Refrescar vista con los nuevos precios
+        cambios.forEach(ch => {
+            const match = _cpMatches.find(it => it.key === ch.key);
+            if (match) match.mov = updates[`usuarios/${uid}/movimientos/${ch.key}`];
+        });
+        renderCorreccionPrecio();
+    } catch (err) {
+        _setBtnLoading('btn-save-cp', false, 'Guardar correcciones de precio');
+        alert('Error al guardar: ' + (err.message || err));
+    }
 }
 
 // ══ ANULACIÓN DE SALIDA ══
