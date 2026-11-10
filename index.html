@@ -1009,8 +1009,8 @@
                             <button class="btn btn-primary btn-sm need-write need-maestro" onclick="openModal('bodegaModal')">+ Nueva bodega</button>
                         </div>
                         <div class="table-wrap">
-                            <table><thead><tr><th>Nombre</th><th>Ubicación</th><th>Capacidad</th><th>Tipo</th><th>Estado</th><th></th></tr></thead>
-                            <tbody id="tBodegas"><tr class="empty-row"><td colspan="6">No hay bodegas registradas</td></tr></tbody></table>
+                            <table><thead><tr><th>Nombre</th><th>Ubicación</th><th>Capacidad</th><th>Tipo</th><th>Estado</th><th style="text-align:right">Total posiciones</th><th style="text-align:right">Posiciones vacías</th><th></th></tr></thead>
+                            <tbody id="tBodegas"><tr class="empty-row"><td colspan="8">No hay bodegas registradas</td></tr></tbody></table>
                         </div>
                     </div>
                 </div>
@@ -4426,11 +4426,36 @@ function renderBodegas() {
     const arrFijas = bodegasFijasActual();
     let rows = Object.entries(data.bodegas||{});
     if (arrFijas) rows = rows.filter(([, b]) => arrFijas.includes(b.nombre));
-    if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="6">No hay bodegas visibles para su perfil</td></tr>'; return; }
+    if (!rows.length) { tb.innerHTML = '<tr class="empty-row"><td colspan="8">No hay bodegas visibles para su perfil</td></tr>'; return; }
+    // Conteo de posiciones ocupadas por bodega — sólo relevante para las bodegas
+    // con grilla de posiciones físicas (CELMEDIK BIODIAL y CELMEDIK LOS ANGELES).
+    // Una posición se cuenta como ocupada si tiene al menos un lote con qty > 0.
+    const BODEGAS_CON_POSICIONES = new Set(['CELMEDIK BIODIAL', 'CELMEDIK LOS ANGELES']);
+    const ocupadasPorBodega = {};
+    Object.values(calcStock() || {}).forEach(s => {
+        if (!s || !BODEGAS_CON_POSICIONES.has(s.bodega)) return;
+        if ((parseFloat(s.cantidad) || 0) <= 0) return;
+        if (!s.ubicacion) return;
+        if (!ocupadasPorBodega[s.bodega]) ocupadasPorBodega[s.bodega] = new Set();
+        ocupadasPorBodega[s.bodega].add(s.ubicacion);
+    });
     tb.innerHTML = rows.map(([id, b]) => {
         const badgeCliente = b.esClienteBodega
             ? `<div style="margin-top:3px"><span class="badge badge-blue" style="font-size:10px" title="Sub-bodega dentro de ${b.parentBodega||'—'}">🏢 Cliente: ${b.clienteOwner||'—'}</span></div>`
             : '';
+        let totalCell = '<span class="text-muted">—</span>';
+        let vaciasCell = '<span class="text-muted">—</span>';
+        if (BODEGAS_CON_POSICIONES.has(b.nombre)) {
+            const total   = Array.isArray(b.ubicaciones) ? b.ubicaciones.length : 0;
+            const ocup    = (ocupadasPorBodega[b.nombre] || new Set()).size;
+            const vacias  = Math.max(0, total - ocup);
+            const pctOcup = total ? Math.round((ocup / total) * 100) : 0;
+            totalCell = `<span class="text-mono">${total}</span>`;
+            const vClass = total === 0 ? '' : (vacias === 0 ? 'badge-danger' : (pctOcup >= 90 ? 'badge-warning' : 'badge-success'));
+            vaciasCell = total === 0
+                ? '<span class="text-muted">—</span>'
+                : `<span class="badge ${vClass}" title="Ocupadas: ${ocup} de ${total} (${pctOcup}%)">${vacias}</span>`;
+        }
         return `
         <tr>
             <td style="color:var(--text);font-weight:500">${b.nombre}${badgeCliente}</td>
@@ -4438,6 +4463,8 @@ function renderBodegas() {
             <td>${b.capacidad ? b.capacidad + ' m³' : '—'}</td>
             <td><span class="badge ${b.tipo === 'Cuarentena' ? 'badge-warning' : b.tipo === 'Rechazados' ? 'badge-danger' : 'badge-success'}">${b.tipo||'General'}</span></td>
             <td><span class="badge badge-success">Activa</span></td>
+            <td style="text-align:right">${totalCell}</td>
+            <td style="text-align:right">${vaciasCell}</td>
             <td>${userPerfil === 'Maestro' ? `<button class="btn btn-sm btn-danger-sm" onclick="deleteBodega('${id}')">Eliminar</button>` : '<span class="text-muted">—</span>'}</td>
         </tr>`;
     }).join('');
