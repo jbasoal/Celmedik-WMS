@@ -1854,13 +1854,6 @@ async function _compressImageProgresivo(file) {
   throw lastErr || new Error('No se pudo comprimir la imagen tras varios intentos.');
 }
 
-// Umbral de pre-compresión: por debajo de 2MB la foto es manejable en
-// cualquier WebView moderno y la mostramos como preview sin pre-procesar
-// (preview instantáneo). Por encima de 2MB sí pre-comprimimos para evitar
-// OOM al decodificar el bitmap full-res, caso típico de Xiaomi 14 (50MP)
-// y similares con cámaras grandes.
-const _UMBRAL_PRECOMPRESION_BYTES = 2 * 1024 * 1024;
-
 // Guarda el input que originó la foto actual, para que "↻ Repetir" reabra
 // el mismo (cámara vs galería) en vez de volver a cámara por default.
 let _pendingPhotoInputId = null;
@@ -1895,21 +1888,14 @@ async function onPhotoChosen(input, kind) {
     alert(msg);
     return;
   }
-  // ── Camino rápido: fotos chicas (< 2MB) no necesitan pre-compresión.
-  // El preview usa directamente un object URL del file original — mismo
-  // UX que la versión original de la app. La compresión final a tamaño
-  // de DB se hace recién en confirmarEntrega/confirmarNoEntregado como
-  // antes. Sólo las fotos pesadas (Xiaomi 14 y similares) pasan por el
-  // camino lento con pre-compresión + reintento progresivo.
-  if (file.size < _UMBRAL_PRECOMPRESION_BYTES) {
-    console.log('[onPhotoChosen] foto chica, camino rápido sin pre-compresión');
-    _pendingPhotoBlob = file;
-    _pendingPhotoObjectUrl = URL.createObjectURL(file);
-    document.getElementById('pf-img').src = _pendingPhotoObjectUrl;
-    document.getElementById('photoFullscreen').classList.add('active');
-    return;
-  }
-  // ── Camino lento: foto pesada, pre-comprimimos con reintento progresivo.
+  // Pre-comprimimos SIEMPRE antes del preview. Aunque el JPEG pese poco,
+  // la resolución del sensor puede ser alta (ej. 4000×3000 en un archivo
+  // de 1.5MB) y mostrarlo como <img src=objectUrl> fuerza al WebView a
+  // decodificar el bitmap full-res (~48MB) → "memoria insuficiente" en
+  // MIUI/HyperOS/EMUI aunque el dispositivo tenga RAM libre.
+  // _compressImageProgresivo usa createImageBitmap con resize nativo en
+  // una sola pasada a 1280px (~200-800ms imperceptibles) y sólo cae al
+  // fallback progresivo si el teléfono falla.
   _showProgressSnack('Procesando foto...');
   let resultado;
   try {
