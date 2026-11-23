@@ -390,6 +390,19 @@
         .filter-bar .form-input, .filter-bar .form-select { width: auto; min-width: 140px; padding: 8px 12px; font-size: 12.5px; }
         .filter-section-label { font-size: 11.5px; color: var(--text3); font-weight: 600; white-space: nowrap; }
 
+        /* Multi-select dropdown (filtros Movimientos) */
+        .ms-wrap { position: relative; display: inline-block; }
+        .ms-trigger { display: inline-flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 160px; cursor: pointer; text-align: left; background: #FFFFFF; }
+        .ms-trigger .ms-caret { font-size: 10px; color: var(--text3); flex-shrink: 0; }
+        .ms-trigger .ms-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .ms-panel { display: none; position: absolute; top: calc(100% + 4px); left: 0; z-index: 2000; background: var(--surface); border: 1px solid var(--border2); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.18); padding: 6px; min-width: 220px; max-height: 320px; overflow-y: auto; }
+        .ms-panel.open { display: block; }
+        .ms-actions { display: flex; justify-content: flex-end; padding: 2px 4px 6px; border-bottom: 1px solid var(--border); margin-bottom: 4px; }
+        .ms-actions button { font-size: 11px; padding: 3px 10px; margin-top: 0; width: auto; }
+        .ms-opt { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 12.5px; user-select: none; }
+        .ms-opt:hover { background: var(--bg2); }
+        .ms-opt input[type=checkbox] { margin: 0; cursor: pointer; }
+
         /* ══════════════════════════════════════
            MODALS
         ══════════════════════════════════════ */
@@ -1049,23 +1062,18 @@
                             </div>
                         </div>
                         <div class="filter-bar">
-                            <select class="form-select filtro-bodega-mov" id="fMovBodega" onchange="renderMovimientos()" style="width:auto" title="Bodega">
-                                <option value="">Todas las bodegas</option>
-                            </select>
-                            <select class="form-select" id="fMovTipo" onchange="renderMovimientos()" style="width:auto">
-                                <option value="">Todos los tipos</option>
-                                <option value="Entrada">Entrada</option>
-                                <option value="Salida">Salida</option>
-                                <option value="Devolución">Devolución</option>
-                                <option value="Ajuste">Cambio de Status</option>
-                                <option value="CambioUbicacion">Cambio de Ubicación</option>
-                            </select>
-                            <select class="form-select" id="fMovFamilia" onchange="renderMovimientos()" style="width:auto" title="Familia de producto">
-                                <option value="">Todas las familias</option>
-                                <option value="medicamento">Medicamentos</option>
-                                <option value="concentrado">Concentrados</option>
-                                <option value="dispmed">Dispositivos Médicos</option>
-                            </select>
+                            <div class="ms-wrap filtro-bodega-mov" id="msMovBodegaWrap" title="Bodega">
+                                <button type="button" class="form-select ms-trigger" onclick="_msToggle('msMovBodegaWrap', event)"><span class="ms-label">Todas las bodegas</span><span class="ms-caret">▾</span></button>
+                                <div class="ms-panel" id="msMovBodegaPanel"></div>
+                            </div>
+                            <div class="ms-wrap" id="msMovTipoWrap" title="Tipo de movimiento">
+                                <button type="button" class="form-select ms-trigger" onclick="_msToggle('msMovTipoWrap', event)"><span class="ms-label">Todos los tipos</span><span class="ms-caret">▾</span></button>
+                                <div class="ms-panel" id="msMovTipoPanel"></div>
+                            </div>
+                            <div class="ms-wrap" id="msMovFamiliaWrap" title="Familia de producto">
+                                <button type="button" class="form-select ms-trigger" onclick="_msToggle('msMovFamiliaWrap', event)"><span class="ms-label">Todas las familias</span><span class="ms-caret">▾</span></button>
+                                <div class="ms-panel" id="msMovFamiliaPanel"></div>
+                            </div>
                             <input type="text" class="form-input" id="fMovSKU" placeholder="SKU..." onkeyup="renderMovimientos()">
                             <input type="text" class="form-input" id="fMovLote" placeholder="Lote..." onkeyup="renderMovimientos()">
                             <input type="text" class="form-input" id="fMovReferencia" placeholder="N° Referencia..." onkeyup="renderMovimientos()">
@@ -3123,6 +3131,7 @@ let _sessionEndReason = '';
 
 document.addEventListener('DOMContentLoaded', () => {
     setupNav();
+    try { _initFiltrosMovimientosMS(); } catch(_) {}
     // Garantiza que la pantalla de login esté visible y oculta la app desde el
     // primer paint, incluso si el SDK tarda en resolver la persistencia.
     showScreen('login');
@@ -4866,19 +4875,113 @@ function updateBodegaSelect() {
     _refreshMovBodegaFilter();
 }
 
-// Pobla el select de filtro de Bodega en la página Movimientos.
+// ══ Multi-select dropdown (filtros Movimientos) ══
+// Componente liviano: cada wrap tiene un botón trigger y un panel con
+// checkboxes. Estado por wrap en _msState (Set de valores seleccionados).
+const _msState = new Map();
+
+function _msInit(wrapId, options, cfg) {
+    _msState.set(wrapId, {
+        values: new Set(),
+        allLabel: cfg.allLabel || 'Todos',
+        singularLabel: cfg.singularLabel || 'Seleccionados',
+        options: options || [],
+        onChange: cfg.onChange || (() => {}),
+    });
+    _msRender(wrapId);
+    _msUpdateLabel(wrapId);
+}
+function _msSetOptions(wrapId, options) {
+    const st = _msState.get(wrapId); if (!st) return;
+    st.options = options || [];
+    const valid = new Set(st.options.map(o => o.value));
+    for (const v of Array.from(st.values)) if (!valid.has(v)) st.values.delete(v);
+    _msRender(wrapId);
+    _msUpdateLabel(wrapId);
+}
+function _msGetValues(wrapId) {
+    const st = _msState.get(wrapId); return st ? Array.from(st.values) : [];
+}
+function _msClear(wrapId, silent) {
+    const st = _msState.get(wrapId); if (!st) return;
+    if (st.values.size === 0) return;
+    st.values.clear();
+    _msRender(wrapId);
+    _msUpdateLabel(wrapId);
+    if (!silent) st.onChange();
+}
+function _msToggle(wrapId, ev) {
+    if (ev) ev.stopPropagation();
+    const panel = document.getElementById(wrapId.replace('Wrap','Panel'));
+    if (!panel) return;
+    document.querySelectorAll('.ms-panel.open').forEach(p => { if (p !== panel) p.classList.remove('open'); });
+    panel.classList.toggle('open');
+}
+function _msRender(wrapId) {
+    const st = _msState.get(wrapId); if (!st) return;
+    const panel = document.getElementById(wrapId.replace('Wrap','Panel')); if (!panel) return;
+    const _esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    const opts = st.options.map(o => {
+        const chk = st.values.has(o.value) ? 'checked' : '';
+        return `<label class="ms-opt" onclick="event.stopPropagation()"><input type="checkbox" value="${_esc(o.value)}" ${chk} onchange="_msOnOptChange('${wrapId}', this)">${_esc(o.label)}</label>`;
+    }).join('');
+    panel.innerHTML =
+        `<div class="ms-actions"><button type="button" class="btn btn-ghost btn-sm" onclick="_msClear('${wrapId}');event.stopPropagation()">Limpiar</button></div>` +
+        opts;
+}
+function _msOnOptChange(wrapId, cb) {
+    const st = _msState.get(wrapId); if (!st) return;
+    if (cb.checked) st.values.add(cb.value); else st.values.delete(cb.value);
+    _msUpdateLabel(wrapId);
+    st.onChange();
+}
+function _msUpdateLabel(wrapId) {
+    const st = _msState.get(wrapId); if (!st) return;
+    const lbl = document.querySelector(`#${wrapId} .ms-label`);
+    if (!lbl) return;
+    const n = st.values.size;
+    if (n === 0) lbl.textContent = st.allLabel;
+    else if (n === 1) {
+        const v = Array.from(st.values)[0];
+        const o = st.options.find(x => x.value === v);
+        lbl.textContent = o ? o.label : v;
+    } else lbl.textContent = `${st.singularLabel} (${n})`;
+}
+// Cerrar al click fuera
+document.addEventListener('click', ev => {
+    if (!ev.target.closest('.ms-wrap')) document.querySelectorAll('.ms-panel.open').forEach(p => p.classList.remove('open'));
+});
+
+// Inicializa los multiselects de Movimientos (Tipo y Familia son fijos; Bodega
+// se puebla en _refreshMovBodegaFilter cuando llegan los datos).
+function _initFiltrosMovimientosMS() {
+    if (_msState.has('msMovTipoWrap')) return; // ya inicializado
+    const onCh = () => renderMovimientos();
+    _msInit('msMovTipoWrap', [
+        { value: 'Entrada',           label: 'Entrada' },
+        { value: 'Salida',            label: 'Salida' },
+        { value: 'Devolución',        label: 'Devolución' },
+        { value: 'AjusteInventario',  label: 'Ajuste de Inventario' },
+        { value: 'CambioEstado',      label: 'Cambio de Status' },
+        { value: 'CambioUbicacion',   label: 'Cambio de Ubicación' },
+        { value: 'Destrucción',       label: 'Destrucción' },
+    ], { allLabel: 'Todos los tipos', singularLabel: 'Tipos', onChange: onCh });
+    _msInit('msMovFamiliaWrap', [
+        { value: 'medicamento', label: 'Medicamentos' },
+        { value: 'concentrado', label: 'Concentrados' },
+        { value: 'dispmed',     label: 'Dispositivos Médicos' },
+    ], { allLabel: 'Todas las familias', singularLabel: 'Familias', onChange: onCh });
+    _msInit('msMovBodegaWrap', [], { allLabel: 'Todas las bodegas', singularLabel: 'Bodegas', onChange: onCh });
+}
+
+// Pobla el filtro de Bodega en la página Movimientos.
 // Para operadores con bodega fija el control está oculto por CSS, igual lo dejamos coherente.
 function _refreshMovBodegaFilter() {
-    const sel = document.getElementById('fMovBodega');
-    if (!sel) return;
-    const cur = sel.value;
-    sel.innerHTML = '<option value="">Todas las bodegas</option>';
-    Object.values(data.bodegas||{}).forEach(b => {
-        const o = document.createElement('option');
-        o.value = b.nombre; o.textContent = b.nombre;
-        sel.appendChild(o);
-    });
-    if (cur) sel.value = cur;
+    _initFiltrosMovimientosMS();
+    const opts = Object.values(data.bodegas || {})
+        .map(b => ({ value: b.nombre, label: b.nombre }))
+        .sort((a, b) => a.label.localeCompare(b.label, 'es'));
+    _msSetOptions('msMovBodegaWrap', opts);
 }
 
 // ══ MOVIMIENTOS ══
@@ -9576,9 +9679,9 @@ let _movVisibleCount = MOV_PAGE_SIZE;
 
 function clearFiltrosMovimientos() {
     _clearFields('fMovSKU','fMovLote','fMovReferencia','fMovFechaDesde','fMovFechaHasta');
-    document.getElementById('fMovTipo').value = '';
-    const bSel = document.getElementById('fMovBodega'); if (bSel) bSel.value = '';
-    const fSel = document.getElementById('fMovFamilia'); if (fSel) fSel.value = '';
+    _msClear('msMovBodegaWrap', true);
+    _msClear('msMovTipoWrap', true);
+    _msClear('msMovFamiliaWrap', true);
     renderMovimientos();
 }
 
@@ -9589,9 +9692,9 @@ function mostrarMasMovimientos() {
 
 function renderMovimientos(preservePage) {
     if (!preservePage) _movVisibleCount = MOV_PAGE_SIZE;
-    const fTipo = document.getElementById('fMovTipo')?.value||'';
-    const fBodega = document.getElementById('fMovBodega')?.value||'';
-    const fFamilia = document.getElementById('fMovFamilia')?.value||'';
+    const fTipos = new Set(_msGetValues('msMovTipoWrap'));
+    const fBodegas = new Set(_msGetValues('msMovBodegaWrap'));
+    const fFamilias = new Set(_msGetValues('msMovFamiliaWrap'));
     const fSKU = (document.getElementById('fMovSKU')?.value||'').toLowerCase();
     const fLote = (document.getElementById('fMovLote')?.value||'').toLowerCase();
     const fReferencia = (document.getElementById('fMovReferencia')?.value||'').toLowerCase();
@@ -9600,11 +9703,11 @@ function renderMovimientos(preservePage) {
     let rows = Object.values(data.movimientos||{});
     const _arrFijasMov = bodegasFijasActual();
     if (_arrFijasMov) rows = rows.filter(m => _arrFijasMov.includes(m.bodega||''));
-    if (fBodega) rows = rows.filter(m => (m.bodega||'') === fBodega);
-    if (fTipo) rows = rows.filter(m => m.tipo === fTipo);
-    if (fFamilia) {
+    if (fBodegas.size) rows = rows.filter(m => fBodegas.has(m.bodega||''));
+    if (fTipos.size) rows = rows.filter(m => fTipos.has(m.tipo));
+    if (fFamilias.size) {
         const _prodsCat = data.productos || {};
-        rows = rows.filter(m => _skuCategoria(m.sku, _prodsCat) === fFamilia);
+        rows = rows.filter(m => fFamilias.has(_skuCategoria(m.sku, _prodsCat)));
     }
     if (fSKU) rows = rows.filter(m => (m.sku||'').toLowerCase().includes(fSKU));
     if (fLote) rows = rows.filter(m => (m.lote||'').toLowerCase().includes(fLote));
